@@ -15,45 +15,41 @@ Initial coverage targets:
 
 Country coverage is a delivery target, not a claim that every jurisdiction is legally certified at the same time. Each production pack must be verified against current official legislation, tax authority specifications, effective dates and local professional review before it is marked compliant.
 
-## User-consented country tax activation
+## Automatic country-based tax activation
 
-Selecting the company's country must identify and recommend the matching tax localization pack, but MUST NOT activate tax functionality automatically. Country selection alone is not consent to enable tax, create tax codes, calculate tax, post tax entries or generate tax returns.
+Selecting the company's country automatically activates the matching tax localization pack for that company. This is software localization activation only; it does not assert that the company is legally registered, liable for every tax type, or required to charge tax on every transaction.
 
 The activation workflow must:
-1. Normalize and validate the selected country using ISO 3166-1 alpha-2 country codes; do not infer jurisdiction from UI language, currency or device location.
-2. Resolve the matching country pack and compatible, versioned rule dataset for the company's accounting start date, then present a clear country-specific preview.
-3. Ask an explicit Yes/No question during company creation: "Would you like to enable the [Country] tax system for this company?" Default to No / not enabled; never preselect Yes.
-4. If the user declines, save the company with tax functionality disabled. Do not create or activate tax codes, rates, posting profiles, tax ledger entries, tax return schedules or e-invoice integrations. Do not apply tax silently in invoices, purchases or POS. Record the company's country as metadata and allow an authorized user to enable tax later.
-5. If the user accepts, activate the matching country pack transactionally, including pack/version, selected tax regime, supported tax types, tax-code templates, posting-profile templates and filing-calendar defaults. Acceptance does not mean the company is legally registered.
-6. Preserve company-specific registration state separately. Never invent a VAT/TIN number or mark the company registered merely because the user enabled the software tax module.
-7. Ask for jurisdiction-specific details required by the company's activity and registration status. Allow pending setup where legally permitted, but block tax-sensitive posting when mandatory registration or tax-determination inputs are missing.
-8. Allow multiple registrations and jurisdictions for one company where legally applicable, with an explicit primary establishment and effective dates.
-9. If the country or legal establishment changes, explain the impact and ask for confirmation before changing an existing tax profile. Never silently rewrite posted documents, historical tax snapshots or filed returns.
-10. If a country pack is unavailable or its rules are not verified for the transaction date, show a clear warning and block unsupported tax posting. Never silently fall back to another country's rate.
-11. Record the user's explicit choice (enabled/declined), pack ID/version where enabled, timestamp and actor in the audit trail.
+1. Normalize and validate the selected country using ISO 3166-1 alpha-2 country codes; never infer jurisdiction from UI language, currency, or device location.
+2. Resolve the matching country pack and compatible, versioned rule dataset for the company's accounting start date.
+3. Automatically activate the selected country's pack during company creation and when an authorized user changes the company's legal country later.
+4. Persist the company tax profile, pack identity/version, applicable regime, supported tax types, tax-code templates, posting-profile templates, and filing-calendar defaults transactionally.
+5. Keep legal registration status separate from software activation. Never invent a VAT/TIN number or mark the company registered merely because a country pack was activated.
+6. Ask for jurisdiction-specific details required by the company's activity and registration status. Preserve a pending/unregistered state where legally permitted; block tax-sensitive posting when mandatory registration or determination inputs are missing.
+7. Support multiple registrations and jurisdictions for one company where legally applicable, with an explicit primary establishment and effective dates.
+8. If the country or legal establishment changes, explain the impact and require confirmation before changing an existing profile. Never rewrite posted documents, historical tax snapshots, or filed returns.
+9. If a country pack is unavailable or its rules are not verified for the transaction date, show a clear warning and block unsupported tax posting. Never fall back to another country's rate or silently treat unsupported tax as zero.
+10. Record the selected country, pack ID/version, activation timestamp, actor, and subsequent changes in the audit trail.
 
 ### Company setup experience
 
-- Country selection loads a preview of the matching tax pack; it does not activate it.
-- Show a clear Yes/No prompt with a concise explanation of the available country-specific tax features.
-- Default to No / not enabled. Do not use a preselected affirmative checkbox.
-- If No is selected, leave tax features disabled and continue company creation without tax configuration or tax postings.
-- If Yes is selected, show applicable tax regimes, registration status, required registration fields, tax treatments and further setup steps.
-- Enabling the software module is not proof of legal tax registration.
-- Provide an authorized, audited way to enable, disable or change tax configuration later. Disabling must not erase posted tax history, tax returns or audit records.
+- Selecting a supported country immediately selects and activates its matching tax pack; no separate enable/disable checkbox or consent prompt is required.
+- Show the selected country and activated tax regime as an informational status in the company wizard.
+- Collect registration number and other legally required details separately. An empty registration number must remain empty and must not imply registration.
+- If the country pack requires additional jurisdictional setup, present the required setup tasks and keep tax-sensitive posting blocked until those tasks are complete.
+- Provide an authorized, audited way to change the country, registrations, or tax configuration later. Disabling or changing a pack must not erase posted tax history, returns, or audit records.
 
-### User-consent acceptance tests
+### Automatic activation acceptance tests
 
-- Selecting any country alone never enables tax functionality or creates tax records.
-- The prompt is shown for a supported country and defaults to No / not enabled.
-- Choosing No leaves tax codes, rates, posting profiles, tax ledger, returns and e-invoicing inactive; ordinary non-tax company setup remains usable.
-- Choosing Yes activates only the matching country pack and expected version, transactionally.
-- No tax is silently calculated or posted for a company whose tax feature is disabled.
-- Changing the country before first save refreshes the pack preview but does not change the explicit activation choice without asking again.
-- Changing the country or tax regime of an existing company requires confirmation and preserves historical posted tax snapshots and returns.
+- Selecting a supported country automatically activates only that country's pack for the new company.
+- The wizard does not ask whether to enable the tax system and does not permit the activation indicator to be unchecked.
+- Creating a company with no country selected does not invent a jurisdiction or tax rate.
+- A selected country with no supported pack is rejected with a clear error rather than creating a company with an unrelated tax configuration.
+- Activation is company-isolated and transaction-safe for both SQLite and PostgreSQL.
 - A company without a tax registration number is not falsely marked registered.
-- An unsupported or out-of-date pack never falls back to an unrelated country's rate.
-- The explicit choice and every later activation/deactivation are company-isolated and auditable.
+- Unsupported or out-of-date rules never fall back to another country's rate or silently calculate zero tax.
+- Changing the country or tax regime of an existing company requires confirmation and preserves historical posted tax snapshots and returns.
+- The activation and every later configuration change are auditable.
 
 ## Required tax domain model
 
