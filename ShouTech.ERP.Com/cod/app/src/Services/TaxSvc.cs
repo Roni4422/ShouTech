@@ -628,7 +628,7 @@ public static class TaxSvc
             using var cmd = connection.CreateCommand();
             var activeMaterialPredicate = DatabaseRuntime.IsPostgreSql() ? "is_deleted = FALSE" : "COALESCE(is_deleted,0)=0";
             cmd.CommandText = $"""
-                SELECT material_id, COALESCE(NULLIF(pos_name,''), NULLIF(name,''), NULLIF(name_en,''), code),
+                SELECT material_id, COALESCE(NULLIF(pos_name,''), NULLIF(name,''), code),
                        COALESCE(price_retail, price_list, 0),
                        COALESCE(default_unit, unit1, ''),
                        COALESCE(tax_rate, 0)
@@ -639,14 +639,14 @@ public static class TaxSvc
                     code=$code OR alt_code=$code OR old_code=$code OR gtin=$code OR sku_external=$code
                     OR unit1_barcode=$code OR unit2_barcode=$code OR unit3_barcode=$code
                     OR unit4_barcode=$code OR unit5_barcode=$code
-                    OR name=$code OR name_en=$code OR pos_name=$code OR short_name=$code
-                    OR search_name=$code OR name LIKE $like OR name_en LIKE $like
+                    OR name=$code OR pos_name=$code OR short_name=$code
+                    OR search_name=$code OR name LIKE $like
                     OR pos_name LIKE $like OR short_name LIKE $like OR search_name LIKE $like
                   )
                 ORDER BY CASE WHEN code=$code OR alt_code=$code OR old_code=$code OR gtin=$code
                     OR unit1_barcode=$code OR unit2_barcode=$code OR unit3_barcode=$code
                     OR unit4_barcode=$code OR unit5_barcode=$code THEN 0 ELSE 1 END,
-                    name_ar
+                    name
                 LIMIT 1;
                 """;
             Add(cmd, "$c", company);
@@ -735,7 +735,7 @@ public static class TaxSvc
 
         const string columns = """
             material_id, code,
-            COALESCE(NULLIF(pos_name,''), NULLIF(name,''), NULLIF(name_en,''), code),
+            COALESCE(NULLIF(pos_name,''), NULLIF(name,''), code),
             COALESCE(default_unit, unit1, ''),
             COALESCE(price_retail, price_list, 0),
             COALESCE(tax_rate, 0)
@@ -744,10 +744,10 @@ public static class TaxSvc
             code=$code OR alt_code=$code OR old_code=$code OR gtin=$code OR sku_external=$code
             OR unit1_barcode=$code OR unit2_barcode=$code OR unit3_barcode=$code
             OR unit4_barcode=$code OR unit5_barcode=$code
-            OR name=$code OR name_en=$code OR pos_name=$code OR short_name=$code OR search_name=$code
+            OR name=$code OR pos_name=$code OR short_name=$code OR search_name=$code
             """;
         const string partialPredicate = """
-            name_ar LIKE $like OR name_en LIKE $like
+            name LIKE $like
             OR pos_name LIKE $like OR short_name LIKE $like OR search_name LIKE $like
             """;
 
