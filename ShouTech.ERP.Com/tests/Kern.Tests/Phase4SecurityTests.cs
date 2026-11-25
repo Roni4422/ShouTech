@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using ShouTech.App;
 using ShouTech.App.Configuration;
 using ShouTech.App.Services;
 using ShouTech.Svc;
@@ -16,6 +17,49 @@ namespace Kern.Tests;
 public class Phase4SecurityTests
 {
     private static PasswordPolicySettings EnterprisePolicy() => new();
+
+    // ---------------------------------------------------------- Backup company isolation
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BackupCompanyScope_RequiresAnActiveCompany(string? companyCode)
+    {
+        var previous = AppState.CurrentCompanyCode;
+        try
+        {
+            AppState.CurrentCompanyCode = companyCode;
+            Assert.Null(BkpServ.ResolveActiveCompanyCode());
+
+            var backup = new BkpServ(null!, null!, null!, null);
+            Assert.False(backup.IsBackupDue());
+
+            var result = backup.PerformRotatedBackup();
+            Assert.False(result.Success);
+            Assert.Contains("No active company", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            AppState.CurrentCompanyCode = previous;
+        }
+    }
+
+    [Fact]
+    public void BackupCompanyScope_UsesTheTrimmedActiveCompanyCode()
+    {
+        var previous = AppState.CurrentCompanyCode;
+        try
+        {
+            AppState.CurrentCompanyCode = "  ACME-02  ";
+            Assert.Equal("ACME-02", BkpServ.ResolveActiveCompanyCode());
+        }
+        finally
+        {
+            AppState.CurrentCompanyCode = previous;
+        }
+    }
+
 
     // ------------------------------------------------------------ PwdPolicy
 
