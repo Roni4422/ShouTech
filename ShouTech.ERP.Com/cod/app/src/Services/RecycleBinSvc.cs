@@ -84,7 +84,7 @@ public static class RecycleBinSvc
             ["product_name_ar", "product_name_en", "product_name", "name", "code", "barcode"],
             ["product_id", "id"]),
         new("materials", "Products",
-            ["name_ar", "name_en", "name", "code", "barcode"],
+            ["name", "code", "barcode"],
             ["material_id", "id"], CompanyIdIsCode: true),
         new("material_groups", "Material groups",
             ["group_name", "group_name_en", "group_code", "card_no"],
