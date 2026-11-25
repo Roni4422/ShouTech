@@ -338,9 +338,9 @@ public class ManufacturingBuildTests
         string? unit2, decimal unit2Factor, decimal avgCost = 0m, decimal minQty = 0m, decimal reorderQty = 0m)
     {
         Exec(db, $"""
-            INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, avg_cost, is_deleted,
+            INSERT INTO materials (material_id, company_id, code, name, is_stocked, avg_cost, is_deleted,
                 unit1, unit1_factor, unit2, unit2_factor, min_qty, reorder_qty)
-            VALUES ({id}, '{Company}', '{code}', '{code}', '{code}', 1, {Num(avgCost)}, 0,
+            VALUES ({id}, '{Company}', '{code}', '{code}', 1, {Num(avgCost)}, 0,
                 '{unit1}', {Num(unit1Factor)}, {(unit2 is null ? "NULL" : $"'{unit2}'")}, {Num(unit2Factor)}, {Num(minQty)}, {Num(reorderQty)});
             """);
     }
