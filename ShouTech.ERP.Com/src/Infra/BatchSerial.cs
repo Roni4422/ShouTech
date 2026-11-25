@@ -1156,7 +1156,7 @@ public sealed class BatchSerialService
         using var connection = OpenConnection();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"""
-            SELECT m.material_id, m.code, m.name_ar, COALESCE(m.default_unit, ''),
+            SELECT m.material_id, m.code, m.name, COALESCE(m.default_unit, ''),
                    b.batch_id, b.batch_no, bb.warehouse_id, b.expiry_date,
                    bb.qty_on_hand, COALESCE(m.alert_before_expiry_days, 0)
             FROM stock_batch_balances bb
