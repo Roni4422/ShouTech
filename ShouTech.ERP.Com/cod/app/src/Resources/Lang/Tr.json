@@ -2197,6 +2197,7 @@
    "Saudi": "Suudi Arabistan — KDV",
    "Jordan": "Ürdün — Satış vergisi"
   },
+  "TaxAutoActivationStatus": "Seçilen ülkenin vergi sistemi otomatik olarak etkinleştirilir",
   "EnableTaxSystem": "Bu şirket için seçilen ülkenin vergi sistemini etkinleştir",
   "TaxCountryRequired": "Vergi sistemini etkinleştirmeden önce desteklenen bir ülke adı veya ISO kodu seçin.",
   "TaxEnableTitle": "Vergi sistemi etkinleştirilsin mi?",
