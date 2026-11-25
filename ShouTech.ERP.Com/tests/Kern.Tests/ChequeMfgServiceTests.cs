@@ -558,7 +558,7 @@ public class ChequeMfgServiceTests
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "INSERT INTO materials (material_id, company_id, code, name_ar) VALUES ($id, $company, $code, $code);";
+            cmd.CommandText = "INSERT INTO materials (material_id, company_id, code, name) VALUES ($id, $company, $code, $code);";
             cmd.Parameters.AddWithValue("$id", id);
             cmd.Parameters.AddWithValue("$company", Company);
             cmd.Parameters.AddWithValue("$code", code);
