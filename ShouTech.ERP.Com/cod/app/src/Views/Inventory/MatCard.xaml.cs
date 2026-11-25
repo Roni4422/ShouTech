@@ -1150,7 +1150,6 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         TxtCode.Clear();
         TxtItemNo.Clear();
         TxtName.Clear();
-        TxtNameEn.Clear();
         CmbCategory.SelectedIndex = -1;
         TxtBrand.Clear();
         TxtModel.Clear();
@@ -1247,7 +1246,6 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         TxtCode.Text = m.Code;
         TxtItemNo.Text = m.Id > 0 ? m.Id.ToString(CultureInfo.InvariantCulture) : "";
         TxtName.Text = m.Name;
-        TxtNameEn.Text = m.NameEn;
         SetCombo(CmbGroup, m.GroupCode);
         SetCombo(CmbStatus, m.Status);
         SetCombo(CmbItemType, m.ItemType);
@@ -1492,7 +1490,6 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         m.Id = _currentId;
         m.Code = S(TxtCode.Text);
         m.Name = S(TxtName.Text);
-        m.NameEn = S(TxtNameEn.Text);
         m.GroupCode = SN(GetComboKey(CmbGroup));
         m.Status = GetComboKey(CmbStatus) ?? "Active";
         m.ItemType = GetComboKey(CmbItemType) ?? "Stock";
@@ -1617,7 +1614,6 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         return new MatRepo.MatRec
         {
             Id = src.Id,
-            NamePrintAr = src.NamePrintAr, NamePrintEn = src.NamePrintEn,
             ShortName = src.ShortName, SearchName = src.SearchName,
             OldCode = src.OldCode, CustomerCode = src.CustomerCode,
             ManufacturerCode = src.ManufacturerCode, HsCode = src.HsCode,
@@ -2030,7 +2026,6 @@ public partial class MatCard : BaseWin, IInfoContextProvider
 		{
 			string code     = m.Code         ?? "";
 			string name     = m.Name       ?? "";
-			string nameEn   = m.NameEn       ?? "";
 			string group    = m.GroupCode    ?? "";
 			string gtin     = m.Gtin         ?? "";
 			string altCode  = m.AltCode      ?? "";
@@ -2040,12 +2035,11 @@ public partial class MatCard : BaseWin, IInfoContextProvider
 			{
 				Payload    = m,
 				Id         = m.Id,
-				SearchText = string.Join(" ", code, name, nameEn, group, gtin, altCode, supplier),
+				SearchText = string.Join(" ", code, name, group, gtin, altCode, supplier),
 				Values = new Dictionary<string, object?>
 				{
 					["Code"]   = m.Code     ?? "",
 					["Name"]   = m.Name   ?? "",
-					["NameEn"] = m.NameEn   ?? "",
 					["Group"]  = m.GroupCode ?? "",
 					["Status"] = m.Status   ?? ""
 				}
@@ -2056,7 +2050,6 @@ public partial class MatCard : BaseWin, IInfoContextProvider
 		{
 			new() { Key = "Code",   Header = L("MatCard.Code",        "Code"),   Width = 90 },
 			new() { Key = "Name",   Header = L("MatCard.Name",        "Name"),   Fill = true },
-			new() { Key = "NameEn", Header = L("MatCard.LatinName",   "Latin"),  Width = 180 },
 			new() { Key = "Group",  Header = L("MatCard.Group",       "Group"),  Width = 90 },
 			new() { Key = "Status", Header = L("MatCard.StatusLabel", "Status"), Width = 80 }
 		};
@@ -2220,9 +2213,7 @@ public partial class MatCard : BaseWin, IInfoContextProvider
             return;
         }
 
-        var name = !string.IsNullOrWhiteSpace(TxtName.Text)
-            ? TxtName.Text.Trim()
-            : TxtNameEn.Text?.Trim() ?? "";
+        var name = TxtName.Text.Trim();
 
         var price = _units.FirstOrDefault(u => u.PriceSale is > 0)?.PriceSale;
         var currency = GetComboKey(CmbPriceCurrency);
