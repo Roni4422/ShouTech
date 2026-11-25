@@ -280,7 +280,7 @@
                                 <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock x:Name="lblEditName"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditName"
                                        Grid.Row="0"
                                        Grid.Column="0"
                                        Text="Text"
@@ -292,7 +292,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditNameEn"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditNameEn"
                                        Grid.Row="0"
                                        Grid.Column="2"
                                        Text="Text"
@@ -304,7 +304,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditTax"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditTax"
                                        Grid.Row="1"
                                        Grid.Column="0"
                                        Text="Text"
@@ -315,7 +315,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditLicense"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditLicense"
                                        Grid.Row="1"
                                        Grid.Column="2"
                                        Text="License"
@@ -327,7 +327,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditEmail"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditEmail"
                                        Grid.Row="2"
                                        Grid.Column="0"
                                        Text="Text"
@@ -338,7 +338,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditWebsite"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditWebsite"
                                        Grid.Row="2"
                                        Grid.Column="2"
                                        Text="Website"
@@ -350,7 +350,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditPhone"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditPhone"
                                        Grid.Row="3"
                                        Grid.Column="0"
                                        Text="Text"
@@ -361,7 +361,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditMobile"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditMobile"
                                        Grid.Row="3"
                                        Grid.Column="2"
                                        Text="Text"
@@ -372,7 +372,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditAddress"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditAddress"
                                        Grid.Row="4"
                                        Grid.Column="0"
                                        Text="Text"
@@ -383,7 +383,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditAddress2"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditAddress2"
                                        Grid.Row="4"
                                        Grid.Column="2"
                                        Text="Address line 2"
@@ -395,7 +395,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditCity"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditCity"
                                        Grid.Row="5"
                                        Grid.Column="0"
                                        Text="Text"
@@ -406,7 +406,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditCountry"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditCountry"
                                        Grid.Row="5"
                                        Grid.Column="2"
                                        Text="Text"
@@ -417,7 +417,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditCurrency"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditCurrency"
                                        Grid.Row="6"
                                        Grid.Column="0"
                                        Text="Text"
@@ -428,7 +428,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditDecimalPlaces"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditDecimalPlaces"
                                        Grid.Row="6"
                                        Grid.Column="2"
                                        Text="Decimal places"
@@ -440,7 +440,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditCalendar"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditCalendar"
                                        Grid.Row="7"
                                        Grid.Column="0"
                                        Text="Calendar"
@@ -451,7 +451,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditGrouping"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditGrouping"
                                        Grid.Row="8"
                                        Grid.Column="0"
                                        Text="Number grouping"
@@ -463,7 +463,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditLanguage"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditLanguage"
                                        Grid.Row="8"
                                        Grid.Column="2"
                                        Text="Company language"
@@ -475,7 +475,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditCoa"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditCoa"
                                        Grid.Row="9"
                                        Grid.Column="0"
                                        Text="Chart of accounts"
@@ -487,7 +487,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditWarehouse"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditWarehouse"
                                        Grid.Row="9"
                                        Grid.Column="2"
                                        Text="Default warehouse"
@@ -499,7 +499,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditFiscalStart"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditFiscalStart"
                                        Grid.Row="11"
                                        Grid.Column="0"
                                        Text="Fiscal year start"
@@ -511,7 +511,7 @@
                                         Grid.Column="1"
                                         Margin="0,0,0,6"/>
 
-                            <TextBlock x:Name="lblEditFiscalEnd"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditFiscalEnd"
                                        Grid.Row="11"
                                        Grid.Column="2"
                                        Text="Fiscal year end"
@@ -523,7 +523,7 @@
                                         Grid.Column="3"
                                         Margin="0,0,0,6"/>
 
-                            <TextBlock x:Name="lblEditNotes"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditNotes"
                                        Grid.Row="10"
                                        Grid.Column="0"
                                        Text="Notes"
@@ -539,7 +539,7 @@
                                      VerticalScrollBarVisibility="Auto"
                                      Margin="0,0,0,6"/>
 
-                            <TextBlock x:Name="lblEditAdminUser"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditAdminUser"
                                        Grid.Row="12"
                                        Grid.Column="0"
                                        Text="Administrator username"
@@ -552,7 +552,7 @@
                                      Style="{StaticResource CompanyEditInputStyle}"
                                      IsReadOnly="True"/>
 
-                            <TextBlock x:Name="lblEditAdminName"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditAdminName"
                                        Grid.Row="12"
                                        Grid.Column="2"
                                        Text="Administrator name"
@@ -565,7 +565,7 @@
                                      Style="{StaticResource CompanyEditInputStyle}"
                                      IsReadOnly="True"/>
 
-                            <TextBlock x:Name="lblEditDbProvider"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditDbProvider"
                                        Grid.Row="13"
                                        Grid.Column="0"
                                        Text="Database provider"
@@ -578,7 +578,7 @@
                                      Style="{StaticResource CompanyEditInputStyle}"
                                      IsReadOnly="True"/>
 
-                            <TextBlock x:Name="lblEditDbPath"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditDbPath"
                                        Grid.Row="13"
                                        Grid.Column="2"
                                        Text="Database path"
@@ -590,7 +590,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditAltDbPath"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditAltDbPath"
                                        Grid.Row="14"
                                        Grid.Column="0"
                                        Text="Alternate database path"
@@ -602,7 +602,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditBackupPath"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditBackupPath"
                                        Grid.Row="14"
                                        Grid.Column="2"
                                        Text="Backup path"
@@ -614,7 +614,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditAltBackupPath"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditAltBackupPath"
                                        Grid.Row="15"
                                        Grid.Column="0"
                                        Text="Alternate backup path"
@@ -626,7 +626,7 @@
                                      Grid.Column="1"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditBackupSchedule"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditBackupSchedule"
                                        Grid.Row="15"
                                        Grid.Column="2"
                                        Text="Backup schedule and time"
@@ -638,7 +638,7 @@
                                      Grid.Column="3"
                                      Style="{StaticResource CompanyEditInputStyle}"/>
 
-                            <TextBlock x:Name="lblEditBackupTime"
+                            <TextBlock Style="{DynamicResource VisuTextBlockLabelStyle}" x:Name="lblEditBackupTime"
                                        Grid.Row="16"
                                        Grid.Column="0"
                                        Text="Backup time"
