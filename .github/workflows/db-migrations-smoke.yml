@@ -2,13 +2,14 @@ name: Database migration smoke tests
 
 on:
   push:
-    branches: [main, work/full-app-stabilization-2026-11-18]
+    branches: [main, work/full-app-stabilization-2026-11-18, reduce-2-upgrade]
     paths:
       - 'ShouTech.ERP.Com/dba/mig/**'
       - 'ShouTech.ERP.Com/tools/SqlMigrator/**'
       - 'ShouTech.ERP.Com/cod/app/src/Services/SchMig.cs'
       - '.github/workflows/db-migrations-smoke.yml'
   pull_request:
+    branches: [main, reduce-2-upgrade]
     paths:
       - 'ShouTech.ERP.Com/dba/mig/**'
       - 'ShouTech.ERP.Com/tools/SqlMigrator/**'
