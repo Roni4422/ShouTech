@@ -540,29 +540,27 @@ public sealed class ContractRepository : IContractRepository
         var keys = SalesPriceResolver.CompanyKeys(connection, transaction, _provider, companyKey);
         var inList = string.Join(", ", keys.Select((_, i) => $"@co{i}"));
         await using var command = CreateCommand(connection, transaction, $"""
-            WITH contract_orders AS (
-                SELECT o.company_id, o.doc_id
+            WITH RECURSIVE contract_docs (company_id, doc_id, doc_kind) AS (
+                SELECT o.company_id, o.doc_id, o.doc_kind
                 FROM sales_documents o
                 WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO'
                   AND o.is_deleted = 0 AND o.contract_id = @contract
-            ),
-            source_documents AS (
-                SELECT company_id, doc_id FROM contract_orders
                 UNION
-                SELECT dl.company_id, dl.target_doc_id
+                SELECT dl.company_id, dl.target_doc_id, dl.target_doc_kind
                 FROM document_links dl
-                JOIN contract_orders o ON o.company_id = dl.company_id AND o.doc_id = dl.source_doc_id
-                WHERE dl.source_doc_kind = 'SO' AND dl.target_doc_kind = 'DLV'
+                JOIN contract_docs source
+                  ON source.company_id = dl.company_id
+                 AND source.doc_id = dl.source_doc_id
+                 AND source.doc_kind = dl.source_doc_kind
             )
             SELECT l.material_id, SUM(l.qty)
-            FROM source_documents source
-            JOIN document_links dl
-              ON dl.company_id = source.company_id AND dl.source_doc_id = source.doc_id
-             AND dl.target_doc_kind = @kind
+            FROM contract_docs chain
             JOIN sales_documents t
-              ON t.doc_id = dl.target_doc_id AND t.company_id = dl.company_id
+              ON t.doc_id = chain.doc_id AND t.company_id = chain.company_id
+             AND t.doc_kind = chain.doc_kind
              AND t.doc_kind = @kind AND t.status = 'Posted' AND t.is_deleted = 0
-            JOIN sales_document_lines l ON l.doc_id = t.doc_id
+            JOIN sales_document_lines l
+              ON l.doc_id = t.doc_id AND l.company_id = t.company_id
             WHERE l.material_id IS NOT NULL
             GROUP BY l.material_id
             """);
@@ -599,29 +597,27 @@ public sealed class ContractRepository : IContractRepository
         var docNos = new List<string>();
         decimal revenue = 0m;
         await using (var invoices = CreateCommand(connection, null, $"""
-            WITH contract_orders AS (
-                SELECT o.company_id, o.doc_id
+            WITH RECURSIVE contract_docs (company_id, doc_id, doc_kind) AS (
+                SELECT o.company_id, o.doc_id, o.doc_kind
                 FROM sales_documents o
                 WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO'
                   AND o.is_deleted = 0 AND o.contract_id = @contract
-            ),
-            source_documents AS (
-                SELECT company_id, doc_id FROM contract_orders
                 UNION
-                SELECT dl.company_id, dl.target_doc_id
+                SELECT dl.company_id, dl.target_doc_id, dl.target_doc_kind
                 FROM document_links dl
-                JOIN contract_orders o ON o.company_id = dl.company_id AND o.doc_id = dl.source_doc_id
-                WHERE dl.source_doc_kind = 'SO' AND dl.target_doc_kind = 'DLV'
+                JOIN contract_docs source
+                  ON source.company_id = dl.company_id
+                 AND source.doc_id = dl.source_doc_id
+                 AND source.doc_kind = dl.source_doc_kind
             )
             SELECT t.doc_no, SUM(l.line_total)
-            FROM source_documents source
-            JOIN document_links dl
-              ON dl.company_id = source.company_id AND dl.source_doc_id = source.doc_id
-             AND dl.target_doc_kind = 'SAL'
+            FROM contract_docs chain
             JOIN sales_documents t
-              ON t.doc_id = dl.target_doc_id AND t.company_id = dl.company_id
+              ON t.doc_id = chain.doc_id AND t.company_id = chain.company_id
+             AND t.doc_kind = chain.doc_kind
              AND t.doc_kind = 'SAL' AND t.status = 'Posted' AND t.is_deleted = 0
-            JOIN sales_document_lines l ON l.doc_id = t.doc_id
+            JOIN sales_document_lines l
+              ON l.doc_id = t.doc_id AND l.company_id = t.company_id
             GROUP BY t.doc_no
             """))
         {
@@ -635,16 +631,25 @@ public sealed class ContractRepository : IContractRepository
             }
         }
         await using (var deliveries = CreateCommand(connection, null, $"""
+            WITH RECURSIVE contract_docs (company_id, doc_id, doc_kind) AS (
+                SELECT o.company_id, o.doc_id, o.doc_kind
+                FROM sales_documents o
+                WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO'
+                  AND o.is_deleted = 0 AND o.contract_id = @contract
+                UNION
+                SELECT dl.company_id, dl.target_doc_id, dl.target_doc_kind
+                FROM document_links dl
+                JOIN contract_docs source
+                  ON source.company_id = dl.company_id
+                 AND source.doc_id = dl.source_doc_id
+                 AND source.doc_kind = dl.source_doc_kind
+            )
             SELECT d.doc_no
-            FROM sales_documents o
-            JOIN document_links dl
-              ON dl.company_id = o.company_id AND dl.source_doc_id = o.doc_id
-             AND dl.source_doc_kind = 'SO' AND dl.target_doc_kind = 'DLV'
+            FROM contract_docs chain
             JOIN sales_documents d
-              ON d.company_id = dl.company_id AND d.doc_id = dl.target_doc_id
-             AND d.doc_kind = 'DLV' AND d.status = 'Posted' AND d.is_deleted = 0
-            WHERE o.company_id IN ({inList}) AND o.doc_kind = 'SO'
-              AND o.contract_id = @contract AND o.is_deleted = 0
+              ON d.company_id = chain.company_id AND d.doc_id = chain.doc_id
+             AND d.doc_kind = chain.doc_kind
+            WHERE d.doc_kind = 'DLV' AND d.status = 'Posted' AND d.is_deleted = 0
             """))
         {
             for (var i = 0; i < keys.Count; i++) Add(deliveries, $"@co{i}", keys[i]);
