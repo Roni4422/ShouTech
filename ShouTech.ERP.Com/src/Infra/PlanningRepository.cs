@@ -603,7 +603,7 @@ public sealed class PlanningRepository : IPlanningRepository
     {
         var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         await using var command = CreateCommand(connection, null,
-            $"SELECT code, COALESCE(NULLIF(name, ''), NULLIF(name_en, ''), code) FROM materials WHERE company_id = @company AND {NotDeleted}");
+            $"SELECT code, COALESCE(NULLIF(name, ''), code) FROM materials WHERE company_id = @company AND {NotDeleted}");
         Add(command, "@company", company);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
