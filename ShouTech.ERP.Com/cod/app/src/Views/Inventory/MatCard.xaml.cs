@@ -1796,9 +1796,20 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         _currentId = 0;
         _loaded = null;
         ClearForm();
-        try { TxtCode.Text = ToWesternDigits(MatRepo.NextCode()); }
-        catch (Exception exL1320) {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1320, "MatCard.xaml.New_Click"); TxtCode.Text = "0001"; }
+        try
+        {
+            TxtCode.Text = ToWesternDigits(MatRepo.NextCode());
+        }
+        catch (Exception exL1320)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL1320, "MatCard.xaml.New_Click");
+            TxtCode.Clear();
+            SetEditMode(false);
+            MessageBox.Show(this,
+                L("MatCard.ErrNumberGeneration", "A new material number could not be generated. Check the company database and numbering configuration, then try again."),
+                Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
         TxtCode.IsReadOnly = false;
         SetEditMode(true);
         ShowSection(0);
