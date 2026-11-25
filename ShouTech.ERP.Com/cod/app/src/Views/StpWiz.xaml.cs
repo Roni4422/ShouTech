@@ -702,7 +702,7 @@ namespace ShouTech.App.Views
             btnCancel.Content = W("Buttons.Cancel", "Cancel");
             btnBack.Content = W("Buttons.Back", "Back");
             btnNext.Content = W("Buttons.Next", "Next");
-            chkEnableTaxSystem.Content = W("EnableTaxSystem", "Enable the selected country's tax system for this company");
+            chkEnableTaxSystem.Content = W("TaxAutoActivationStatus", "The selected country's tax system is activated automatically");
 
             if (!_isSaving)
             {
@@ -1440,39 +1440,13 @@ namespace ShouTech.App.Views
         {
             var selected = cmbCountry.SelectedItem as ComboBoxItem;
             var countryCode = selected?.Tag?.ToString()?.Trim().ToUpperInvariant() ?? string.Empty;
-            var hasCountry = countryCode.Length == 2;
-            chkEnableTaxSystem.IsEnabled = hasCountry;
+            var hasCountry = TaxCountryPackCatalog.TryGet(countryCode, out _);
 
-            if (!hasCountry)
-            {
-                chkEnableTaxSystem.IsChecked = false;
-                _lastTaxPromptCountryCode = string.Empty;
-                return;
-            }
-
-            if (string.Equals(_lastTaxPromptCountryCode, countryCode, StringComparison.Ordinal))
-                return;
-
-            _lastTaxPromptCountryCode = countryCode;
-            chkEnableTaxSystem.IsChecked = false;
-
-            if (!IsLoaded)
-                return;
-
-            var countryName = selected?.Content?.ToString() ?? countryCode;
-            var prompt = string.Format(
-                CultureInfo.CurrentCulture,
-                W("TaxEnablePrompt", "Would you like to enable the tax system for {0}? Choose No to keep tax disabled for this company."),
-                countryName);
-            var answer = MessageBox.Show(
-                this,
-                prompt,
-                W("TaxEnableTitle", "Enable tax system?"),
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question,
-                MessageBoxResult.No);
-
-            chkEnableTaxSystem.IsChecked = answer == MessageBoxResult.Yes;
+            // Selecting the company's country automatically activates its matching
+            // localization pack. This control is informational, not an opt-in gate.
+            chkEnableTaxSystem.IsEnabled = false;
+            chkEnableTaxSystem.IsChecked = hasCountry;
+            _lastTaxPromptCountryCode = hasCountry ? countryCode : string.Empty;
         }
 
         private NewCoReq BuildRequest()
@@ -1556,7 +1530,7 @@ namespace ShouTech.App.Views
                     taxCountryCode,
 
                 EnableTaxSystem =
-                    chkEnableTaxSystem.IsChecked == true,
+                    TaxCountryPackCatalog.TryGet(taxCountryCode, out _),
 
                 Notes =
                     txtNotes.Text.Trim(),
