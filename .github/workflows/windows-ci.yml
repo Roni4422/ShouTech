@@ -5,8 +5,9 @@ on:
     branches:
       - main
       - work/full-app-stabilization-2026-11-18
+      - reduce-2-upgrade
   pull_request:
-    branches: [main]
+    branches: [main, reduce-2-upgrade]
   workflow_dispatch:
 
 concurrency:
