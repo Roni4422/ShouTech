@@ -352,6 +352,13 @@ public static class DataExportSvc
         // never another company's, and fails closed when the company
         // cannot be resolved: an unscoped SELECT * is not a fallback.
         var tableColumns = await GetColumnNamesAsync(connection, option.TableName, ct);
+        // Use declared database column types for the workbook identity. Runtime
+        // values are not a schema: SQLite may return Int64 for a NUMERIC/REAL
+        // column when a particular row happens to contain an integral value.
+        // Deriving the import type from that runtime value mislabels decimal
+        // fields as WholeNumber and makes a valid value such as 1.6 fail on
+        // re-import.
+        var declaredColumnTypes = await GetColumnTypeMapAsync(connection, option.TableName, ct);
         var (sql, scopeParameters) = await BuildScopedExportQueryAsync(connection, option, tableColumns, companyCode, ct);
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
@@ -380,7 +387,10 @@ public static class DataExportSvc
         {
             Key = columnKeys[i],
             HeaderTextKey = field.Name,
-            Type = GetColumnType(field.Name, field.Type),
+            Type = declaredColumnTypes.TryGetValue(field.Name, out var declaredType) &&
+                Enum.TryParse<RptColType>(declaredType, out var schemaType)
+                    ? schemaType
+                    : GetColumnType(field.Name, field.Type),
             Width = 140
         }).ToArray();
         var rows = new List<IReadOnlyDictionary<string, object?>>();
@@ -1432,18 +1442,27 @@ public static class DataExportSvc
 
     private static string MapStorageType(string? storageType)
     {
-        var value = (storageType ?? string.Empty).ToLowerInvariant();
-        if (value.Contains("bool"))
+        var value = (storageType ?? string.Empty).Trim().ToLowerInvariant();
+        if (value.Contains("bool", StringComparison.Ordinal))
             return RptColType.Boolean.ToString();
-        if (value.Contains("int") || value is "serial" or "bigserial" or "smallserial")
-            return RptColType.WholeNumber.ToString();
-        if (value.Contains("real") || value.Contains("double") || value.Contains("float") ||
-            value.Contains("numeric") || value.Contains("decimal") || value.Contains("money"))
-            return RptColType.FractionalNumber.ToString();
-        if (value.Contains("timestamp") || value.Contains("datetime"))
+        if (value.Contains("timestamp", StringComparison.Ordinal) ||
+            value.Contains("datetime", StringComparison.Ordinal))
             return RptColType.DateTime.ToString();
         if (value == "date")
             return RptColType.Date.ToString();
+        // Check decimal declarations before integer-like tokens. This keeps
+        // NUMERIC(p,s), DECIMAL(p,s), REAL and floating-point columns fractional
+        // even when the current stored value has no fractional component.
+        if (value.Contains("real", StringComparison.Ordinal) ||
+            value.Contains("double", StringComparison.Ordinal) ||
+            value.Contains("float", StringComparison.Ordinal) ||
+            value.Contains("numeric", StringComparison.Ordinal) ||
+            value.Contains("decimal", StringComparison.Ordinal) ||
+            value.Contains("money", StringComparison.Ordinal))
+            return RptColType.FractionalNumber.ToString();
+        if (value.Contains("int", StringComparison.Ordinal) ||
+            value is "serial" or "bigserial" or "smallserial" or "smallint" or "integer" or "bigint")
+            return RptColType.WholeNumber.ToString();
         return RptColType.Text.ToString();
     }
 
