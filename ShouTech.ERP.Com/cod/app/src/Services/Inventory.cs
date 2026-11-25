@@ -31,7 +31,6 @@ public sealed record InventoryItem(
     int Id,
     string Code,
     string Name,
-    string? Name2,
     int CategoryId,
     string Unit,
     decimal Cost,
@@ -42,10 +41,10 @@ public sealed record InventoryItem(
 public interface IInvServ
     {
         // Items
-        Task<Guid> CreateItemAsync(string code, string name, string? name2, Guid categoryId,
+        Task<Guid> CreateItemAsync(string code, string name, Guid categoryId,
             string unit, decimal cost, decimal price, string userId, CancellationToken ct = default);
 
-        Task UpdateItemAsync(Guid id, string name, string? name2, Guid categoryId,
+        Task UpdateItemAsync(Guid id, string name, Guid categoryId,
             string unit, decimal cost, decimal price, string userId, CancellationToken ct = default);
 
         Task SoftDeleteItemAsync(Guid id, string userId, CancellationToken ct = default);
@@ -80,7 +79,7 @@ public interface IInvServ
         }
 
         public async Task<Guid> CreateItemAsync(
-            string code, string name, string? name2, Guid categoryId,
+            string code, string name, Guid categoryId,
             string unit, decimal cost, decimal price, string userId,
             CancellationToken ct = default)
         {
@@ -106,7 +105,7 @@ public interface IInvServ
         }
 
         public async Task UpdateItemAsync(
-            Guid id, string name, string? name2, Guid categoryId,
+            Guid id, string name, Guid categoryId,
             string unit, decimal cost, decimal price, string userId,
             CancellationToken ct = default)
         {
@@ -204,9 +203,9 @@ public interface IInvRepo
 {
     Task<IReadOnlyList<InventoryItem>> GetItemsAsync(string? search, Guid companyId, CancellationToken ct);
     Task<InventoryItem?> GetItemAsync(int id, Guid companyId, CancellationToken ct);
-    Task<int> CreateItemAsync(string code, string name, string? name2, int categoryId,
+    Task<int> CreateItemAsync(string code, string name, int categoryId,
         string unit, decimal cost, decimal price, Guid companyId, Guid userId, CancellationToken ct);
-    Task UpdateItemAsync(int id, string name, string? name2, int categoryId, string unit,
+    Task UpdateItemAsync(int id, string name, int categoryId, string unit,
         decimal cost, decimal price, Guid companyId, Guid userId, CancellationToken ct);
     Task SoftDeleteItemAsync(int id, Guid companyId, Guid userId, CancellationToken ct);
     Task<bool> ItemCodeExistsAsync(string code, int? excludeId, Guid companyId, CancellationToken ct);
@@ -233,7 +232,7 @@ public sealed class SqlInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name Name,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.company_id=@companyId AND p.is_deleted=false
@@ -249,7 +248,7 @@ public sealed class SqlInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name Name,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.product_id=@id AND p.company_id=@companyId AND p.is_deleted=false LIMIT 1
@@ -257,33 +256,33 @@ public sealed class SqlInvRepo : IInvRepo
         return await db.QuerySingleOrDefaultAsync<InventoryItem>(new CommandDefinition(sql, new { id, companyId }, cancellationToken: ct));
     }
 
-    public async Task<int> CreateItemAsync(string code, string name, string? name2, int categoryId,
+    public async Task<int> CreateItemAsync(string code, string name, int categoryId,
         string unit, decimal cost, decimal price, Guid companyId, Guid userId, CancellationToken ct)
     {
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
             INSERT INTO products
-                (company_id, product_code, product_name_ar, product_name_en, category_id, primary_uom_id,
+                (company_id, product_code, product_name, category_id, primary_uom_id,
                  default_sale_price, default_purchase_price, cost_price, created_by)
-            SELECT @companyId, @code, @name, @name2, @categoryId, u.uom_id,
+            SELECT @companyId, @code, @name, @categoryId, u.uom_id,
                    @price, @cost, @cost, @userId
             FROM units_of_measure u
             WHERE u.company_id = @companyId AND u.uom_code = @unit AND u.is_deleted = false AND u.is_active = true
             RETURNING product_id;
             """;
         var id = await db.ExecuteScalarAsync<int?>(new CommandDefinition(sql, new
-        { companyId, code, name, name2, categoryId, unit, cost, price, userId }, cancellationToken: ct));
+        { companyId, code, name, categoryId, unit, cost, price, userId }, cancellationToken: ct));
         return id ?? throw new InvalidOperationException("The specified unit was not found for the company.");
     }
 
-    public async Task UpdateItemAsync(int id, string name, string? name2, int categoryId, string unit,
+    public async Task UpdateItemAsync(int id, string name, int categoryId, string unit,
         decimal cost, decimal price, Guid companyId, Guid userId, CancellationToken ct)
     {
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            UPDATE products p SET product_name_ar=@name, product_name_en=@name2, category_id=@categoryId,
+            UPDATE products p SET product_name=@name, category_id=@categoryId,
                 primary_uom_id=u.uom_id, cost_price=@cost, default_sale_price=@price,
                 default_purchase_price=@cost, updated_by=@userId, updated_at=now()
             FROM units_of_measure u
@@ -291,7 +290,7 @@ public sealed class SqlInvRepo : IInvRepo
               AND u.company_id=p.company_id AND u.uom_code=@unit AND u.is_deleted=false AND u.is_active=true;
             """;
         var affected = await db.ExecuteAsync(new CommandDefinition(sql,
-            new { id, name, name2, categoryId, unit, cost, price, companyId, userId }, cancellationToken: ct));
+            new { id, name, categoryId, unit, cost, price, companyId, userId }, cancellationToken: ct));
         if (affected != 1) throw new KeyNotFoundException("Inventory item was not found.");
     }
 
@@ -384,7 +383,7 @@ public sealed class SqliteInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name Name,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.company_id=@companyId AND p.is_deleted=0
@@ -400,7 +399,7 @@ public sealed class SqliteInvRepo : IInvRepo
         await using var db = OpenConnection();
         await db.OpenAsync(ct);
         const string sql = """
-            SELECT p.product_id Id, p.product_code Code, p.product_name_ar Name, p.product_name_en Name2,
+            SELECT p.product_id Id, p.product_code Code, p.product_name Name,
                    p.category_id CategoryId, u.uom_code Unit, p.cost_price Cost, p.default_sale_price Price, p.is_active IsActive
             FROM products p INNER JOIN units_of_measure u ON u.uom_id=p.primary_uom_id
             WHERE p.product_id=@id AND p.company_id=@companyId AND p.is_deleted=0 LIMIT 1
@@ -408,7 +407,7 @@ public sealed class SqliteInvRepo : IInvRepo
         return await db.QuerySingleOrDefaultAsync<InventoryItem>(new CommandDefinition(sql, new { id, companyId = companyId.ToString() }, cancellationToken: ct));
     }
 
-    public async Task<int> CreateItemAsync(string code, string name, string? name2, int categoryId,
+    public async Task<int> CreateItemAsync(string code, string name, int categoryId,
         string unit, decimal cost, decimal price, Guid companyId, Guid userId, CancellationToken ct)
     {
         await using var db = OpenConnection();
@@ -424,7 +423,7 @@ public sealed class SqliteInvRepo : IInvRepo
 
         await db.ExecuteAsync(new CommandDefinition("""
             INSERT INTO products
-                (company_id, product_code, product_name_ar, product_name_en, category_id, primary_uom_id,
+                (company_id, product_code, product_name, category_id, primary_uom_id,
                  default_sale_price, default_purchase_price, cost_price, created_by)
             VALUES (@companyId, @code, @name, @categoryId, @primaryUomId,
                     @price, @cost, @cost, @userId)
@@ -433,7 +432,6 @@ public sealed class SqliteInvRepo : IInvRepo
             companyId = companyId.ToString(),
             code,
             name,
-            name2,
             categoryId,
             primaryUomId = uomId.Value,
             price,
@@ -445,7 +443,7 @@ public sealed class SqliteInvRepo : IInvRepo
         return checked((int)id);
     }
 
-    public async Task UpdateItemAsync(int id, string name, string? name2, int categoryId, string unit,
+    public async Task UpdateItemAsync(int id, string name, int categoryId, string unit,
         decimal cost, decimal price, Guid companyId, Guid userId, CancellationToken ct)
     {
         await using var db = OpenConnection();
@@ -461,8 +459,7 @@ public sealed class SqliteInvRepo : IInvRepo
 
         var affected = await db.ExecuteAsync(new CommandDefinition("""
             UPDATE products
-            SET product_name_ar=@name,
-                product_name_en=@name2,
+            SET product_name=@name,
                 category_id=@categoryId,
                 primary_uom_id=@primaryUomId,
                 cost_price=@cost,
@@ -475,7 +472,6 @@ public sealed class SqliteInvRepo : IInvRepo
         {
             id,
             name,
-            name2,
             categoryId,
             primaryUomId = uomId.Value,
             cost,
