@@ -75,7 +75,7 @@ public class DataExchangeStep10Tests
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["material_id", "company_id", "code", "name_ar", "name_en"],
+            ["material_id", "company_id", "code", "name", "name_en"],
             [[1L, CompanyCode, "MAT-1", "Widget", "Renamed"]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
@@ -100,7 +100,7 @@ public class DataExchangeStep10Tests
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["material_id", "company_id", "code", "name_ar", "name_en"],
+            ["material_id", "company_id", "code", "name", "name_en"],
             [[1L, CompanyCode, "MAT-1", "Widget", "Renamed"]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
@@ -138,7 +138,7 @@ public class DataExchangeStep10Tests
             var result = await DataExportSvc.ImportExcelAsync(xlsx, option, CompanyCode);
             Assert.Equal(1, result.UpsertedRows);
             Assert.Equal("Material in user language", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
-            Assert.Equal("Material in user language", db.Scalar("SELECT name_ar FROM materials WHERE material_id = 1"));
+            Assert.Equal("", db.Scalar("SELECT name_ar FROM materials WHERE material_id = 1"));
             Assert.Equal("", db.Scalar("SELECT name_en FROM materials WHERE material_id = 1"));
         }
         finally { AppHost.Permissions.Clear(); }
@@ -180,7 +180,7 @@ public class DataExchangeStep10Tests
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["material_id", "company_id", "code", "name_ar", "name_en", "qty_on_hand", "avg_cost"],
+            ["material_id", "company_id", "code", "name", "name_en", "qty_on_hand", "avg_cost"],
             [[1L, CompanyCode, "MAT-1", "Widget", "Renamed", 9999L, 999L]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
@@ -344,7 +344,7 @@ public class DataExchangeStep10Tests
     private static void SeedCompanyAndMaterial(TestDb db)
     {
         db.Exec($"INSERT INTO companies (company_id, company_code, company_name_ar, company_name_en, currency_code, language_code, is_active, is_deleted, created_at) VALUES ('{CompanyGuid}', '{CompanyCode}', 'Step10 Co', 'Step10 Co', 'SAR', 'en', 1, 0, '2026-01-01T00:00:00')");
-        db.Exec($"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, qty_on_hand, avg_cost, is_deleted) VALUES (1, '{CompanyCode}', 'MAT-1', 'Widget', 'Widget', 50, 10, 0)");
+        db.Exec($"INSERT INTO materials (material_id, company_id, code, name, name_ar, name_en, qty_on_hand, avg_cost, is_deleted) VALUES (1, '{CompanyCode}', 'MAT-1', 'Widget', '', 'Widget', 50, 10, 0)");
     }
 
     private static string WriteWorkbook(string root, string[] headers, object?[][] rows)

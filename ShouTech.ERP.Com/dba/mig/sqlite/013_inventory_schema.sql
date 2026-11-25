@@ -3,7 +3,7 @@
             material_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
             company_id TEXT NOT NULL DEFAULT '',
             code TEXT NOT NULL,
-            name_ar TEXT NOT NULL,
+            name_ar TEXT NOT NULL DEFAULT '',
             name_en TEXT NOT NULL DEFAULT '',
             name_print_ar TEXT NOT NULL DEFAULT '',
             name_print_en TEXT NOT NULL DEFAULT '',

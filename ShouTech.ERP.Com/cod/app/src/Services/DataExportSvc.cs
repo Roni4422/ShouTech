@@ -833,20 +833,18 @@ public static class DataExportSvc
                             : parsed;
                 }
 
-                // Canonical material name is language-neutral. Keep name_ar synchronized
-                // during the compatibility period so existing databases and older clients remain usable.
+                // The language-neutral "name" column is the only canonical
+                // material name. name_ar is retained solely as an empty legacy
+                // compatibility column and must never be required from users.
                 if (option.TableName.Equals("materials", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (values.TryGetValue("name", out var canonicalName))
-                    {
-                        values["name"] = canonicalName ?? string.Empty;
-                        values["name_ar"] = canonicalName ?? string.Empty;
-                    }
-                    else if (values.TryGetValue("name_ar", out var legacyName))
-                    {
-                        values["name"] = legacyName ?? string.Empty;
-                        values["name_ar"] = legacyName ?? string.Empty;
-                    }
+                    if (!values.TryGetValue("name", out var canonicalName) ||
+                        string.IsNullOrWhiteSpace(Convert.ToString(canonicalName, CultureInfo.InvariantCulture)))
+                        throw new InvalidDataException("Product rows require a non-empty canonical 'name' column.");
+
+                    values["name"] = canonicalName;
+                    if (columns.Contains("name_ar", StringComparer.OrdinalIgnoreCase))
+                        values["name_ar"] = string.Empty;
                     if (values.TryGetValue("name_en", out var englishName))
                         values["name_en"] = englishName ?? string.Empty;
                 }
