@@ -119,6 +119,31 @@ public class DataExchangeStep10Tests
         finally { AppHost.Permissions.Clear(); }
     }
 
+    [Fact]
+    public async Task ExcelImport_LanguageNeutralMaterialName_AllowsBlankEnglishName()
+    {
+        using var db = await MigratedDbAsync();
+        PointAppAt(db.Path);
+        SeedCompanyAndMaterial(db);
+        var xlsx = WriteWorkbook(db.Root,
+            ["material_id", "company_id", "code", "name", "name_en"],
+            [[1L, CompanyCode, "MAT-1", "Material in user language", ""]]);
+        var option = new DataExportOption("Products", "Product cards and directory", "materials");
+        try
+        {
+            AppHost.Permissions.GrantAllCatalogPermissions("u1");
+            AppState.CurrentUser = new UserInfo { Id = "u1", Username = "admin", CompanyId = CompanyCode };
+            AppState.SetCompany(CompanyCode, "Step10 Co", "Step10 Co");
+
+            var result = await DataExportSvc.ImportExcelAsync(xlsx, option, CompanyCode);
+            Assert.Equal(1, result.UpsertedRows);
+            Assert.Equal("Material in user language", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
+            Assert.Equal("Material in user language", db.Scalar("SELECT name_ar FROM materials WHERE material_id = 1"));
+            Assert.Equal("", db.Scalar("SELECT name_en FROM materials WHERE material_id = 1"));
+        }
+        finally { AppHost.Permissions.Clear(); }
+    }
+
     // ------------------------------------------------------------ balances
 
     [Fact]
