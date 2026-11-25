@@ -1548,31 +1548,23 @@ namespace ShouTech.App.Views
             if (RibbonControl == null)
                 return;
 
-            // The ribbon strip is retired as a presentation; the map
-            // now renders in the navigation pane + command bar.
-            RibbonControl.Visibility =
-                Visibility.Collapsed;
+            foreach (RibbonTab tab in RibbonControl.Items)
+                tab.Visibility = Visibility.Collapsed;
 
-            if (_currentTab == tabName)
+            if (_currentTab == tabName &&
+                RibbonControl.Visibility == Visibility.Visible)
             {
-                // Same module again: toggle its commands off, exactly
-                // as the strip used to hide on a repeated menu click.
-                CommandBarItems.Children.Clear();
-                CommandBarTitle.Text = string.Empty;
-
+                RibbonControl.Visibility = Visibility.Collapsed;
                 _currentTab = string.Empty;
-
                 return;
             }
 
             if (FindName(tabName) is RibbonTab selectedTab)
             {
+                selectedTab.Visibility = Visibility.Visible;
                 selectedTab.IsSelected = true;
-
+                RibbonControl.Visibility = Visibility.Visible;
                 _currentTab = tabName;
-
-                ExpandNavSection(tabName);
-                BuildCommandBar(selectedTab);
             }
         }
 
@@ -2143,16 +2135,7 @@ namespace ShouTech.App.Views
             if (RibbonControl == null)
                 return;
 
-            RibbonControl.Visibility =
-                Visibility.Collapsed;
-
-            // Explorer shell: an action click also clears the command
-            // bar, as the ribbon strip used to hide after a click.
-            if (CommandBarItems != null)
-                CommandBarItems.Children.Clear();
-            if (CommandBarTitle != null)
-                CommandBarTitle.Text = string.Empty;
-
+            RibbonControl.Visibility = Visibility.Collapsed;
             _currentTab = string.Empty;
         }
 
