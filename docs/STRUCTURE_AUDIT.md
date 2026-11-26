@@ -27,7 +27,7 @@ Branch: `reduce-2-upgrade`
 - Remove the redundant `ShouTech.ERP.Com/` wrapper.
 - Flatten `cod/app/src/` to `app/`.
 - Move the inventory library from `cod/cor/` to `src/Inv/`.
-- Shorten the domain project folder from `Domain` to `Dom`; retain the established `Domain.csproj` identity.
+- Use the compact `src/Dom/Dom.csproj` project path while preserving the public `Domain.dll` assembly identity. Standard .NET project conventions remain in use.
 - Keep Domain, App, Infra and Inv as separate bounded technical layers.
 - Place the solution, service, database assets, docs, tools, tests, security code and configuration directly under the repository root.
 - Preserve migration filenames, IDs, checksums and SQL contents.

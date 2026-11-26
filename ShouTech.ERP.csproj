@@ -83,8 +83,8 @@
        ================================================================ -->
   <ItemGroup>
 
-    <ProjectReference Include="src\Inv\inv.csproj" />
-    <ProjectReference Include="src\Dom\Domain.csproj" />
+    <ProjectReference Include="src\Inv\Inv.csproj" />
+    <ProjectReference Include="src\Dom\Dom.csproj" />
     <ProjectReference Include="src\App\App.csproj" />
     <ProjectReference Include="src\Infra\Infra.csproj" />
 
