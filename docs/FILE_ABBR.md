@@ -158,7 +158,7 @@ A reference that maps the current **abbreviated file names** in the project to t
 
 ---
 
-## Domain — `src/ShouTech.Domain/`
+## Domain — `src/Dom/`
 
 | File / path | Note |
 |------------|--------|

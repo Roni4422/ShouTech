@@ -14,6 +14,7 @@ The Windows desktop ERP application has one startup project at the repository ro
 - [Architecture](docs/ARCHITECTURE.md) — technical layers and project boundaries.
 - [Structure audit](docs/STRUCTURE_AUDIT.md) — canonical folder layout and ownership.
 - [Complete file/folder index](docs/FILE_INDEX.md) — searchable paths for every repository file and directory.
+- [Abbreviation dictionary](docs/FILE_ABBR.md) — shortened file and folder names with their full meanings.
 - [Developer guide](DEV.md) — engineering workflow and build guidance.
 
 ## Build and run
