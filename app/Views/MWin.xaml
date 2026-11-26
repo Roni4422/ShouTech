@@ -243,7 +243,6 @@
                 <MenuItem x:Name="MenuBanks" Header="Banks" Click="OnMenuBanksClick"/>
                 <MenuItem x:Name="MenuReports" Header="Reports" Click="OnMenuReportsClick"/>
                 <MenuItem x:Name="MenuTools" Header="Tools" Click="OnMenuToolsClick"/>
-                <MenuItem x:Name="MenuOtherTools" Header="Other Tools" Click="OnMenuOtherToolsClick"/>
                 <MenuItem x:Name="MenuView" Header="View" Click="OnMenuViewClick"/>
                 <MenuItem x:Name="MenuExit" Header="Exit" Click="OnMenuExitClick"/>
                 <MenuItem x:Name="MenuHelp" Header="Help" Click="OnMenuHelpClick"/>
@@ -640,9 +639,6 @@
                         <ribbon:RibbonButton loc:LocProps.Key="Tools.Addons" Label="Program add-ons" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="Tools.AI" Label="Artificial intelligence" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
-                </ribbon:RibbonTab>
-
-                <ribbon:RibbonTab x:Name="TabOtherTools" Header="Other Tools" Visibility="Collapsed">
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OtherToolsAdministration" Header="Administration">
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.Rotation" Label="Rollover" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.Permissions" Label="Permissions" Click="OnRibbonButtonClick"/>
@@ -662,7 +658,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.SearchDelivery" Label="Search delivery" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.CloseDriverCash" Label="Close driver cash" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
-                </ribbon:RibbonTab>
+
 
                 <ribbon:RibbonTab x:Name="TabView" Header="View" Visibility="Collapsed">
                    

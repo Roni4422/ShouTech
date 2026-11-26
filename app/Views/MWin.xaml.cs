@@ -802,12 +802,6 @@ namespace ShouTech.App.Views
                     L("Tools", "Tools");
             }
 
-            if (MenuOtherTools != null)
-            {
-                MenuOtherTools.Header =
-                    L("OtherTools", "Other Tools");
-            }
-
             if (MenuView != null)
             {
                 MenuView.Header =
@@ -1369,7 +1363,6 @@ namespace ShouTech.App.Views
                 ["TabBanks"] = "Menu.Banks",
                 ["TabReports"] = "Menu.Reports",
                 ["TabTools"] = "Menu.Tools",
-                ["TabOtherTools"] = "Menu.OtherTools",
                 ["TabView"] = "Menu.View",
                 ["TabExit"] = "Menu.Exit",
                 ["TabHelp"] = "Menu.Help"
@@ -1715,11 +1708,6 @@ namespace ShouTech.App.Views
             object sender,
             RoutedEventArgs e) =>
             ShowRibbonTab("TabTools");
-
-        private void OnMenuOtherToolsClick(
-            object sender,
-            RoutedEventArgs e) =>
-            ShowRibbonTab("TabOtherTools");
 
         private void OnMenuViewClick(
             object sender,
