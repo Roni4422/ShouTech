@@ -1528,11 +1528,10 @@ public static class DataExportSvc
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
                 map[reader.GetString(1)] = MapStorageType(reader.IsDBNull(2) ? null : reader.GetString(2));
-            return map;
         }
-
-        await using (var command = connection.CreateCommand())
+        else
         {
+            await using var command = connection.CreateCommand();
             command.CommandText = """
                 SELECT column_name, data_type
                 FROM information_schema.columns
@@ -1546,15 +1545,15 @@ public static class DataExportSvc
             while (await reader.ReadAsync(ct))
                 map[reader.GetString(0)] = MapStorageType(reader.GetString(1));
         }
-        // SQLite has no Boolean storage class. Boolean flags are stored as
-        // INTEGER, so declared storage types alone misclassify exported TRUE/FALSE
-        // cells as whole numbers. Preserve PostgreSQL's native Boolean mapping and
-        // recognize the application's language-neutral Boolean column conventions.
+
+        // SQLite stores Boolean flags as INTEGER. Apply the same
+        // language-neutral column conventions to both providers.
         foreach (var column in map.Keys.ToArray())
         {
             if (IsBooleanColumnName(column))
                 map[column] = RptColType.Boolean.ToString();
         }
+
         return map;
     }
 
