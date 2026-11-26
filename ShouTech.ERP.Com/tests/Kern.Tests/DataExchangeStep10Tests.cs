@@ -144,6 +144,20 @@ public class DataExchangeStep10Tests
     }
 
     [Fact]
+    public void ExcelImport_ResolvesLocalizedHeadersFromTrustedWorkbookIdentity()
+    {
+        var resolver = typeof(DataExportSvc).GetMethod(
+            "ResolveImportField", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var headers = new[] { "رقم الصنف", "اسم الصنف", "المجموعة" };
+        var fields = new[] { "code", "name", "group_code" };
+
+        Assert.Equal("code", resolver.Invoke(null, ["رقم الصنف", headers, fields, "materials"]));
+        Assert.Equal("name", resolver.Invoke(null, ["اسم الصنف", headers, fields, "materials"]));
+        Assert.Equal("group_code", resolver.Invoke(null, ["المجموعة", headers, fields, "materials"]));
+        Assert.Equal("name", resolver.Invoke(null, ["Name", headers, fields, "materials"]));
+    }
+
+    [Fact]
     public async Task ExcelImport_MaterialCardExportLabels_ImportWithoutHiddenIdentityMarker()
     {
         using var db = await MigratedDbAsync();
