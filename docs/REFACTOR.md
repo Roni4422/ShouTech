@@ -1,7 +1,7 @@
 # ShouTech ERP — Architecture Refactoring Program
 
-**Status:** Phase 0 audit and target architecture definition  
-**Working branch:** `work/full-app-stabilization-2026-11-18`  
+**Status:** Phase 0 structural baseline completed; behavioral inventory ongoing  
+**Working branch:** `reduce-2-upgrade`  
 **Protected baseline:** `main`  
 **Scope:** Windows desktop ERP, SQLite/PostgreSQL, background service, migration CLI, native security component.
 
@@ -9,20 +9,24 @@ This program is an incremental re-engineering effort. It is not a rewrite and it
 
 ## 1. Audit snapshot
 
-The branch tree at the audit commit contained 749 tracked files and 71 directories. The largest concentration is `cod/app` (300 files), followed by provider migrations (113 files across SQLite/PostgreSQL paths), Domain (65), Infrastructure (32), Application (27), and tests (39).
+The current `reduce-2-upgrade` tree contains **843 tracked files and 76 directories** (Git tree snapshot at commit `89b295425a7598beba6feb904537291e8e9ce3b3`). The canonical WPF entry point is at the repository root; presentation code is under `app/`, technical layers are under `src/Dom`, `src/App`, `src/Infra` and `src/Inv`, and provider migrations remain under `dba/mig/`. These counts exclude no tracked source files; generated/build/cache directories are not part of the tracked tree snapshot.
 
-Large implementation files requiring responsibility analysis include:
+Current large source/resource files requiring responsibility and reference analysis include:
 
-| File | Approximate size | Initial concern |
+| File | Approximate size | Review focus |
 |---|---:|---|
-| `cod/app/src/Services/Inventory.cs` | 134 KB | Inventory workflows, persistence and domain rules are likely too concentrated |
-| `src/Infra/HrRepository.cs` | 125 KB | Large repository; inspect query/command and aggregate boundaries |
-| `cod/app/src/Services/RptQuery.cs` | 112 KB | Report query catalog and execution concerns may be coupled |
-| `cod/app/src/Services/InvRepo.cs` | 111 KB | Persistence and inventory behavior boundary needs review |
-| `cod/app/src/Services/Company.cs` | 105 KB | Company lifecycle and provisioning concerns need separation |
-| `src/Infra/MfgOrderRepository.cs` | 101 KB | Manufacturing persistence responsibilities need decomposition |
-| `cod/app/src/Views/WhsWin.xaml.cs` | 98 KB | UI event handling and business logic boundary needs review |
-| `cod/app/src/Views/MatCard.xaml.cs` | 87 KB | UI construction, validation and persistence coupling risk |
+| `app/Services/InvRepo.cs` | 291 KB | Inventory persistence and legacy service boundary; map callers before changing |
+| `src/Infra/OrderDocumentRepository.cs` | 241 KB | Order document persistence; inspect cohesive query/command responsibilities |
+| `app/Themes/VisuId.xaml` | 215 KB | Shared visual resources; preserve resource keys and merged-dictionary behavior |
+| `app/Services/Rpt.cs` | 161 KB | Reporting orchestration and query responsibilities |
+| `tests/Kern.Tests/OrderChainStep9Tests.cs` | 151 KB | Test fixture cohesion and scenario coverage |
+| `src/Infra/CommercialDocumentRepository.cs` | 147 KB | Commercial document persistence and transaction boundaries |
+| `app/Services/Inventory.cs` | 135 KB | Inventory workflow ownership and persistence boundary |
+| `src/Infra/HrRepository.cs` | 125 KB | HR repository query/command and aggregate boundaries |
+| `src/Infra/MasterCardRepository.cs` | 117 KB | Master-data persistence responsibilities |
+| `app/Views/InvoiceWin.cs` | 114 KB | Programmatic UI construction and presentation/business separation |
+| `app/Services/Company.cs` | 112 KB | Company lifecycle and provisioning responsibilities |
+| `src/Infra/CrmRepository.cs` | 109 KB | CRM persistence responsibilities |
 
 File size is a review signal, not a deletion criterion.
 
@@ -229,10 +233,10 @@ This commit defines the audited baseline and the safe refactoring sequence. It d
 
 ## 11. Short naming convention
 
-Core project directories now use concise, readable names: `src/Domain`, `src/App`, and `src/Infra`. Project filenames are correspondingly `Domain.csproj`, `App.csproj`, and `Infra.csproj`. The C# namespaces and assembly identities remain unchanged in this compatibility step.
+Core project directories now use concise, readable names: `src/Dom`, `src/App`, and `src/Infra`. Project filenames are correspondingly `Domain.csproj`, `App.csproj`, and `Infra.csproj`. The C# namespaces and assembly identities remain unchanged in this compatibility step.
 
 Naming rules for subsequent work:
-- Prefer one clear word for a folder: `Domain`, `App`, `Infra`, `Views`, `Reports`, `Tests`, `Migrations`.
+- Prefer one clear word for a folder: `Dom`, `App`, `Infra`, `Inv`, `Views`, `Reports`, `Tests`, `Migrations`.
 - Use concise but meaningful PascalCase filenames: `Rpt.cs`, `InvRepo.cs`, `Company.cs`; avoid unexplained acronyms and one-letter names.
 - Keep established domain acronyms only when they are common in the ERP codebase (GL, HR, POS, CRM, SQL).
 - Do not shorten public type names, database table names, migration IDs, API routes or serialized field names as part of a filesystem rename; those are compatibility contracts.
@@ -289,3 +293,20 @@ After each wave:
 - Record failures, fixes and rerun evidence in the inventory.
 
 The final window-migration gate requires every inventoried candidate to be classified (window, view, helper, base type, view model, resource or historical), every visible route to have a verified destination, and a complete regression report. Do not claim completion from a file move or build-only result.
+
+
+## 14. Verified repository baseline (2026-11-26)
+
+The following facts were checked against the Git tree and current branch, rather than carried forward from the earlier audit snapshot:
+
+- Branch: `reduce-2-upgrade`.
+- Audited commit: `89b295425a7598beba6feb904537291e8e9ce3b3`.
+- Tracked tree: 843 files and 76 directories.
+- Canonical startup files: `App.xaml`, `App.xaml.cs`, `ShouTech.ERP.csproj` and `ShouTech.sln` at repository root.
+- Current source roots include `app/`, `src/Dom/`, `src/App/`, `src/Infra/`, `src/Inv/`, `dba/`, `svc/`, `tools/`, `tests/`, `sec/`, `cfg/`, `docs/` and `archive/`.
+- The generated `docs/FILE_INDEX.md` reports the same 843-file / 76-directory counts.
+- `tools/gen_index.py` validates the root entry point, requires exactly one `App.xaml`, and rejects reintroduction of the obsolete `ShouTech.ERP.Com/`, `cod/`, `src/Domain/` and `src/ShouTech.Domain/` wrappers.
+
+This is a **structural baseline**, not proof that Phase 0's behavioral inventory is complete. The remaining Phase 0 work is to map active window routes, startup and dependency composition, service-to-repository call paths, database access ownership, migration dependencies/checksums, and meaningful test coverage. Phase 1 and production-code movement remain gated on that evidence.
+
+The large-file table above is a review queue generated from the current tracked tree. Sizes are approximate and must never be used alone to split, delete or move a file. The preservation and disposition rules in Sections 6 and 12 continue to govern every candidate.
