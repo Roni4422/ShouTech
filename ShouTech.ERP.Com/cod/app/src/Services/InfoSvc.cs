@@ -151,7 +151,7 @@ public static class InfoSvc
         "Phone", "Mobile", "Email", "Active"
     ];
 
-    private static readonly IReadOnlyDictionary<InfoKind, string[]> Registry =
+    private static readonly Dictionary<InfoKind, string[]> Registry =
         new Dictionary<InfoKind, string[]>
         {
             [InfoKind.Material] =
@@ -202,7 +202,7 @@ public static class InfoSvc
             ]
         };
 
-    private static readonly IReadOnlyDictionary<InfoKind, string[]> Defaults =
+    private static readonly Dictionary<InfoKind, string[]> Defaults =
         new Dictionary<InfoKind, string[]>
         {
             // The Phenix checked set (§7 of the evidence): balances,
