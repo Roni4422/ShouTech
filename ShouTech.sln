@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShouTech.ERP", "ShouTech.ERP.csproj", "{D1A9F596-70FE-4891-9913-E02C1E158272}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "svc", "ShouTech.ERP.Com\svc\svc.csproj", "{E88C7E6C-B6C6-4AA0-8369-27C7EF255BE9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "svc", "svc\svc.csproj", "{E88C7E6C-B6C6-4AA0-8369-27C7EF255BE9}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShouTech.Core.Inv", "src\Inv\inv.csproj", "{B92349F3-FDF5-4AF8-94A7-36A1821B2EA1}"
 EndProject

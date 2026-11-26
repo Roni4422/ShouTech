@@ -127,18 +127,20 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 
 | Path | Responsibility |
 |---|---|
-| `cod/app/src/` | WPF startup, views, view models, navigation, services, reporting, localization, and configuration integration |
-| `cod/cor/` | Inventory core project and related models, services, repositories, and unit-of-work code |
-| `src/ShouTech.Domain/` | Domain entities, enums, and repository/service interfaces |
-| `src/ShouTech.Application/` | Application-level services and use-case logic |
-| `src/ShouTech.Infrastructure/` | Provider-backed database repositories and health checks |
-| `svc/` | Windows service host, outbox worker, and health reporting |
-| `tools/SqlMigrator/` | CLI for SQLite/PostgreSQL database migrations |
-| `dba/mig/` | Active provider-specific migration histories |
+| `ShouTech.ERP.csproj`, `App.xaml`, `App.xaml.cs` | Sole Windows desktop application and bootstrap |
+| `app/` | WPF views, view models, services, navigation, reporting, localization, themes, and resources |
+| `src/Dom/` | Domain entities, value types, contracts, and business rules |
+| `src/App/` | Application use cases and orchestration |
+| `src/Infra/` | SQLite/PostgreSQL persistence and infrastructure adapters |
+| `src/Inv/` | Inventory core library |
+| `dba/` | Authoritative schema assets and provider-specific migration history |
+| `svc/` | Independent Windows background worker |
+| `tools/` | SQL migration CLI and developer verification harnesses |
+| `tests/` | Automated regression and integration tests |
 | `sec/` | Native C++ security library and native tests |
-| `tests/Kern.Tests/` | .NET xUnit tests |
-| `archive/` | Legacy schema snapshots and SQL Server reference scripts |
-| `docs/` | Feature, migration, schema, and development documentation |
+| `cfg/` | Non-secret application defaults |
+| `docs/` | Architecture, product, engineering, and user documentation |
+| `archive/` | Historical schema snapshots and legacy reference material |
 
 ## Architectural caveats
 

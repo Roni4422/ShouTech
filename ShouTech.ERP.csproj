@@ -132,10 +132,10 @@
        ================================================================ -->
   <ItemGroup>
 
-    <None Include="ShouTech.ERP.Com\cfg\appset.json" Link="cfg/appset.json" Condition="Exists('ShouTech.ERP.Com\cfg\appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="cfg\appset.json" Link="cfg/appset.json" Condition="Exists('cfg\appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="app\Resources\Errors\*.json" Link="Resources\Errors\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="app\Resources\Lang\*.json" Link="Resources\Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="ShouTech.ERP.Com\docs\USER_GUIDE_EN.md" Link="docs/USER_GUIDE_EN.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="docs\USER_GUIDE_EN.md" Link="docs/USER_GUIDE_EN.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="app\Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="app\Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	
@@ -185,7 +185,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="ShouTech.ERP.Com\dba\mig\sqlite\*.sql" Link="dba/mig/sqlite/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('ShouTech.ERP.Com\dba\mig\sqlite')" />
-    <None Include="ShouTech.ERP.Com\dba\mig\postgresql\*.sql" Link="dba/mig/postgresql/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('ShouTech.ERP.Com\dba\mig\postgresql')" />
+    <None Include="dba\mig\sqlite\*.sql" Link="dba/mig/sqlite/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('dba\mig\sqlite')" />
+    <None Include="dba\mig\postgresql\*.sql" Link="dba/mig/postgresql/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('dba\mig\postgresql')" />
   </ItemGroup>
 </Project>
