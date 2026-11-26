@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "FILE_INDEX.md"
-SKIP = {".git", ".vs", "bin", "obj", "TestResults", "__pycache__", "node_modules", ".idea"}
+SKIP = {".git", ".vs", ".idea", ".cache", ".venv", "venv", "bin", "obj", "build", "dist", "publish", "artifacts", "coverage", "TestResults", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", "node_modules", "packages"}
 PURPOSE = {
     "app": "WPF desktop UI, views, view models, services, navigation, localization and resources",
     "src": "Domain, application, infrastructure and inventory libraries",
