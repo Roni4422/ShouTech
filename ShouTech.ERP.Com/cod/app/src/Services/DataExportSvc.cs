@@ -795,7 +795,17 @@ public static class DataExportSvc
         var matchedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var header in visibleHeaders)
         {
-            var field = MatchImportColumn(header, identity.Fields, option.TableName);
+            // The encrypted identity stores the exact localized header emitted
+            // by the export. Resolve that label by identity before attempting
+            // the English/business-name fallback. Without this step, an Arabic
+            // export is readable in Excel but cannot be imported because its
+            // translated column captions do not match physical database names.
+            var identityHeaderIndex = Array.FindIndex(
+                identity.Headers,
+                exportedHeader => string.Equals(exportedHeader, header, StringComparison.OrdinalIgnoreCase));
+            var field = identityHeaderIndex >= 0
+                ? identity.Fields[identityHeaderIndex]
+                : MatchImportColumn(header, identity.Fields, option.TableName);
             if (field == null || !fieldTypes.TryGetValue(field, out var type) || !matchedFields.Add(field))
                 throw new InvalidDataException($"Column '{header}' does not uniquely match a field in the exported dataset.");
             headerToField.Add(header, (field, type));
