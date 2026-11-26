@@ -587,7 +587,7 @@ public sealed class ContractRepository : IContractRepository
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        var keys = SalesPriceResolver.CompanyKeys(connection, null!, _provider, company);
+        var keys = SalesPriceResolver.CompanyKeys(connection, null, _provider, company);
         var inList = string.Join(", ", keys.Select((_, i) => $"@co{i}"));
 
         // Revenue: posted SAL documents linked from the contract's
