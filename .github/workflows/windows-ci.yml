@@ -58,8 +58,6 @@ jobs:
           foreach ($item in $failed) {
             $n = $item.Node
             $name = [string]$n.GetAttribute('testName')
-            $messageNode = $n.SelectSingleNode("t:Output/t:ErrorInfo/t:Message", (New-Object System.Xml.XmlNamespaceManager($n.OwnerDocument.NameTable)))
-            $stackNode = $n.SelectSingleNode("t:Output/t:ErrorInfo/t:StackTrace", (New-Object System.Xml.XmlNamespaceManager($n.OwnerDocument.NameTable)))
             $manager = New-Object System.Xml.XmlNamespaceManager($n.OwnerDocument.NameTable)
             $manager.AddNamespace('t', 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
             $messageNode = $n.SelectSingleNode("t:Output/t:ErrorInfo/t:Message", $manager)
