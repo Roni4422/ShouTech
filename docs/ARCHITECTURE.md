@@ -42,7 +42,7 @@ flowchart BT
     Application["App<br/>application services"]
     Infrastructure["Infra<br/>database repositories"]
     Inventory["ShouTech.Core.Inv<br/>inventory core"]
-    ShouTech.ERP["ShouTech.ERP<br/>WPF desktop executable"]
+    DesktopApp["ShouTech.ERP<br/>WPF desktop executable"]
     Tests["Kern.Tests<br/>xUnit test project"]
     Migrator["SqlMigrator<br/>standalone CLI"]
     Service["svc<br/>Windows worker executable"]
@@ -50,11 +50,11 @@ flowchart BT
     Application --> Domain
     Infrastructure --> Domain
     Inventory --> Domain
-    ShouTech.ERP --> Domain
-    ShouTech.ERP --> Application
-    ShouTech.ERP --> Infrastructure
-    ShouTech.ERP --> Inventory
-    Tests --> ShouTech.ERP
+    DesktopApp --> Domain
+    DesktopApp --> Application
+    DesktopApp --> Infrastructure
+    DesktopApp --> Inventory
+    Tests --> DesktopApp
     Tests -. "build/reference only<br/>(ReferenceOutputAssembly=false)" .-> Migrator
 ```
 
