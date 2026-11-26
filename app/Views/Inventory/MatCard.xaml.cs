@@ -313,6 +313,11 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         {
             DgUnits.CanUserAddRows = false;
             DgAttributes.CanUserAddRows = true;
+            // Unit grid already has a persisted LineNo data column; avoid
+            // duplicating it with the shared row header. Attribute rows use
+            // the standard row header and shared Excel-like interaction.
+            GridEngine.ApplyStandard(DgUnits, showRowNumbers: false);
+            GridEngine.ApplyStandard(DgAttributes);
             DgUnits.ItemsSource = _units;
             DgUnits.PreparingCellForEdit += DgUnits_PreparingCellForEdit;
             DgAttributes.ItemsSource = _attrs;

@@ -11,7 +11,8 @@ namespace ShouTech.App.Services;
 public static class GridEngine
 {
     public static void ApplyStandard(DataGrid grid, string rowBrushKey = "TableSurfaceBrush",
-        string alternateRowBrushKey = "TableAlternateRowBrush", bool enableContextMenu = true)
+        string alternateRowBrushKey = "TableAlternateRowBrush", bool showRowNumbers = true,
+        bool enableContextMenu = true)
     {
         ArgumentNullException.ThrowIfNull(grid);
         grid.AutoGenerateColumns = false;
@@ -21,14 +22,16 @@ public static class GridEngine
         VirtualizingPanel.SetIsVirtualizing(grid, true);
         VirtualizingPanel.SetVirtualizationMode(grid, VirtualizationMode.Recycling);
         ScrollViewer.SetCanContentScroll(grid, true);
-        grid.HeadersVisibility = DataGridHeadersVisibility.All;
-        grid.RowHeaderWidth = 38;
+        grid.HeadersVisibility = showRowNumbers ? DataGridHeadersVisibility.All : DataGridHeadersVisibility.Column;
+        grid.RowHeaderWidth = showRowNumbers ? 38 : 0;
         grid.CanUserResizeRows = false;
         grid.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         grid.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         grid.SetResourceReference(DataGrid.RowBackgroundProperty, rowBrushKey);
         grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, alternateRowBrushKey);
-        DataGridTableBehavior.SetShowRowNumbers(grid, true);
-        DataGridTableBehavior.SetEnableStandardContextMenu(grid, enableContextMenu);
+        if (showRowNumbers)
+            DataGridTableBehavior.SetShowRowNumbers(grid, true);
+        if (enableContextMenu)
+            DataGridTableBehavior.SetEnableStandardContextMenu(grid, true);
     }
 }
