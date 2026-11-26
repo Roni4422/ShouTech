@@ -21,12 +21,14 @@ ShouTech supports SQLite and PostgreSQL only. SQL Server-specific scripts and im
 
 ## Configure and run
 
-From the repository root, the standard build command automatically selects the single root solution:
+From the repository root, the root `ShouTech.ERP.csproj` is the default application entry point:
 
 ```powershell
-dotnet restore
-dotnet build --configuration Release --no-restore
-dotnet run --project app/ShouTech.ERP.csproj
+dotnet build
+dotnet run
+
+# Full solution and tests
+dotnet build build/ShouTech.sln
 dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release
 ```
 
