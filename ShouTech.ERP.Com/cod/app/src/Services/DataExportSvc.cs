@@ -800,12 +800,8 @@ public static class DataExportSvc
             // the English/business-name fallback. Without this step, an Arabic
             // export is readable in Excel but cannot be imported because its
             // translated column captions do not match physical database names.
-            var identityHeaderIndex = Array.FindIndex(
-                identity.Headers,
-                exportedHeader => string.Equals(exportedHeader, header, StringComparison.OrdinalIgnoreCase));
-            var field = identityHeaderIndex >= 0
-                ? identity.Fields[identityHeaderIndex]
-                : MatchImportColumn(header, identity.Fields, option.TableName);
+            var field = ResolveImportField(
+                header, identity.Headers, identity.Fields, option.TableName);
             if (field == null || !fieldTypes.TryGetValue(field, out var type) || !matchedFields.Add(field))
                 throw new InvalidDataException($"Column '{header}' does not uniquely match a field in the exported dataset.");
             headerToField.Add(header, (field, type));
@@ -1414,6 +1410,30 @@ public static class DataExportSvc
                 skipped.Add(sheet.Headers[i]);
         }
         return (identity, new ExcelSheet(headers, rows), skipped);
+    }
+
+    internal static string? ResolveImportField(
+        string header,
+        IReadOnlyList<string> exportedHeaders,
+        IReadOnlyList<string> fields,
+        string tableName)
+    {
+        if (exportedHeaders.Count != fields.Count)
+            throw new InvalidDataException("The workbook dataset schema is invalid.");
+
+        var identityHeaderIndex = -1;
+        for (var i = 0; i < exportedHeaders.Count; i++)
+        {
+            if (string.Equals(exportedHeaders[i], header, StringComparison.OrdinalIgnoreCase))
+            {
+                identityHeaderIndex = i;
+                break;
+            }
+        }
+
+        return identityHeaderIndex >= 0
+            ? fields[identityHeaderIndex]
+            : MatchImportColumn(header, fields, tableName);
     }
 
     private static string? MatchImportColumn(
