@@ -16,7 +16,7 @@
     <Compile Include="..\..\svc\WebhookSigner.cs" Link="WebhookSigner.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\app\ShouTech.ERP.csproj" />
+    <ProjectReference Include="..\..\ShouTech.ERP.csproj" />
     <ProjectReference Include="..\..\src\Infra\Infra.csproj" />
     <ProjectReference Include="..\..\tools\SqlMigrator\SqlMigrator.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
