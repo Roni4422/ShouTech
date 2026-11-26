@@ -1089,8 +1089,8 @@ namespace Kern.Tests
                     VALUES (1, 'SC-TEST', 1, 'Main', 'Main', 1, 0);
 
                     INSERT INTO materials
-                        (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted)
-                    VALUES (42, 'SC-TEST', 'MAT-42', 'Chain test item', 'Chain test item', 1, 0);
+                        (material_id, company_id, code, name, is_stocked, is_deleted)
+                    VALUES (42, 'SC-TEST', 'MAT-42', 'Chain test item', 1, 0);
 
                     INSERT INTO material_stock_balances
                         (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
@@ -1495,8 +1495,8 @@ namespace Kern.Tests
                     VALUES (1, $companyId, 1, 'Main', 'Main', 1, 0);
 
                     INSERT INTO materials
-                        (material_id, company_id, code, name_ar, name_en, is_stocked, is_deleted)
-                    VALUES (42, $companyId, 'MAT-42', 'Chain test item', 'Chain test item', 1, 0);
+                        (material_id, company_id, code, name, is_stocked, is_deleted)
+                    VALUES (42, $companyId, 'MAT-42', 'Chain test item', 1, 0);
 
                     INSERT INTO material_stock_balances
                         (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost)
