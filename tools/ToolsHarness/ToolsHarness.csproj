@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- InfoHarness: headless proof for the global Information Window
-       (INFO_WINDOW_STUDY §7). Runs the REAL InfoSvc against a real
+  <!-- ToolsHarness: headless proof for the unified Tools window
+       (TOOLS_WINDOW_STUDY §8). Runs the REAL backup engine, AppConfig store and Operations stack against a real
        SchemaMigrator-built SQLite database and prints PASS/FAIL lines.
        On Linux the WindowsDesktop framework entry is stripped from the
        generated runtimeconfig before execution (the exercised code
@@ -11,12 +11,12 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>InfoHarness</AssemblyName>
+    <AssemblyName>ToolsHarness</AssemblyName>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\ShouTech.ERP.csproj" />
+    <ProjectReference Include="..\..\ShouTech.ERP.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- BinHarness: headless proof for the recycle-bin completion
-       (SOFT_DELETE_STUDY). Runs the REAL services (InvRepo posting,
-       DocBinSvc, RecycleBinSvc, JournalRepository) against a real
+  <!-- InfoHarness: headless proof for the global Information Window
+       (INFO_WINDOW_STUDY §7). Runs the REAL InfoSvc against a real
        SchemaMigrator-built SQLite database and prints PASS/FAIL lines.
        On Linux the WindowsDesktop framework entry is stripped from the
        generated runtimeconfig before execution (the exercised code
@@ -12,12 +11,12 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>BinHarness</AssemblyName>
+    <AssemblyName>InfoHarness</AssemblyName>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\ShouTech.ERP.csproj" />
+    <ProjectReference Include="..\..\ShouTech.ERP.csproj" />
   </ItemGroup>
 
 </Project>

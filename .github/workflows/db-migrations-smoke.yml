@@ -5,14 +5,14 @@ on:
     branches: [main, work/full-app-stabilization-2026-11-18, reduce-2-upgrade]
     paths:
       - 'dba/mig/**'
-      - 'ShouTech.ERP.Com/tools/SqlMigrator/**'
+      - 'tools/SqlMigrator/**'
       - 'app/Services/SchMig.cs'
       - '.github/workflows/db-migrations-smoke.yml'
   pull_request:
     branches: [main, reduce-2-upgrade]
     paths:
       - 'dba/mig/**'
-      - 'ShouTech.ERP.Com/tools/SqlMigrator/**'
+      - 'tools/SqlMigrator/**'
       - 'app/Services/SchMig.cs'
       - '.github/workflows/db-migrations-smoke.yml'
   workflow_dispatch:
@@ -30,9 +30,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Create clean SQLite database and apply migrations
-        run: dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-fresh.db"
+        run: dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-fresh.db"
       - name: Re-run migrations against the same SQLite database
-        run: dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-fresh.db"
+        run: dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-fresh.db"
       - name: Assert journal header columns exist in SQLite
         run: |
           python3 - <<'PY'
@@ -88,8 +88,8 @@ jobs:
           con.commit()
           con.close()
           PY
-          dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
-          dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
+          dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
+          dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
 
   postgresql-migrations:
     runs-on: ubuntu-latest
@@ -115,11 +115,11 @@ jobs:
       - name: Apply migrations to clean PostgreSQL database
         env:
           PG_CONN: Host=localhost;Port=5432;Database=shoutest;Username=shoutest;Password=shoutest
-        run: dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN"
+        run: dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN"
       - name: Re-run migrations against the same PostgreSQL database
         env:
           PG_CONN: Host=localhost;Port=5432;Database=shoutest;Username=shoutest;Password=shoutest
-        run: dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN"
+        run: dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN"
       - name: Assert journal header columns exist in PostgreSQL
         env:
           PG_CONN: Host=localhost;Port=5432;Database=shoutest;Username=shoutest;Password=shoutest
@@ -151,5 +151,5 @@ jobs:
           # Use a separate empty database: dropping public alone may leave application objects in other schemas.
           PGPASSWORD=shoutest createdb -h localhost -U shoutest shoutest_existing_history
           PGPASSWORD=shoutest psql -h localhost -U shoutest -d shoutest_existing_history -v ON_ERROR_STOP=1 -c "CREATE TABLE schema_migrations (migration_id text PRIMARY KEY, checksum char(64) NOT NULL, applied_at timestamptz NOT NULL DEFAULT now());"
-          dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"
-          dotnet run --project ShouTech.ERP.Com/tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"
+          dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"
+          dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"

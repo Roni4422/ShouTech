@@ -2,7 +2,7 @@
 """
 ShouTech ERP - window shell-context audit.
 
-Enumerates every window class in cod/app/src/Views and reports, per window:
+Enumerates every window class in app/Views and reports, per window:
   * base class,
   * direction (RTL/LTR) source,
   * company-context source,
@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "cod" / "app" / "src"
+SRC = ROOT / "app"
 VIEWS = SRC / "Views"
 
 APPHOST_SVC = re.compile(r"AppHost\.(Journal|JournalStore|Projects|Assets|Reconciliation|AccountingStructure|DatabaseHealth|Budgets|Quality|Crm)\b")

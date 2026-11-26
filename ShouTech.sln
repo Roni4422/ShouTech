@@ -19,11 +19,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infra", "src\Infra\Infra.cs
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{657557B0-B19A-406A-8027-F1D5D2082980}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kern.Tests", "ShouTech.ERP.Com\tests\Kern.Tests\Kern.Tests.csproj", "{FDCE060E-6293-4A40-8B3D-341F0C0D8160}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kern.Tests", "tests\Kern.Tests\Kern.Tests.csproj", "{FDCE060E-6293-4A40-8B3D-341F0C0D8160}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{98593162-CCD5-43C0-A131-176082BDB847}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlMigrator", "ShouTech.ERP.Com\tools\SqlMigrator\SqlMigrator.csproj", "{18949270-98DA-476F-A5FD-12F48EEBA99E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlMigrator", "tools\SqlMigrator\SqlMigrator.csproj", "{18949270-98DA-476F-A5FD-12F48EEBA99E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

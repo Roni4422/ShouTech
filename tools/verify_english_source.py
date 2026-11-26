@@ -22,9 +22,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ARABIC = re.compile(r"[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]")
 ALLOWED_PARTS = {
-    Path("cod/app/src/Resources/Lang"),
-    Path("cod/app/src/Resources/COA/Lang"),
-    Path("cod/app/src/Resources/Errors"),
+    Path("app/Resources/Lang"),
+    Path("app/Resources/COA/Lang"),
+    Path("app/Resources/Errors"),
     Path("dba/mig"),
     Path("docs"),
     Path("tests/Kern.Tests/SteiRoundTripTests.cs"),
@@ -67,7 +67,7 @@ def main() -> int:
         print(f"{file}:{line}: {sample}")
 
     # Validate the shape of all localization catalogs and report missing keys.
-    lang_root = ROOT / "cod/app/src/Resources/Lang"
+    lang_root = ROOT / "app/Resources/Lang"
     catalogs: dict[str, dict] = {}
     for path in sorted(lang_root.glob("*.json")):
         try:

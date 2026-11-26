@@ -6,7 +6,7 @@ The owner's rule: every child window opens at <= 50% of the work area.
 At 1366x768 that cap is 684x384, so no window may declare a minimum
 larger than that (a minimum above the cap defeats the central cap:
 BaseWin's clamp floors at the minimum). This harness statically
-verifies, from the XAML/code in cod/app/src/Views:
+verifies, from the XAML/code in app/Views:
 
   1. Every window's declared MinWidth/MinHeight is <= 684x384.
      (Windows that declare no minimum cannot defeat the cap and are
@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-VIEWS = ROOT / "cod" / "app" / "src" / "Views"
+VIEWS = ROOT / "app" / "Views"
 CAP_W, CAP_H = 684, 384
 
 SEQ_RE = re.compile(

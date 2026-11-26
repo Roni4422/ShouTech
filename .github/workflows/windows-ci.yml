@@ -37,7 +37,7 @@ jobs:
         run: dotnet build ShouTech.sln --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test ShouTech.ERP.Com/tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
+        run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
 
       - name: Report failed tests
         if: failure()
@@ -63,5 +63,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: windows-test-results
-          path: ShouTech.ERP.Com/**/TestResults/*.trx
+          path: **/TestResults/*.trx
           if-no-files-found: warn

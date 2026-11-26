@@ -9,6 +9,13 @@ The Windows desktop ERP application has one startup project at the repository ro
 - Application bootstrap and lifecycle: `App.xaml.cs`
 - Solution: `ShouTech.sln`
 
+## Repository map
+
+- [Architecture](docs/ARCHITECTURE.md) — technical layers and project boundaries.
+- [Structure audit](docs/STRUCTURE_AUDIT.md) — canonical folder layout and ownership.
+- [Complete file/folder index](docs/FILE_INDEX.md) — searchable paths for every repository file and directory.
+- [Developer guide](DEV.md) — engineering workflow and build guidance.
+
 ## Build and run
 
 Run these commands from the repository root on Windows with the .NET 8 SDK:

@@ -60,7 +60,7 @@ def main() -> int:
     duplicates = {name: places for name, places in sorted(definitions.items()) if len(places) > 1}
     active_service_ddl = [
         hit for hit in ddl_hits
-        if hit[0].startswith("cod/app/src/Services/")
+        if hit[0].startswith("app/Services/")
     ]
     non_dba_sql = [
         hit for hit in ddl_hits
