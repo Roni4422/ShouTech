@@ -143,8 +143,8 @@ var binCount = await RecycleBinSvc.CountAsync(CompanyCode);
 Check("health: recycle-bin count source answers", binCount == 0, binCount.ToString());
 
 // ---------------------------------------------------------------- errors
-var errorsDir = FindUp(AppContext.BaseDirectory, Path.Combine("cod", "app", "src", "Resources", "Errors"))
-    ?? FindUp(Directory.GetCurrentDirectory(), Path.Combine("cod", "app", "src", "Resources", "Errors"));
+var errorsDir = FindUp(AppContext.BaseDirectory, Path.Combine("app", "Resources", "Errors"))
+    ?? FindUp(Directory.GetCurrentDirectory(), Path.Combine("app", "Resources", "Errors"));
 foreach (var lang in new[] { "en", "ar", "fr", "tr" })
 {
     var catalog = new ErrorCatalogSvc(() => lang, errorsDir);
