@@ -55,7 +55,7 @@ flowchart BT
     Tests -. "build/reference only<br/>(ReferenceOutputAssembly=false)" .-> Migrator
 ```
 
-`ShouTech.sln` includes the projects shown above. `sec/` has a separate CMake/C++ build and is not listed as a solution project. The root WPF project is `ShouTech.ERP.csproj` (assembly `ShouTech.ERP`). It references `src/Dom/Dom.csproj` (assembly `Domain`), `src/App/App.csproj` (assembly `App`), `src/Infra/Infra.csproj` (assembly `Infra`), and `src/Inv/Inv.csproj` (assembly `ShouTech.Core.Inv`). The WPF client also retains legacy presentation-facing services; this is a transitional, mixed architecture rather than a strict single-direction clean-architecture stack.
+`ShouTech.sln` includes the active projects shown above. `sec/` has a separate CMake/C++ build and is not listed as a solution project. The root WPF project is `ShouTech.ERP.csproj` (assembly `ShouTech.ERP`). It references `src/Dom/Dom.csproj` (assembly `Domain`), `src/App/App.csproj` (assembly `App`), and `src/Infra/Infra.csproj` (assembly `Infra`). The former SQL Server-only inventory adapter is archived under `archive/legacy_inventory/` and excluded from the active solution. The WPF client also retains legacy presentation-facing services; this is a transitional, mixed architecture rather than a strict single-direction clean-architecture stack.
 
 ## Desktop application
 
