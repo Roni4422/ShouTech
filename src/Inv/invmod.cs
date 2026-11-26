@@ -48,23 +48,15 @@ namespace ShouTech.Core.Inv
             _security = security;
         }
 
-        public async Task<bool> ProcessPOSSaleAsync(POSSaleRequest req)
+        public Task<bool> ProcessPOSSaleAsync(POSSaleRequest req)
         {
-            await _security.ValidatePermissionAsync(req.UserId, "POS.ProcessSale");
+            ArgumentNullException.ThrowIfNull(req);
 
-            _uow.Begin();
-            try
-            {
-                _uow.Commit();
-                _logger.LogInformation("POS Sale Completed Successfully");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _uow.Rollback();
-                _logger.LogError(ex, "POS Sale Failed");
-                throw;
-            }
+            // This legacy module has no complete posting implementation. Never
+            // report a sale as successful or commit an empty transaction.
+            _logger.LogError("POS sale processing is unavailable in the legacy inventory module.");
+            throw new NotSupportedException(
+                "POS sale processing is not implemented by this legacy inventory module. Use the application POS workflow.");
         }
 
         public void Dispose() => _uow?.Dispose();
