@@ -60,13 +60,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="cfg\appset.json" Link="cfg/appset.json" Condition="Exists('..\cfg\appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="Resources\Errors\*.json" Link="Resources\Errors\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Resources\Lang\*.json" Link="Resources\Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="cfg\appset.json" Link="cfg/appset.json" Condition="Exists('cfg\appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="app\Resources\Errors\*.json" Link="Resources\Errors\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="app\Resources\Lang\*.json" Link="Resources\Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="docs\USER_GUIDE_EN.md" Link="docs/USER_GUIDE_EN.md" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Resource Include="Resources\Ico\**\*.png"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <None Include="app\Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="app\Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Resource Include="app\Resources\Ico\**\*.png"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
     <Resource Include="Resources\Ico\**\*.jpg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
     <Resource Include="Resources\Ico\**\*.svg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
     <Resource Include="Resources\Ico\**\*.ico"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
