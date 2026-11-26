@@ -6,7 +6,8 @@ Branch: `reduce-2-upgrade`
 
 | Path | Responsibility |
 |---|---|
-| `App.xaml`, `App.xaml.cs` | Sole WPF application definition and lifecycle at repository root |\n| `ShouTech.ERP.csproj` | Sole Windows desktop startup project and default root-level .NET entry point |
+| `App.xaml`, `App.xaml.cs` | Sole WPF application definition and lifecycle at repository root |
+| `ShouTech.ERP.csproj` | Sole Windows desktop startup project and default root-level .NET entry point |
 | `build/ShouTech.sln` | Full developer/IDE solution; deliberately nested so it does not compete with the root project for plain `dotnet build` and `dotnet run` |
 | `app/` | WPF presentation: views, view models, services, navigation, reporting, localization, themes and resources |
 | `src/Dom/` | Domain entities, value types, contracts and business rules |
