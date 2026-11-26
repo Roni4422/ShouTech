@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Security.Cryptography;
+using System.Text;
 using System.Windows;
 using ShouTech.App.Configuration;
 
@@ -71,6 +73,21 @@ public static class ShellContext
             "CurrencyCode", typeof(string), typeof(ShellContext),
             new PropertyMetadata(null));
 
+    public static readonly DependencyProperty UserIdProperty =
+        DependencyProperty.RegisterAttached(
+            "UserId", typeof(string), typeof(ShellContext),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty DatabaseProviderProperty =
+        DependencyProperty.RegisterAttached(
+            "DatabaseProvider", typeof(string), typeof(ShellContext),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty DatabaseFingerprintProperty =
+        DependencyProperty.RegisterAttached(
+            "DatabaseFingerprint", typeof(string), typeof(ShellContext),
+            new PropertyMetadata(null));
+
     public static string? GetCompanyCode(DependencyObject obj) =>
         (string?)obj.GetValue(CompanyCodeProperty);
 
@@ -94,6 +111,24 @@ public static class ShellContext
 
     public static void SetCurrencyCode(DependencyObject obj, string? value) =>
         obj.SetValue(CurrencyCodeProperty, value);
+
+    public static string? GetUserId(DependencyObject obj) =>
+        (string?)obj.GetValue(UserIdProperty);
+
+    public static void SetUserId(DependencyObject obj, string? value) =>
+        obj.SetValue(UserIdProperty, value);
+
+    public static string? GetDatabaseProvider(DependencyObject obj) =>
+        (string?)obj.GetValue(DatabaseProviderProperty);
+
+    public static void SetDatabaseProvider(DependencyObject obj, string? value) =>
+        obj.SetValue(DatabaseProviderProperty, value);
+
+    public static string? GetDatabaseFingerprint(DependencyObject obj) =>
+        (string?)obj.GetValue(DatabaseFingerprintProperty);
+
+    public static void SetDatabaseFingerprint(DependencyObject obj, string? value) =>
+        obj.SetValue(DatabaseFingerprintProperty, value);
 
     // ================================================================
     //  Live snapshot — resolved fresh from the central holders on
@@ -134,6 +169,45 @@ public static class ShellContext
     /// <summary>Display name of the signed-in user (empty when signed out).</summary>
     public static string CurrentUserName => AppState.CurrentUser?.FullName ?? string.Empty;
 
+    /// <summary>Stable user identity for the active authenticated session.</summary>
+    public static string CurrentUserId => AppState.CurrentUser?.Username ?? string.Empty;
+
+    /// <summary>Database provider selected by the active company.</summary>
+    public static string ActiveDatabaseProvider
+    {
+        get
+        {
+            try { return DatabaseRuntime.IsPostgreSql() ? "postgresql" : "sqlite"; }
+            catch { return string.Empty; }
+        }
+    }
+
+    /// <summary>
+    /// Non-reversible fingerprint of the active connection string. It lets
+    /// diagnostics verify that every open window is stamped for the same
+    /// database without exposing credentials or the connection string.
+    /// </summary>
+    public static string ActiveDatabaseFingerprint
+    {
+        get
+        {
+            try
+            {
+                var connectionString = DatabaseRuntime.GetConnectionString();
+                if (string.IsNullOrWhiteSpace(connectionString))
+                    return string.Empty;
+
+                return Convert.ToHexString(
+                    SHA256.HashData(Encoding.UTF8.GetBytes(connectionString.Trim())));
+            }
+            catch (Exception ex)
+            {
+                AppHost.Logging?.LogError("ShellContext", "Active database fingerprint could not be resolved", ex);
+                return string.Empty;
+            }
+        }
+    }
+
     // ================================================================
     //  THE central routine
     // ================================================================
@@ -167,6 +241,9 @@ public static class ShellContext
         SetLanguageCode(window, LanguageCode);
         SetAccentKey(window, AccentKey);
         SetCurrencyCode(window, CurrencyCode);
+        SetUserId(window, CurrentUserId);
+        SetDatabaseProvider(window, ActiveDatabaseProvider);
+        SetDatabaseFingerprint(window, ActiveDatabaseFingerprint);
     }
 
     /// <summary>
@@ -191,7 +268,9 @@ public static class ShellContext
     /// <summary>One-line description of the context a window carries (diagnostics/audit).</summary>
     public static string Describe(Window window) =>
         $"Company={GetCompanyCode(window)}; Lang={GetLanguageCode(window)}; " +
-        $"Accent={GetAccentKey(window)}; Currency={GetCurrencyCode(window)}";
+        $"Accent={GetAccentKey(window)}; Currency={GetCurrencyCode(window)}; " +
+        $"User={GetUserId(window)}; DbProvider={GetDatabaseProvider(window)}; " +
+        $"DbKey={GetDatabaseFingerprint(window)}";
 
     // ================================================================
     //  Live stamp refresh wiring (subscribed once, centrally)

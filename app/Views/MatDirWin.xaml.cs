@@ -103,8 +103,7 @@ private readonly ObservableCollection<MatDirListItem> _all = new();
 private readonly ObservableCollection<MatDirListItem> _view = new();
 private readonly ObservableCollection<MatDirNode> _roots = new();
 
-// Raw load state for tree building: groups with their parent
-// linkage, and the (group, material) membership pairs.
+// Raw load state for tree building: categories and their parent linkage.
 private List<MatGroupRepo.MatGroupRec> _groups = new();
 
 // ------------------------------------------------------------------
@@ -366,8 +365,7 @@ private void ApplyFilter()
     var categorizedMaterialIds = new HashSet<long>();
     foreach (var material in materialsById.Values.OrderBy(x => x.Code, StringComparer.Ordinal))
     {
-        var category = _all.First(x =>
-            x.ItemKind == MatDirListItem.Kind.Material && x.Id == material.Id).Category?.Trim();
+        var category = material.Category?.Trim();
         if (string.IsNullOrWhiteSpace(category))
             continue;
 
@@ -793,6 +791,7 @@ protected override void OnClosed(EventArgs e)
 protected override void ApplyLocalizedText()
 {
     ApplyDirection();
+    ApplyFilter();
 }
 
 }

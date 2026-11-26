@@ -137,6 +137,7 @@ namespace ShouTech.App.Views
 			if (AppState.InactiveMainWindow is MWin existingMain && existingMain.IsVisible)
 			{
 				AppState.InactiveMainWindow = null;
+				ShellContext.RestampAllOpenWindows();
 
 				if (existingMain.DataContext is MainShVM vm)
 				{
@@ -167,6 +168,7 @@ namespace ShouTech.App.Views
             {
                 AppState.CurrentUser = null;
                 AppState.ClearCompany();
+                ShellContext.RestampAllOpenWindows();
                 try { WpfApp.Current.Properties.Remove("SelectedCompany"); } catch (Exception exL168) {
                     AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL168, "LogWin.xaml.OnRequestClose"); }
 
