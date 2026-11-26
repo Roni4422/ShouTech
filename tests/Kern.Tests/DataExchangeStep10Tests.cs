@@ -211,6 +211,20 @@ public class DataExchangeStep10Tests
         finally { AppHost.Permissions.Clear(); }
     }
 
+    [Theory]
+    [InlineData("is_stocked")]
+    [InlineData("is_purchased")]
+    [InlineData("has_expiry")]
+    [InlineData("allow_negative")]
+    [InlineData("price_includes_tax")]
+    public void ExcelImport_SqliteBooleanColumns_AreMappedAsBoolean(string columnName)
+    {
+        var resolver = typeof(DataExportSvc).GetMethod(
+            "IsBooleanColumnName", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        Assert.True((bool)resolver.Invoke(null, [columnName])!);
+    }
+
     [Fact]
     public void ExcelImport_DeclaredDecimalStorageType_RemainsFractional()
     {

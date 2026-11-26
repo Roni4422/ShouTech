@@ -1546,7 +1546,28 @@ public static class DataExportSvc
             while (await reader.ReadAsync(ct))
                 map[reader.GetString(0)] = MapStorageType(reader.GetString(1));
         }
+        // SQLite has no Boolean storage class. Boolean flags are stored as
+        // INTEGER, so declared storage types alone misclassify exported TRUE/FALSE
+        // cells as whole numbers. Preserve PostgreSQL's native Boolean mapping and
+        // recognize the application's language-neutral Boolean column conventions.
+        foreach (var column in map.Keys.ToArray())
+        {
+            if (IsBooleanColumnName(column))
+                map[column] = RptColType.Boolean.ToString();
+        }
         return map;
+    }
+
+    private static bool IsBooleanColumnName(string columnName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(columnName);
+        return columnName.StartsWith("is_", StringComparison.OrdinalIgnoreCase) ||
+            columnName.StartsWith("has_", StringComparison.OrdinalIgnoreCase) ||
+            columnName.StartsWith("allow_", StringComparison.OrdinalIgnoreCase) ||
+            columnName.StartsWith("can_", StringComparison.OrdinalIgnoreCase) ||
+            columnName.StartsWith("use_", StringComparison.OrdinalIgnoreCase) ||
+            columnName.StartsWith("requires_", StringComparison.OrdinalIgnoreCase) ||
+            columnName.Equals("price_includes_tax", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string MapStorageType(string? storageType)
