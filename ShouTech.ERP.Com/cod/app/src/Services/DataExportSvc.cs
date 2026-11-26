@@ -778,6 +778,9 @@ public static class DataExportSvc
         if (keyColumns.Count == 0 || keyColumns.Any(key => !identity.Fields.Contains(key, StringComparer.OrdinalIgnoreCase)))
             throw new InvalidDataException("The workbook does not contain the complete primary key required for a safe import.");
 
+        var notNullColumns = await GetNotNullColumnNamesAsync(connection, option.TableName, ct);
+        var isMaterialsImport = IsMaterialsTable(option.TableName);
+        var importCategoryCards = isMaterialsImport ? LoadCategoryCards() : new List<MatRepo.MatGroupRec>();
         var companyId = await FindCompanyIdAsync(connection, companyCode, ct);
         var companyColumn = columns.FirstOrDefault(x =>
             x.Equals("company_id", StringComparison.OrdinalIgnoreCase) ||
