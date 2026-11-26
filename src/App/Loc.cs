@@ -13,7 +13,9 @@ namespace ShouTech.Application
         {
             try
             {
-                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Lang", $"{code}.json");
+                string resourcePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "Lang", $"{code}.json");
+                string legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Lang", $"{code}.json");
+                string path = File.Exists(resourcePath) ? resourcePath : legacyPath;
                 if (File.Exists(path))
                 {
                     var json = File.ReadAllText(path);
