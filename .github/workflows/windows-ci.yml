@@ -63,5 +63,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: windows-test-results
-          path: **/TestResults/*.trx
+          path: "**/TestResults/*.trx"
           if-no-files-found: warn
