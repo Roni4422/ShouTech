@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- ShouTech ERP desktop application; kept with the presentation layer. -->
+  <!-- ShouTech ERP desktop application; root-level default dotnet entry point. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -67,9 +67,9 @@
     <None Include="app\Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="app\Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="app\Resources\Ico\**\*.png"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
-    <Resource Include="Resources\Ico\**\*.jpg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
-    <Resource Include="Resources\Ico\**\*.svg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
-    <Resource Include="Resources\Ico\**\*.ico"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <Resource Include="app\Resources\Ico\**\*.jpg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <Resource Include="app\Resources\Ico\**\*.svg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <Resource Include="app\Resources\Ico\**\*.ico"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
   </ItemGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
