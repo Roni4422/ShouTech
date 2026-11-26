@@ -6,18 +6,44 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "FILE_INDEX.md"
 SKIP = {".git", ".vs", ".idea", ".cache", ".venv", "venv", "bin", "obj", "build", "dist", "publish", "artifacts", "coverage", "TestResults", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", "node_modules", "packages"}
 PURPOSE = {
-    "app": "WPF desktop UI, views, view models, services, navigation, localization and resources",
-    "src": "Domain, application, infrastructure and inventory libraries",
-    "dba": "Database definitions and provider-specific migration history",
-    "svc": "Independent Windows background service",
-    "tools": "Migration CLI and developer verification harnesses",
-    "tests": "Automated regression and integration tests",
-    "sec": "Native security library and native tests",
-    "cfg": "Non-secret application defaults",
-    "docs": "Architecture, product, engineering and user documentation",
-    "archive": "Historical schema snapshots and legacy reference material",
     ".github": "CI workflows and repository automation",
+    "app": "Desktop presentation layer and user interaction",
+    "app/Common": "Shared UI primitives and common presentation helpers",
+    "app/Configuration": "Desktop application configuration and options",
+    "app/Converters": "WPF value and binding converters",
+    "app/Interaction": "UI interaction behaviors and commands",
+    "app/Localization": "Runtime localization and language selection",
+    "app/Navigation": "Window and module navigation",
+    "app/Reporting": "Report presentation and document output",
+    "app/Resources": "Localized resources, templates, icons and error catalogs",
+    "app/Services": "Desktop-facing application service adapters",
+    "app/Themes": "Shared WPF styles, templates and visual themes",
+    "app/ViewModels": "Presentation state and view models",
+    "app/Views": "WPF windows, pages and module views",
+    "archive": "Immutable legacy references and historical schema snapshots",
+    "cfg": "Non-secret deployment and application defaults",
+    "dba": "Canonical database definitions and forward-only migrations",
+    "dba/mig": "Provider-specific forward-only schema migrations",
+    "docs": "Architecture, engineering, product and user documentation",
+    "sec": "Native security and licensing components",
+    "src": "Layered domain, application, infrastructure and inventory libraries",
+    "src/Dom": "Business entities, value objects, enums and domain contracts",
+    "src/App": "Application use cases and orchestration contracts",
+    "src/Infra": "Database providers and infrastructure adapters",
+    "src/Inv": "Inventory-domain integration and legacy module boundary",
+    "svc": "Independent Windows background worker",
+    "tests": "Automated regression, contract and integration tests",
+    "tools": "Developer tooling, migration runner and verification harnesses",
 }
+
+def purpose_for(path: str) -> str:
+    normalized = path.strip("/")
+    matches = (
+        (prefix, description)
+        for prefix, description in PURPOSE.items()
+        if normalized == prefix or normalized.startswith(prefix + "/")
+    )
+    return max(matches, key=lambda item: len(item[0]), default=("", "Repository root and build metadata"))[1]
 
 def validate_layout() -> None:
     required = (
@@ -72,11 +98,11 @@ def main() -> None:
         "| Directory | Responsibility |", "|---|---|",
     ]
     for folder in sorted(dirs, key=str.casefold):
-        area = PURPOSE.get(folder.split("/", 1)[0], "Module-owned source, resource, or support files")
+        area = purpose_for(folder)
         lines.append(f"| `{folder}/` | {area} |")
     lines += ["", "## File index", "", "| File | Area |", "|---|---|"]
     for file in sorted(files, key=str.casefold):
-        area = PURPOSE.get(file.split("/", 1)[0], "Repository root and build metadata")
+        area = purpose_for(file)
         lines.append(f"| `{file}` | {area} |")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
