@@ -54,7 +54,11 @@ def validate_layout() -> None:
     )
     missing = [path.relative_to(ROOT).as_posix() for path in required if not path.is_file()]
     if missing:
-        raise SystemExit(Canonical application/solution entry-point files are missing:  + ", ".join(missing))
+        raise SystemExit("Canonical application/solution entry-point files are missing: " + ", ".join(missing))
+
+    root_projects = sorted(path.name for path in ROOT.glob("*.csproj"))
+    if root_projects:
+        raise SystemExit("Keep the root solution as the only root-level .NET build entry; found: " + ", ".join(root_projects))
 
     app_definitions = sorted(
         path.relative_to(ROOT).as_posix()
