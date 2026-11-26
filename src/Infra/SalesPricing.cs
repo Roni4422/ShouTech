@@ -319,6 +319,7 @@ public sealed class SalesPriceResolver
         static decimal? ReadPrice(object? value)
             => value is null or DBNull ? null : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
 
+        long resolvedId = materialId;
         decimal? ReadUnitPrice(string propertyName)
         {
             using var unitsCommand = Create($"SELECT units_json FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
@@ -383,7 +384,6 @@ public sealed class SalesPriceResolver
             return null;
         }
 
-        long resolvedId = materialId;
         var code = materialCode?.Trim() ?? string.Empty;
         if (resolvedId <= 0)
         {
