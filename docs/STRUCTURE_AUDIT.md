@@ -12,7 +12,7 @@ Branch: `reduce-2-upgrade`
 | `src/Dom/` | Domain entities, value types, contracts and business rules |
 | `src/App/` | Application use cases and orchestration |
 | `src/Infra/` | SQLite/PostgreSQL persistence and infrastructure adapters |
-| `src/Inv/` | Inventory core library |
+| `archive/legacy_inventory/` | Retained source for a retired SQL Server-only inventory adapter; excluded from the active solution |
 | `dba/` | Authoritative database definitions and immutable provider migrations |
 | `svc/` | Independent Windows background worker |
 | `tools/` | SQL migration CLI and developer verification harnesses |
@@ -26,9 +26,9 @@ Branch: `reduce-2-upgrade`
 
 - Remove the redundant `ShouTech.ERP.Com/` wrapper.
 - Flatten `cod/app/src/` to `app/`.
-- Move the inventory library from `cod/cor/` to `src/Inv/`.
+- Preserve the old SQL Server-only inventory adapter under `archive/legacy_inventory/`; it is excluded from the active solution and desktop build.
 - Use the compact `src/Dom/Dom.csproj` project path while preserving the public `Domain.dll` assembly identity. Standard .NET project conventions remain in use.
-- Keep Domain, App, Infra and Inv as separate bounded technical layers.
+- Keep Domain, App and Infra as separate bounded technical layers. Inventory workflows use the current application services and repositories.
 - Place the solution, service, database assets, docs, tools, tests, security code and configuration directly under the repository root.
 - Preserve migration filenames, IDs, checksums and SQL contents.
 - Remove the obsolete nested company README; the root README remains the single repository landing page.
@@ -47,7 +47,7 @@ The index is generated from the working tree and excludes build output, package 
 
 ## Current inventory and consolidation disposition
 
-The canonical index currently records **76 directories and 841 files** (excluding generated build/cache folders). The index now assigns responsibilities by the most specific architectural path, so nested folders no longer inherit an overly broad top-level description.
+The canonical index now records **76 directories and 842 files** (excluding generated build/cache folders). The index now assigns responsibilities by the most specific architectural path, so nested folders no longer inherit an overly broad top-level description.
 
 ### Duplicate-content review
 
