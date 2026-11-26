@@ -52,17 +52,21 @@ jobs:
         run: |
           $trx = Get-ChildItem -Path . -Recurse -Filter *.trx -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $trx) { Write-Host "::error::No trx test results found"; exit 0 }
-          [xml]$x = Get-Content $trx.FullName
+          [xml]$x = Get-Content -Raw $trx.FullName
           $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
-          Select-Xml -Xml $x -XPath "//t:UnitTestResult[@outcome='Failed']" -Namespace $ns | ForEach-Object {
-            $n = $_.Node
-            $nm = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($n.testName))
-            $msg = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($n.'Message'.'#text' + ' ' + $n.InnerXml)))
-            $st  = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($n.'StackTrace'.'#text'))
-            for ($i = 0; $i -lt $nm.Length; $i += 400) { Write-Host ("::error::B64NAME {0}" -f $nm.Substring($i, [Math]::Min(400, $nm.Length - $i))) }
-            for ($i = 0; $i -lt $msg.Length; $i += 400) { Write-Host ("::error::B64MSG {0}" -f $msg.Substring($i, [Math]::Min(400, $msg.Length - $i))) }
-            for ($i = 0; $i -lt $st.Length; $i += 400) { Write-Host ("::error::B64ST {0}" -f $st.Substring($i, [Math]::Min(400, $st.Length - $i))) }
-            Write-Host "::error::B64END"
+          $failed = Select-Xml -Xml $x -XPath "//t:UnitTestResult[@outcome='Failed']" -Namespace $ns
+          foreach ($item in $failed) {
+            $n = $item.Node
+            $name = [string]$n.GetAttribute('testName')
+            $messageNode = $n.SelectSingleNode("t:Output/t:ErrorInfo/t:Message", (New-Object System.Xml.XmlNamespaceManager($n.OwnerDocument.NameTable)))
+            $stackNode = $n.SelectSingleNode("t:Output/t:ErrorInfo/t:StackTrace", (New-Object System.Xml.XmlNamespaceManager($n.OwnerDocument.NameTable)))
+            $manager = New-Object System.Xml.XmlNamespaceManager($n.OwnerDocument.NameTable)
+            $manager.AddNamespace('t', 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
+            $messageNode = $n.SelectSingleNode("t:Output/t:ErrorInfo/t:Message", $manager)
+            $stackNode = $n.SelectSingleNode("t:Output/t:ErrorInfo/t:StackTrace", $manager)
+            Write-Host "::error title=Failed test::$name"
+            if ($messageNode) { Write-Host $messageNode.InnerText }
+            if ($stackNode) { Write-Host $stackNode.InnerText }
           }
 
       - name: Upload test results
