@@ -348,16 +348,49 @@ public sealed class SalesPriceResolver
     /// <summary>The company's own keys (code + the key the caller passed,
     /// e.g. its Guid form) — the PartyCreditGuard dual-key pattern.</summary>
     internal static List<string> CompanyKeys(
-        DbConnection connection, DbTransaction transaction, string provider, string companyKey)
+        DbConnection connection, DbTransaction? transaction, string provider, string companyKey)
     {
         var keys = new List<string>();
         if (string.IsNullOrWhiteSpace(companyKey))
             return keys;
-        var code = PartyLedger.ResolveCompanyCode(connection, transaction, provider, companyKey.Trim());
+
+        var key = companyKey.Trim();
+        var code = PartyLedger.ResolveCompanyCode(connection, transaction, provider, key);
         if (!string.IsNullOrWhiteSpace(code))
             keys.Add(code);
-        if (!keys.Contains(companyKey.Trim()))
-            keys.Add(companyKey.Trim());
+        if (!keys.Contains(key, StringComparer.OrdinalIgnoreCase))
+            keys.Add(key);
+
+        // Company-scoped operational tables do not all store the same key:
+        // legacy/master tables use company_code while newer document tables
+        // carry companies.company_id (Guid). A caller that only has the
+        // company code must still resolve both keys or chain rollups silently
+        // miss posted documents stored under the Guid.
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT CAST(company_id AS TEXT)
+            FROM companies
+            WHERE company_code = @code OR CAST(company_id AS TEXT) = @key
+            LIMIT 1
+            """;
+        var codeParameter = command.CreateParameter();
+        codeParameter.ParameterName = "@code";
+        codeParameter.Value = code;
+        command.Parameters.Add(codeParameter);
+        var keyParameter = command.CreateParameter();
+        keyParameter.ParameterName = "@key";
+        keyParameter.Value = key;
+        command.Parameters.Add(keyParameter);
+        var companyId = command.ExecuteScalar();
+        if (companyId is not null and not DBNull)
+        {
+            var id = Convert.ToString(companyId, CultureInfo.InvariantCulture);
+            if (!string.IsNullOrWhiteSpace(id) &&
+                !keys.Contains(id, StringComparer.OrdinalIgnoreCase))
+                keys.Add(id);
+        }
+
         return keys;
     }
 
