@@ -32,6 +32,8 @@ public string Name { get; init; } = "";
 
 public string NameEn { get; init; } = "";
 
+public string? Category { get; init; }
+
 public string Status { get; init; } = "Active";
 
 public string DisplayName
@@ -104,7 +106,6 @@ private readonly ObservableCollection<MatDirNode> _roots = new();
 // Raw load state for tree building: groups with their parent
 // linkage, and the (group, material) membership pairs.
 private List<MatGroupRepo.MatGroupRec> _groups = new();
-private List<MatGroupRepo.MatGroupMember> _membership = new();
 
 // ------------------------------------------------------------------
 // Picker mode (owner grid spec 2026-11-24 15:07 item 3): document
@@ -144,6 +145,7 @@ public MatDirWin()
     VisuId.ApplyWindow(this);
 
     AppHost.Localization.LanguageChanged += OnLanguageChanged;
+    Closed += (_, _) => AppHost.Localization.LanguageChanged -= OnLanguageChanged;
 
     ApplyDirection();
 
@@ -233,6 +235,7 @@ private void ApplyDirection()
 private void OnLanguageChanged(object? sender, EventArgs e)
 {
     ApplyDirection();
+    ApplyFilter();
 }
 
 private MatDirListItem? SelectedItem
@@ -252,8 +255,7 @@ private void Reload()
 {
     _all.Clear();
     _groups = new();
-    _membership = new();
-
+    
     try
     {
         // One unified load for the tree: materials, groups and
@@ -272,13 +274,13 @@ private void Reload()
                 Id = m.Id,
                 Code = m.Code,
                 Name = m.Name,
+                Category = m.Category,
                 Status = m.Status
             });
         }
 
         _groups = MatGroupRepo.LoadAll();
-        _membership = MatGroupRepo.LoadMembership();
-
+        
         foreach (var g in _groups)
         {
             _all.Add(new MatDirListItem
@@ -354,15 +356,30 @@ private void ApplyFilter()
         }
     }
 
-    var memberIds = new HashSet<long>();
-    foreach (var pair in _membership)
+    // A material belongs beneath its category through materials.category.
+    // material_group_items is a separate, optional many-to-many grouping
+    // feature and must not be used to build the category hierarchy.
+    var categoryNodesById = _groups.ToDictionary(
+        group => group.Id.ToString(CultureInfo.InvariantCulture),
+        group => groupNodes[group.Code],
+        StringComparer.OrdinalIgnoreCase);
+    var categorizedMaterialIds = new HashSet<long>();
+    foreach (var material in materialsById.Values.OrderBy(x => x.Code, StringComparer.Ordinal))
     {
-        memberIds.Add(pair.MaterialId);
-        var group = _groups.FirstOrDefault(x => x.Id == pair.GroupId);
-        if (group is null || !groupNodes.TryGetValue(group.Code, out var groupNode))
+        var category = _all.First(x =>
+            x.ItemKind == MatDirListItem.Kind.Material && x.Id == material.Id).Category?.Trim();
+        if (string.IsNullOrWhiteSpace(category))
             continue;
-        if (materialsById.TryGetValue(pair.MaterialId, out var material))
-            groupNode.Children.Add(new MatDirNode(material));
+
+        MatDirNode? categoryNode = null;
+        if (!groupNodes.TryGetValue(category, out categoryNode))
+            categoryNodesById.TryGetValue(category, out categoryNode);
+
+        if (categoryNode is null)
+            continue;
+
+        categoryNode.Children.Add(new MatDirNode(material));
+        categorizedMaterialIds.Add(material.Id);
     }
 
     var topLevel = new List<MatDirNode>();
@@ -371,7 +388,8 @@ private void ApplyFilter()
         if (!nested.Contains(g.Code))
             topLevel.Add(groupNodes[g.Code]);
     }
-    foreach (var m in _all.Where(x => x.ItemKind == MatDirListItem.Kind.Material && !memberIds.Contains(x.Id))
+    foreach (var m in materialsById.Values
+                 .Where(x => !categorizedMaterialIds.Contains(x.Id))
                  .OrderBy(x => x.Code, StringComparer.Ordinal))
     {
         topLevel.Add(new MatDirNode(m));

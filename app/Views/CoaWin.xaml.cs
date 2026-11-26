@@ -280,10 +280,24 @@ public partial class CoaWin : BaseWin, IInfoContextProvider
         Width = Math.Clamp(Math.Ceiling((maxWidth + 90) * 1.20), MinWidth, Math.Min(1600, maxFit));
     }
 
-    private static string GetDisplayName(AccountNode node) =>
-        string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase)
-            ? node.Name
-            : node.NameEn;
+    internal static string GetDisplayName(AccountNode node)
+    {
+        var isArabic = string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase);
+        if (isArabic)
+        {
+            if (!string.IsNullOrWhiteSpace(node.Name)
+                && !string.Equals(node.Name, node.NameEn, StringComparison.OrdinalIgnoreCase))
+                return node.Name;
+
+            var localized = Loc.Get($"CoaWin.AccountNames.{node.Code}", string.Empty);
+            if (!string.IsNullOrWhiteSpace(localized))
+                return localized;
+
+            return !string.IsNullOrWhiteSpace(node.Name) ? node.Name : node.NameEn;
+        }
+
+        return !string.IsNullOrWhiteSpace(node.NameEn) ? node.NameEn : node.Name;
+    }
 
     private static IEnumerable<AccountNode> Flatten(AccountNode node)
     {
@@ -1247,9 +1261,7 @@ public sealed class AccountNode
     public string DisplayCode => Code;
     // Language-aware like CoaWin.GetDisplayName: Arabic UI shows Name,
     // other languages prefer NameEn. (Was NameEn-first in all languages.)
-    public string DisplayName => string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase)
-        ? (!string.IsNullOrWhiteSpace(Name) ? Name : NameEn)
-        : (!string.IsNullOrWhiteSpace(NameEn) ? NameEn : Name);
+    public string DisplayName => CoaWin.GetDisplayName(this);
     // Localized rendering of the canonical TypeLabel ("Group"/"Account");
     // TypeLabel itself stays canonical because it is the export file's
     // Type column value.
@@ -1267,7 +1279,7 @@ public sealed class AccountNode
         return string.Format(System.Globalization.CultureInfo.CurrentCulture, format, arg);
     }
 
-    public string ToolTipText => $"{Code} - {Name}\n{NameEn}\n{NodeFormat("CoaWin.NodeTypeLine", "Type: {0}", TypeDisplay)}\n{(Children.Count > 0 ? NodeFormat("CoaWin.NodeChildren", "Child accounts: {0}", Children.Count) : AppHost.Localization.GetString("CoaWin.NodePostable", "Postable account"))}";
+    public string ToolTipText => $"{Code} - {DisplayName}\n{NameEn}\n{NodeFormat("CoaWin.NodeTypeLine", "Type: {0}", TypeDisplay)}\n{(Children.Count > 0 ? NodeFormat("CoaWin.NodeChildren", "Child accounts: {0}", Children.Count) : AppHost.Localization.GetString("CoaWin.NodePostable", "Postable account"))}";
     public bool IsExpanded { get; set; }
     public AccountNode? Parent { get; set; }
     public ObservableCollection<AccountNode> Children { get; } = new();
