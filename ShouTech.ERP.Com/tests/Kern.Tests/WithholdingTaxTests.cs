@@ -323,7 +323,7 @@ public sealed class WithholdingTaxTests
         })
             Exec(db, $"INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted) VALUES ('{Guid.NewGuid():D}', '{companyId:D}', '{code}', '{name}', '{type}', 1, 1, 0);");
 
-        Exec(db, $"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, avg_cost, is_deleted) VALUES (42, '{CompanyCode}', 'MAT-42', 'Item', 'Item', 1, 40, 0);");
+        Exec(db, $"INSERT INTO materials (material_id, company_id, code, name, is_stocked, avg_cost, is_deleted) VALUES (42, '{CompanyCode}', 'MAT-42', 'Item', 1, 40, 0);");
         Exec(db, $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_deleted) VALUES (1, '{CompanyCode}', 1, 'Main', 'Main', 0);");
         Exec(db, $"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, average_cost, last_cost) VALUES ('{CompanyCode}', 1, 42, 1000, 40, 40);");
         return db;
@@ -352,7 +352,7 @@ public sealed class WithholdingTaxTests
         })
             Exec(db, $"INSERT INTO chart_of_accounts (account_id, company_id, account_code, account_name, account_type, is_postable, is_active, is_deleted) VALUES ('{Guid.NewGuid():D}', '{chain:D}', '{code}', '{name}', '{type}', 1, 1, 0);");
         Exec(db, $"INSERT INTO parties (id, company_id, kind, code, name_en, credit_limit, is_active, is_deleted, created_by, ledger_id, withholding_tax_code) VALUES ('{Guid.NewGuid():D}', '{ChainCode}', 'S', 'SUP-1', 'Chain Supplier', 0, 1, 0, '{Actor}', 9, 'WHT5');");
-        Exec(db, $"INSERT INTO materials (material_id, company_id, code, name_ar, name_en, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (142, '{ChainCode}', 'MAT-42', 'Item', 'Item', 1, 0, 'WeightedAvg', 0, 0);");
+        Exec(db, $"INSERT INTO materials (material_id, company_id, code, name, is_stocked, is_service, cost_method, allow_negative, is_deleted) VALUES (142, '{ChainCode}', 'MAT-42', 'Item', 1, 0, 'WeightedAvg', 0, 0);");
         Exec(db, $"INSERT INTO warehouses (warehouse_id, company_id, warehouse_code, warehouse_name_ar, warehouse_name_en, is_active, is_deleted) VALUES (2, '{ChainCode}', 'WH-01', 'Main', 'Main', 1, 0);");
         Exec(db, $"INSERT INTO material_stock_balances (company_id, warehouse_id, material_id, available_qty, reserved_qty, average_cost, last_cost, stock_value, is_deleted) VALUES ('{ChainCode}', 2, 142, 100, 0, 10, 10, 1000, 0);");
     }
