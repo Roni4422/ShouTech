@@ -862,6 +862,19 @@ public static class DataExportSvc
                         throw new InvalidDataException("Product rows require a non-empty 'name' column.");
                 }
 
+                // Product cards: the sheet shows the category NAME; store the card code.
+                if (isMaterialsImport && values.TryGetValue("category", out var categoryCell) && categoryCell is string categoryText)
+                    values["category"] = CategoryNameToCode(categoryText, importCategoryCards)!;
+
+                // Blank cell + NOT NULL column: omit it (DEFAULT applies on insert,
+                // existing value kept on update) instead of writing NULL.
+                foreach (var column in notNullColumns)
+                {
+                    if (values.TryGetValue(column, out var cellValue) && cellValue is null &&
+                        !keyColumns.Contains(column, StringComparer.OrdinalIgnoreCase))
+                        values.Remove(column);
+                }
+
                 if (companyColumn != null)
                     values[companyColumn] = companyScopeValue!;
 
@@ -1574,6 +1587,91 @@ public static class DataExportSvc
                 columns.Add(reader.GetString(0));
         }
         return columns;
+    }
+
+    /// <summary>
+    /// Columns declared NOT NULL. A blank spreadsheet cell must never be sent
+    /// as an explicit NULL to these (it bypasses the column DEFAULT and the
+    /// whole import rolls back); the import omits them so the default applies.
+    /// </summary>
+    private static async Task<HashSet<string>> GetNotNullColumnNamesAsync(DbConnection connection, string table, CancellationToken ct)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var command = connection.CreateCommand();
+        if (DatabaseRuntime.IsSqlite())
+        {
+            command.CommandText = $"PRAGMA table_info({QuoteIdentifier(table)})";
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                if (reader.GetInt32(3) != 0)
+                    result.Add(reader.GetString(1));
+        }
+        else
+        {
+            command.CommandText = "SELECT column_name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=@table AND is_nullable='NO'";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@table";
+            parameter.Value = table;
+            command.Parameters.Add(parameter);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                result.Add(reader.GetString(0));
+        }
+        return result;
+    }
+
+    private static bool IsMaterialsTable(string table)
+        => table.Equals("materials", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Category cards (material_groups) of the active company: code -> display name.
+    /// materials.category stores the CARD CODE; spreadsheets show the NAME.
+    /// </summary>
+    private static List<MatRepo.MatGroupRec> LoadCategoryCards()
+    {
+        try { return MatRepo.LoadGroups() ?? new(); }
+        catch (Exception ex)
+        {
+            LogWarn($"Category cards could not be loaded for the workbook: {ex.Message}");
+            return new();
+        }
+    }
+
+    private static string CategoryDisplayName(MatRepo.MatGroupRec card)
+    {
+        var arabic = string.Equals(App.CurrentLanguageCode?.Trim(), "ar", StringComparison.OrdinalIgnoreCase);
+        var name = arabic
+            ? (string.IsNullOrWhiteSpace(card.Name) ? card.NameEn : card.Name)
+            : (string.IsNullOrWhiteSpace(card.NameEn) ? card.Name : card.NameEn);
+        return string.IsNullOrWhiteSpace(name) ? card.Code : name.Trim();
+    }
+
+    /// <summary>Export: category code -> category name (unknown values are left as stored).</summary>
+    private static string? CategoryCodeToName(string? value, IReadOnlyList<MatRepo.MatGroupRec> cards)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value;
+        var card = cards.FirstOrDefault(c =>
+            string.Equals(c.Code, value.Trim(), StringComparison.OrdinalIgnoreCase));
+        return card == null ? value : CategoryDisplayName(card);
+    }
+
+    /// <summary>
+    /// Import: a category NAME (either language) or code typed in Excel -> the card code that
+    /// materials.category stores. Ambiguous or unknown names are kept exactly as typed.
+    /// </summary>
+    private static string? CategoryNameToCode(string? value, IReadOnlyList<MatRepo.MatGroupRec> cards)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return value;
+        var text = value.Trim();
+        var byCode = cards.FirstOrDefault(c => string.Equals(c.Code, text, StringComparison.OrdinalIgnoreCase));
+        if (byCode != null) return byCode.Code;
+        var byName = cards.Where(c =>
+                string.Equals(c.Name?.Trim(), text, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.NameEn?.Trim(), text, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Code)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return byName.Count == 1 ? byName[0] : value;
     }
 
     private static async Task<List<string>> GetPrimaryKeyColumnsAsync(DbConnection connection, string table, CancellationToken ct)
