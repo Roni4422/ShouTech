@@ -150,8 +150,18 @@ public class DataExchangeStep10Tests
         PointAppAt(db.Path);
         SeedCompanyAndMaterial(db);
         var xlsx = WriteWorkbook(db.Root,
-            ["Name", "Item No", "Internal ID", "Group Code", "Item Type"],
-            [["Updated Widget", "MAT-1", 1L, "GRP-01", "Stock"]]);
+            [
+                "Name", "Item No", "Internal ID", "Group Code", "Item Type",
+                "Category", "Brand", "Model", "Color", "Size Spec",
+                "Manufacturer", "Origin Country", "Source", "Alt Code", "Gtin",
+                "Supplier Code", "Abc Class", "Status", "Is Stocked", "Is Purchased"
+            ],
+            [[
+                "Updated Widget", "MAT-1", 1L, "GRP-01", "Stock",
+                "CAT-01", "Brand A", "Model X", "Blue", "10x20",
+                "Maker", "KW", "Local", "ALT-1", "1234567890123",
+                "SUP-01", "A", "Active", true, true
+            ]]);
         var option = new DataExportOption("Products", "Product cards and directory", "materials");
         try
         {
@@ -168,6 +178,21 @@ public class DataExchangeStep10Tests
             Assert.Equal("Updated Widget", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
             Assert.Equal("GRP-01", db.Scalar("SELECT group_code FROM materials WHERE material_id = 1"));
             Assert.Equal("Stock", db.Scalar("SELECT item_type FROM materials WHERE material_id = 1"));
+            Assert.Equal("CAT-01", db.Scalar("SELECT category FROM materials WHERE material_id = 1"));
+            Assert.Equal("Brand A", db.Scalar("SELECT brand FROM materials WHERE material_id = 1"));
+            Assert.Equal("Model X", db.Scalar("SELECT model FROM materials WHERE material_id = 1"));
+            Assert.Equal("Blue", db.Scalar("SELECT color FROM materials WHERE material_id = 1"));
+            Assert.Equal("10x20", db.Scalar("SELECT size_spec FROM materials WHERE material_id = 1"));
+            Assert.Equal("Maker", db.Scalar("SELECT manufacturer FROM materials WHERE material_id = 1"));
+            Assert.Equal("KW", db.Scalar("SELECT origin_country FROM materials WHERE material_id = 1"));
+            Assert.Equal("Local", db.Scalar("SELECT source FROM materials WHERE material_id = 1"));
+            Assert.Equal("ALT-1", db.Scalar("SELECT alt_code FROM materials WHERE material_id = 1"));
+            Assert.Equal("1234567890123", db.Scalar("SELECT gtin FROM materials WHERE material_id = 1"));
+            Assert.Equal("SUP-01", db.Scalar("SELECT supplier_code FROM materials WHERE material_id = 1"));
+            Assert.Equal("A", db.Scalar("SELECT abc_class FROM materials WHERE material_id = 1"));
+            Assert.Equal("Active", db.Scalar("SELECT status FROM materials WHERE material_id = 1"));
+            Assert.Equal("1", db.Scalar("SELECT CAST(is_stocked AS TEXT) FROM materials WHERE material_id = 1"));
+            Assert.Equal("1", db.Scalar("SELECT CAST(is_purchased AS TEXT) FROM materials WHERE material_id = 1"));
         }
         finally { AppHost.Permissions.Clear(); }
     }
