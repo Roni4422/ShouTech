@@ -389,7 +389,8 @@ public partial class SerWin : BaseWin
 
             BuildColumns(columns ?? Enumerable.Empty<SerWinColumn>());
 
-            TxtSearch.Clear();
+            // Keep the caller's fragment so the picker opens on matching rows.
+            TxtSearch.Text = initialQuery ?? string.Empty;
             ApplyFilter();
         }
         catch (Exception ex) { LogError(nameof(Configure), ex); }

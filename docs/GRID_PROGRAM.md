@@ -25,28 +25,24 @@ v9 remains an additional account-card reference to consult.
 
 **Verdict: DONE (batch R2a), gates ALL-GREEN.**
 
-- Row numbers: NEW central `DataGridTableBehavior.ShowRowNumbers`
-  (fixed row-header column, 1-based position stamped per realized
-  row — virtualization-safe, O(1) via GetIndex). InvoiceWin opts
-  in. Zebra: already conformed (central styles + Sand/… per-window
-  tint via AlternatingRowBackground). Unlimited rows: conformed
-  (no caps; CanUserAddRows=false with explicit Add-line flow).
-- Column order: REORDERED to the spec — Description (name), Qty,
-  Unit, UnitPrice, LineTotal first; Code, Discount %, Tax code,
-  Tax %, Margin, Warehouse after. Header rewriting on language
+- Shared policy is applied through `app/Services/GridEngine.cs`.
+  It centralizes virtualization/recycling, row numbering, standard
+  context behavior and table palette; domain windows retain their
+  own columns and persistence. Zebra rows use each window's palette.
+  Rows are uncapped; document lines are added through the validated
+  explicit add-line action.
+- Default columns: Material, Unit, Qty, UnitPrice, calculated
+  LineTotal and Statement. Additional fields (Code, Discount %,
+  Tax code, Tax %, Margin, Warehouse) remain chooser-managed. Header rewriting on language
   change now binds by column identity (it was index-based and
   would have mislabeled columns after any reorder — fixed at the
   cause).
-- Material entry: NEW `TaxSvc.MatchMaterial` on the proven
-  ResolveMaterial predicates (codes, alt/old codes, GTIN, all five
-  unit barcodes, exact names, name-contains). Exact or unique
-  contains-match fills the line immediately (id, code, canonical
-  name, default unit, tax rate; price through the existing sales
-  resolver / card price on purchase). Ambiguous or no match opens
-  MatDirWin as the search window (new picker mode: pre-filtered
-  with the typed text, double-click/Enter accepts, editing buttons
-  hidden) — the directory IS the search surface; no parallel
-  lookup was built. The Find Material button, previously a
+- Material entry: `TaxSvc.MatchMaterial` resolves exact/unique
+  partial matches for codes, alternate codes, GTIN, unit barcodes
+  and names. Ambiguous/no match opens the shared SerWin picker with
+  the typed fragment pre-filled; selection fills the line from the
+  active company's material record. The scanner follows the same
+  cell-commit pipeline; weighted labels also populate quantity. The Find Material button, previously a
   focus-only stub, runs the same search. A per-line processed-text
   guard keeps tab-through from re-opening the search.
 - Column chooser: the existing ColChsWin (checkboxes + reorder),

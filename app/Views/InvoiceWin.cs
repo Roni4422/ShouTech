@@ -991,33 +991,33 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL546, "InvoiceWin.ConfigureGrid");
         }
 
-        // Excel-like grid (owner spec item 1): numbered row headers,
-        // zebra rows via the central styles + this window's tint,
-        // unlimited rows with virtualization.
-        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+        // Shared grid policy: virtualization, row numbering, keyboard/context
+        // behavior and the window's table palette.
+        GridEngine.ApplyStandard(_grid, "TableSurfaceBrush", "TableAlternateRowBrush");
 
         _grid.ItemsSource = _lines;
         _grid.Columns.Clear();
 
-        // Core columns in the owner's fixed order (spec item 2):
-        // 1) item name, 2) quantity, 3) unit, 4) unit price,
-        // 5) line total. They are always visible, in this order.
+        // Six fixed invoice columns: material, first unit, quantity,
+        // unit price, calculated line total and line statement.
         _descColumn = TextCol(nameof(LineVm.Description), 180, Tf("Invoice.ColMaterial", "Material"));
         _grid.Columns.Add(_descColumn);
-        _qtyColumn = TextCol(nameof(LineVm.QtyText), 70, Tf("Invoice.ColQty", "Qty"));
-        _grid.Columns.Add(_qtyColumn);
-        _unitColumn = TextCol(nameof(LineVm.Unit), 60, Tf("Invoice.ColUnit", "Unit"));
+        _unitColumn = TextCol(nameof(LineVm.Unit), 70, Tf("Invoice.ColUnit", "Unit"));
         _grid.Columns.Add(_unitColumn);
-        _priceColumn = TextCol(nameof(LineVm.UnitPriceText), 80, Tf("Invoice.ColUnitPrice", "Unit price"));
+        _qtyColumn = TextCol(nameof(LineVm.QtyText), 60, Tf("Invoice.ColQty", "Qty"));
+        _grid.Columns.Add(_qtyColumn);
+        _priceColumn = TextCol(nameof(LineVm.UnitPriceText), 90, Tf("Invoice.ColUnitPrice", "Unit price"));
         _grid.Columns.Add(_priceColumn);
         _lineTotalColumn = new DataGridTextColumn
         {
             Header = Tf("Invoice.ColLineTotal", "Line total"),
             Binding = new Binding(nameof(LineVm.LineTotalText)) { Mode = BindingMode.OneWay },
-            Width = 90,
+            Width = 100,
             IsReadOnly = true
         };
         _grid.Columns.Add(_lineTotalColumn);
+        _notesColumn = TextCol(nameof(LineVm.Notes), 150, Tf("Invoice.ColNotes", "Statement"));
+        _grid.Columns.Add(_notesColumn);
 
         // Optional columns (spec item 4) — shown/hidden and ordered
         // through the column chooser, persisted per user (WinPref).
@@ -1049,13 +1049,6 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         _grid.Columns.Add(_marginColumn);
         _warehouseColumn = TextCol(nameof(LineVm.WarehouseName), 110, Tf("Invoice.ColWarehouse", "Warehouse"));
         _grid.Columns.Add(_warehouseColumn);
-        // Line notes (migration 120): the SIXTH default column
-        // (owner grid refinement 2026-11-24 16:13: material, qty,
-        // unit, price, total, notes). Still chooser-managed: the
-        // user can hide it or move it, persisted per user.
-        _notesColumn = TextCol(nameof(LineVm.Notes), 140, Tf("Invoice.ColNotes", "Line notes"));
-        _notesColumn.DisplayIndex = 5;
-        _grid.Columns.Add(_notesColumn);
         // Every other optional column starts hidden; the chooser
         // (visibility + placement) reveals them per user.
         _codeColumn.Visibility = Visibility.Collapsed;
@@ -1088,7 +1081,6 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         new("TaxRate", _taxRateColumn, "Invoice.ColTax"),
         new("Margin", _marginColumn, "Invoice.ColMargin"),
         new("Warehouse", _warehouseColumn, "Invoice.ColWarehouse"),
-        new("LineNotes", _notesColumn, "Invoice.ColNotes"),
     };
 
     private string ColumnScope()
@@ -2160,10 +2152,21 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             return;
         }
 
-        var pick = MatDirWin.ShowPicker(this, scanQty is not null ? scanCode : text);
-        if (pick is not null)
+        // Use the shared SerWin lookup, pre-filtered by the typed fragment
+        // or scanned code. Selection remains scoped to the current company.
+        var picked = SerWin.PickMaterial(this, scanQty is not null ? scanCode : text);
+        if (picked is not null)
         {
-            ApplyPick(line, pick);
+            var selected = TaxSvc.MatchMaterial(picked.Code);
+            if (selected is not null)
+                FillLineFromMatch(line, selected);
+            else
+            {
+                line.MaterialId = picked.Id;
+                line.MaterialCode = picked.Code;
+                line.Description = picked.Name;
+                line.LastMaterialText = picked.Name;
+            }
             if (scanQty is decimal pickedQty)
                 line.QtyText = pickedQty.ToString("0.####", CultureInfo.InvariantCulture);
         }
@@ -2352,6 +2355,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         _taxRateColumn.Header = Tf("Invoice.ColTax", "Tax %");
         _marginColumn.Header = Tf("Invoice.ColMargin", "Margin");
         _warehouseColumn.Header = Tf("Invoice.ColWarehouse", "Warehouse");
+        _notesColumn.Header = Tf("Invoice.ColNotes", "Statement");
         _chkExport.Content = Tf("Invoice.ExportInvoice", "Export invoice");
 
         RefreshTotals();
