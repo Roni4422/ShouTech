@@ -5,6 +5,34 @@ A reference that maps the current **abbreviated file names** in the project to t
 > **Naming rule:** roughly 6–9 characters, with a semantic suffix when names are similar:
 > `VM` = ViewModel · `Vw` = View · `Svc`/`Serv` = Service · `Cv` = Converter · `Sv` = Service/helper
 
+## Canonical folder abbreviations
+
+| Folder | Full meaning | Responsibility |
+|---|---|---|
+| `app/` | Application presentation | WPF desktop shell, windows, view models, UI services and resources |
+| `src/Dom/` | Domain | Business entities, value objects, enums and contracts |
+| `src/App/` | Application | Use cases and application orchestration |
+| `src/Infra/` | Infrastructure | Database repositories, persistence and external adapters |
+| `src/Inv/` | Inventory core | Inventory-specific core library |
+| `dba/` | Database administration | Authoritative database assets |
+| `dba/mig/` | Migrations | Ordered provider-specific schema changes |
+| `dba/sys/` | Database system assets | System-level database scripts and references |
+| `svc/` | Service | Independent Windows background worker |
+| `sec/` | Security | Native security library and supporting tests |
+| `cfg/` | Configuration | Non-secret deployment defaults |
+| `tools/` | Tools | Migration CLI and developer verification scripts |
+| `tests/` | Tests | Automated regression and integration tests |
+| `docs/` | Documentation | Architecture, engineering, user and research material |
+| `archive/` | Archive | Historical and non-deployable reference material |
+| `Views/` | Views | WPF windows and view components |
+| `ViewModels/` | View models | Presentation state and commands |
+| `Services/` | Services | UI-facing application service adapters |
+| `Resources/` | Resources | Localization, icons, templates and error catalogs |
+| `Themes/` | Themes | Shared WPF visual dictionaries |
+| `Reporting/` | Reporting | Report definitions, rendering and invoice templates |
+
+The canonical architecture uses the full layer names in documentation and the compact folder tokens in paths. Do not invent new abbreviations when an existing folder already owns the responsibility.
+
 ---
 
 ## WPF Application — `app`
