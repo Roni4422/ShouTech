@@ -745,10 +745,9 @@ public static class DataExportSvc
         var visibleHeaders = sheet.Headers
             .Where((_, index) => index != identityColumnIndex)
             .ToArray();
-        if (visibleHeaders.Length != identity.Headers.Length ||
-            visibleHeaders.Any(string.IsNullOrWhiteSpace) ||
+        if (visibleHeaders.Any(string.IsNullOrWhiteSpace) ||
             visibleHeaders.Distinct(StringComparer.OrdinalIgnoreCase).Count() != visibleHeaders.Length)
-            throw new InvalidDataException("The workbook columns do not match the exported dataset structure.");
+            throw new InvalidDataException("The workbook contains empty or duplicate column headers.");
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(ct);
@@ -795,19 +794,21 @@ public static class DataExportSvc
         var matchedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var header in visibleHeaders)
         {
-            // The encrypted identity stores the exact localized header emitted
-            // by the export. Resolve that label by identity before attempting
-            // the English/business-name fallback. Without this step, an Arabic
-            // export is readable in Excel but cannot be imported because its
-            // translated column captions do not match physical database names.
+            // Keep the encrypted identity authoritative for known exported
+            // headers, while allowing users to remove columns or append their
+            // own notes/calculated columns in Excel. Unknown columns are
+            // ignored; duplicate mappings remain an error to prevent one
+            // visible value from ambiguously overwriting a database field.
             var field = ResolveImportField(
                 header, identity.Headers, identity.Fields, option.TableName);
-            if (field == null || !fieldTypes.TryGetValue(field, out var type) || !matchedFields.Add(field))
-                throw new InvalidDataException($"Column '{header}' does not uniquely match a field in the exported dataset.");
+            if (field == null)
+                continue;
+            if (!fieldTypes.TryGetValue(field, out var type) || !matchedFields.Add(field))
+                throw new InvalidDataException($"Column '{header}' maps more than once or does not belong to the exported dataset.");
             headerToField.Add(header, (field, type));
         }
-        if (matchedFields.Count != identity.Fields.Length)
-            throw new InvalidDataException("The workbook must retain every exported dataset column.");
+        if (headerToField.Count == 0)
+            throw new InvalidDataException("No editable columns in this workbook match the exported dataset.");
 
         var columnIndexes = sheet.Headers
             .Select((header, index) => (header, index))
