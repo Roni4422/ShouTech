@@ -21,9 +21,6 @@ jobs:
   build-and-test:
     runs-on: windows-latest
     timeout-minutes: 60
-    defaults:
-      run:
-        working-directory: ShouTech.ERP.Com
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -34,13 +31,13 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore tests and application
-        run: dotnet restore tests/Kern.Tests/Kern.Tests.csproj
+        run: dotnet restore ShouTech.sln
 
       - name: Build application and tests
-        run: dotnet build tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-restore
+        run: dotnet build ShouTech.sln --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
+        run: dotnet test ShouTech.ERP.Com/tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
 
       - name: Report failed tests
         if: failure()

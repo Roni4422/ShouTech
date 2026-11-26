@@ -37,6 +37,7 @@
     <EnableDefaultPageItems>false</EnableDefaultPageItems>
     <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
 
     <!-- Build Configuration -->
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
@@ -82,10 +83,10 @@
        ================================================================ -->
   <ItemGroup>
 
-    <ProjectReference Include="..\..\cor\inv.csproj" Condition="Exists('..\..\cor\inv.csproj')" />
-    <ProjectReference Include="..\..\..\src\Domain\Domain.csproj" Condition="Exists('..\..\..\src\Domain\Domain.csproj')" />
-    <ProjectReference Include="..\..\..\src\App\App.csproj" Condition="Exists('..\..\..\src\App\App.csproj')" />
-    <ProjectReference Include="..\..\..\src\Infra\Infra.csproj" Condition="Exists('..\..\..\src\Infra\Infra.csproj')" />
+    <ProjectReference Include="ShouTech.ERP.Com\cod\cor\inv.csproj" />
+    <ProjectReference Include="ShouTech.ERP.Com\src\Domain\Domain.csproj" />
+    <ProjectReference Include="ShouTech.ERP.Com\src\App\App.csproj" />
+    <ProjectReference Include="ShouTech.ERP.Com\src\Infra\Infra.csproj" />
 
   </ItemGroup>
 
@@ -105,7 +106,10 @@
        ================================================================ -->
   <ItemGroup>
 
-    <Page Include="**\*.xaml" Exclude="App.xaml;obj\**\*;bin\**\*" />
+    <Page Include="ShouTech.ERP.Com\cod\app\src\**\*.xaml"
+          Exclude="ShouTech.ERP.Com\cod\app\src\App.xaml;ShouTech.ERP.Com\cod\app\src\obj\**\*;ShouTech.ERP.Com\cod\app\src\bin\**\*">
+      <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Page>
 
   </ItemGroup>
 
@@ -116,7 +120,9 @@
   <ItemGroup>
 
     <!-- Application Source -->
-    <Compile Include="**\*.cs" Exclude="obj\**\*;bin\**\*;ViewModels\MainWnVM.cs" />
+    <Compile Include="App.xaml.cs" />
+    <Compile Include="ShouTech.ERP.Com\cod\app\src\**\*.cs"
+             Exclude="ShouTech.ERP.Com\cod\app\src\App.xaml.cs;ShouTech.ERP.Com\cod\app\src\obj\**\*;ShouTech.ERP.Com\cod\app\src\bin\**\*" />
 
   </ItemGroup>
 
@@ -126,21 +132,21 @@
        ================================================================ -->
   <ItemGroup>
 
-    <None Include="../../../cfg/appset.json" Condition="Exists('../../../cfg/appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="Resources\Errors\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="Resources\Lang\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="../../../docs/USER_GUIDE_EN.md" Link="docs/USER_GUIDE_EN.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="Resources/COA/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="Resources/Currencies/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="ShouTech.ERP.Com\cfg\appset.json" Link="cfg/appset.json" Condition="Exists('ShouTech.ERP.Com\cfg\appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\Errors\*.json" Link="Resources\Errors\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\Lang\*.json" Link="Resources\Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="ShouTech.ERP.Com\docs\USER_GUIDE_EN.md" Link="docs/USER_GUIDE_EN.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	
 
   </ItemGroup>
   
   <ItemGroup>
-	<Resource Include="Resources\Ico\**\*.png" />
-    <Resource Include="Resources\Ico\**\*.jpg" />
-    <Resource Include="Resources\Ico\**\*.svg" />
-	<Resource Include="Resources\Ico\**\*.ico" />
+	<Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.png"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.jpg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.svg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+	<Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.ico"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
   </ItemGroup>
 
 
@@ -179,7 +185,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../../../dba/mig/sqlite/*.sql" Link="dba/mig/sqlite/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/sqlite')" />
-    <None Include="../../../dba/mig/postgresql/*.sql" Link="dba/mig/postgresql/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('../../../dba/mig/postgresql')" />
+    <None Include="ShouTech.ERP.Com\dba\mig\sqlite\*.sql" Link="dba/mig/sqlite/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('ShouTech.ERP.Com\dba\mig\sqlite')" />
+    <None Include="ShouTech.ERP.Com\dba\mig\postgresql\*.sql" Link="dba/mig/postgresql/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('ShouTech.ERP.Com\dba\mig\postgresql')" />
   </ItemGroup>
 </Project>

@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\cod\app\src\MainApp.csproj" />
+    <ProjectReference Include="..\..\..\ShouTech.ERP.csproj" />
   </ItemGroup>
 
 </Project>
