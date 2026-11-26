@@ -871,6 +871,36 @@ public static class TaxSvc
         }
     }
 
+    /// <summary>Reads a specifically requested material/customer price tier.</summary>
+    public static decimal? ResolveExplicitPrice(
+        string? partyCode, long? materialId, string? materialCode,
+        string priceLevel, string? unit = null, string? currency = null,
+        DateTime? asOfDate = null)
+    {
+        if (materialId is not > 0 && string.IsNullOrWhiteSpace(materialCode))
+            return null;
+        var cs = DatabaseRuntime.GetConnectionString();
+        var company = AppState.CurrentCompanyCode ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(cs) || string.IsNullOrWhiteSpace(company))
+            return null;
+        try
+        {
+            using var connection = Open(cs);
+            using var tx = connection.BeginTransaction();
+            return SalesPriceResolver.Default.ResolveExplicitPrice(
+                connection, tx,
+                DatabaseRuntime.IsPostgreSql() ? "PostgreSQL" : "SQLite",
+                company, partyCode, materialId ?? 0, materialCode,
+                priceLevel, unit, currency,
+                (asOfDate ?? DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "TaxSvc.ResolveExplicitPrice");
+            return null;
+        }
+    }
+
     /// <summary>
     /// W5 live margin: the material's current valuation cost through
     /// the SAME fallback chain the pricing guard's margin rule uses

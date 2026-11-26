@@ -269,6 +269,145 @@ public sealed class SalesPriceResolver
     }
 
     /// <summary>
+    /// Resolves one explicitly selected invoice price level. A missing value
+    /// remains missing; this method never silently substitutes another tier.
+    /// Matching price-list rows take precedence over material-card tier fields.
+    /// </summary>
+    public decimal? ResolveExplicitPrice(
+        DbConnection connection, DbTransaction transaction, string provider,
+        string companyKey, string? partyCode, long materialId, string? materialCode,
+        string priceLevel, string? unit = null, string? currency = null,
+        string? asOfDate = null)
+    {
+        if (string.IsNullOrWhiteSpace(priceLevel) ||
+            (materialId <= 0 && string.IsNullOrWhiteSpace(materialCode)))
+            return null;
+
+        var isPg = IsPg(provider);
+        var notDeleted = isPg ? "is_deleted = FALSE" : "is_deleted = 0";
+        var keys = CompanyKeys(connection, transaction, provider, companyKey);
+        if (keys.Count == 0) return null;
+        var inList = string.Join(", ", keys.Select((_, i) => $"@co{i}"));
+        var date = string.IsNullOrWhiteSpace(asOfDate)
+            ? DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : asOfDate.Trim();
+
+        DbCommand Create(string sql)
+        {
+            var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = sql;
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = $"@co{i}";
+                parameter.Value = keys[i];
+                command.Parameters.Add(parameter);
+            }
+            return command;
+        }
+
+        void Add(DbCommand command, string name, object value)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value;
+            command.Parameters.Add(parameter);
+        }
+
+        static decimal? ReadPrice(object? value)
+            => value is null or DBNull ? null : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+
+        long resolvedId = materialId;
+        var code = materialCode?.Trim() ?? string.Empty;
+        if (resolvedId <= 0)
+        {
+            using var find = Create($"SELECT material_id FROM materials WHERE company_id IN ({inList}) AND code = @code AND {notDeleted} LIMIT 1");
+            Add(find, "@code", code);
+            var id = find.ExecuteScalar();
+            if (id is null or DBNull) return null;
+            resolvedId = Convert.ToInt64(id, CultureInfo.InvariantCulture);
+        }
+
+        var level = priceLevel.Trim();
+        if (level.Equals("Customer", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(partyCode) ||
+                !PartyLedger.TableExists(connection, transaction, provider, "customer_prices"))
+                return null;
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                using var codeCmd = Create($"SELECT code FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
+                Add(codeCmd, "@mat", resolvedId);
+                code = Convert.ToString(codeCmd.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            if (string.IsNullOrWhiteSpace(code)) return null;
+            var active = isPg ? "is_active = TRUE" : "is_active = 1";
+            using var customer = Create($"""
+                SELECT price FROM customer_prices
+                WHERE company_id IN ({inList}) AND party_code = @party
+                  AND material_code = @code AND {active} AND {notDeleted}
+                LIMIT 1
+                """);
+            Add(customer, "@party", partyCode.Trim());
+            Add(customer, "@code", code);
+            return ReadPrice(customer.ExecuteScalar());
+        }
+
+        if (level.Equals("LastPurchase", StringComparison.OrdinalIgnoreCase))
+        {
+            using var last = Create($"SELECT last_purchase_cost FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
+            Add(last, "@mat", resolvedId);
+            return ReadPrice(last.ExecuteScalar());
+        }
+
+        var listLevels = level.Equals("Purchase", StringComparison.OrdinalIgnoreCase)
+            ? new[] { "PURCHASE", "BUYING", "BUY", "PURCHASEPRICE" }
+            : level.Equals("HalfWholesale", StringComparison.OrdinalIgnoreCase)
+                ? new[] { "HALFWHOLESALE", "HALF-WHOLESALE", "HALF WHOLESALE" }
+                : new[] { level.ToUpperInvariant() };
+
+        if (PartyLedger.TableExists(connection, transaction, provider, "material_price_list"))
+        {
+            using var list = Create($"""
+                SELECT price FROM material_price_list
+                WHERE company_id IN ({inList}) AND material_id = @mat
+                  AND UPPER(REPLACE(REPLACE(price_level, '-', ''), ' ', '')) IN ({string.Join(", ", listLevels.Select((_, i) => $"@level{i}"))})
+                  AND (valid_from IS NULL OR valid_from = '' OR valid_from <= @date)
+                  AND (valid_to IS NULL OR valid_to = '' OR valid_to >= @date)
+                  AND (unit_name IS NULL OR unit_name = '' OR unit_name = @unit)
+                  AND (currency IS NULL OR currency = '' OR @currency = '' OR currency = @currency)
+                ORDER BY valid_from DESC
+                LIMIT 1
+                """);
+            Add(list, "@mat", resolvedId);
+            for (var i = 0; i < listLevels.Length; i++)
+                Add(list, $"@level{i}", listLevels[i].Replace("-", string.Empty).Replace(" ", string.Empty));
+            Add(list, "@date", date);
+            Add(list, "@unit", unit?.Trim() ?? string.Empty);
+            Add(list, "@currency", currency?.Trim() ?? string.Empty);
+            var listed = ReadPrice(list.ExecuteScalar());
+            if (listed is not null) return listed;
+        }
+
+        var column = level.ToUpperInvariant() switch
+        {
+            "RETAIL" => "price_retail",
+            "WHOLESALE" => "price_wholesale",
+            "SPECIAL" => "price_special",
+            "LIST" => "price_list",
+            "EXPORT" => "price_export",
+            "DISTRIBUTOR" => "price_distributor",
+            "ONLINE" => "price_online",
+            _ => null
+        };
+        if (column is null) return null;
+        using var card = Create($"SELECT {column} FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
+        Add(card, "@mat", resolvedId);
+        return ReadPrice(card.ExecuteScalar());
+    }
+
+    /// <summary>
     /// BXGY line expansion (W7a): for every PAID line, resolves the
     /// material's bonus rule and appends the earned free quantity as a
     /// zero-price companion line (same material, or bonus_item_code's

@@ -493,26 +493,8 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             }
             RefreshTotals();
         };
-        _btnAddLine.Click += (_, _) =>
-        {
-            _lines.Add(new LineVm
-            {
-                TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
-                TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
-                TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
-                    string.Equals(x.Code, Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
-                WarehouseName = _txtWarehouse.Text.Trim()
-            });
-            RefreshTotals();
-        };
-        _btnRemoveLine.Click += (_, _) =>
-        {
-            if (_grid.SelectedItem is LineVm line)
-            {
-                _lines.Remove(line);
-                RefreshTotals();
-            }
-        };
+        _btnAddLine.Click += (_, _) => AddInvoiceLine();
+        _btnRemoveLine.Click += (_, _) => RemoveSelectedInvoiceLine();
         _btnFindMaterial.Click += (_, _) => PickMaterial();
         foreach (var b in new[] { _btnSave, _btnPost, _btnReverse, _btnDelete, _btnPrint, _btnPdf, _btnCollect, _btnAddLine, _btnRemoveLine, _btnFindMaterial, _btnSubmitApproval, _btnApproveDoc, _btnRejectDoc })
             toolbar.Children.Add(b);
@@ -972,7 +954,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         _grid.CanUserResizeRows = false;
         _grid.HeadersVisibility = DataGridHeadersVisibility.Column;
         _grid.SelectionMode = DataGridSelectionMode.Single;
-        _grid.SelectionUnit = DataGridSelectionUnit.FullRow;
+        _grid.SelectionUnit = DataGridSelectionUnit.CellOrRowHeader;
         _grid.AlternationCount = 2;
         _grid.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         _grid.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
@@ -1061,6 +1043,270 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         ApplySavedColumnLayout();
 
         _grid.CellEditEnding += OnCellEditEnding;
+        _grid.PreviewMouseRightButtonDown += (_, e) =>
+        {
+            var row = FindGridRow(e.OriginalSource as DependencyObject);
+            if (row?.Item is LineVm line)
+            {
+                _grid.SelectedItem = line;
+                var cell = FindVisualCell(e.OriginalSource as DependencyObject);
+                if (cell is not null)
+                    _grid.CurrentCell = new DataGridCellInfo(line, cell.Column);
+            }
+        };
+        _grid.ContextMenuOpening += (_, _) => _grid.ContextMenu = BuildInvoiceLineContextMenu();
+        _grid.ContextMenu = BuildInvoiceLineContextMenu();
+    }
+
+    private sealed record InvoicePriceOption(string Level, string ResourceKey, string Fallback);
+
+    private IReadOnlyList<InvoicePriceOption> InvoicePriceOptions()
+    {
+        var options = new List<InvoicePriceOption>
+        {
+            new("Retail", "Invoice.PriceRetail", "Retail price"),
+            new("Wholesale", "Invoice.PriceWholesale", "Wholesale price"),
+            new("HalfWholesale", "Invoice.PriceHalfWholesale", "Half-wholesale price"),
+            new("Special", "Invoice.PriceSpecial", "Special price"),
+            new("List", "Invoice.PriceList", "List price"),
+            new("Distributor", "Invoice.PriceDistributor", "Distributor price"),
+            new("Export", "Invoice.PriceExport", "Export price"),
+            new("Online", "Invoice.PriceOnline", "Online price"),
+            new("Purchase", "Invoice.PricePurchase", "Purchase price"),
+            new("LastPurchase", "Invoice.PriceLastPurchase", "Last purchase price")
+        };
+        if (_doc.IsSalesSide)
+            options.Insert(8, new InvoicePriceOption("Customer", "Invoice.PriceCustomer", "Customer price"));
+        return options;
+    }
+
+    private ContextMenu BuildInvoiceLineContextMenu()
+    {
+        var menu = new ContextMenu();
+        MenuItem Add(string key, string fallback, Action action, bool enabled = true)
+        {
+            var item = new MenuItem
+            {
+                Header = Tf(key, fallback),
+                IsEnabled = enabled,
+                Padding = new Thickness(8, 2, 8, 2),
+                MinHeight = 21,
+                FontSize = 12
+            };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+            return item;
+        }
+
+        Add("Invoice.CtxAddLine", "New line", AddInvoiceLine,
+            _doc.Status == InvDocStatus.Draft);
+        Add("Invoice.CtxDeleteLine", "Delete line", RemoveSelectedInvoiceLine,
+            _doc.Status == InvDocStatus.Draft && _grid.SelectedItem is LineVm);
+        Add("Invoice.CtxDuplicateLine", "Duplicate line", DuplicateSelectedInvoiceLine,
+            _doc.Status == InvDocStatus.Draft && _grid.SelectedItem is LineVm);
+        menu.Items.Add(new Separator { Margin = new Thickness(0, 1, 0, 1) });
+        Add("Invoice.CtxCopySelected", "Copy selected", CopySelectedInvoiceLine,
+            _grid.SelectedItem is LineVm);
+        Add("Invoice.CtxCopyAll", "Copy all", CopyAllInvoiceLines, _lines.Count > 0);
+
+        var pastePrices = new MenuItem
+        {
+            Header = Tf("Invoice.CtxPastePrices", "Paste prices"),
+            Padding = new Thickness(8, 2, 8, 2),
+            MinHeight = 21,
+            FontSize = 12,
+            IsEnabled = _doc.Status == InvDocStatus.Draft &&
+                        _grid.SelectedItem is LineVm &&
+                        _lines.Any(x => x.MaterialId is > 0 || !string.IsNullOrWhiteSpace(x.MaterialCode))
+        };
+        foreach (var option in InvoicePriceOptions())
+        {
+            var child = new MenuItem
+            {
+                Header = Tf(option.ResourceKey, option.Fallback),
+                Tag = option.Level,
+                Padding = new Thickness(8, 2, 8, 2),
+                MinHeight = 21,
+                FontSize = 12
+            };
+            child.Click += (_, _) => ApplyInvoicePrice(option.Level, Tf(option.ResourceKey, option.Fallback));
+            pastePrices.Items.Add(child);
+        }
+        menu.Items.Add(pastePrices);
+        menu.Items.Add(new Separator { Margin = new Thickness(0, 1, 0, 1) });
+        Add("Invoice.CtxDeleteEmpty", "Delete empty lines", DeleteEmptyInvoiceLines,
+            _doc.Status == InvDocStatus.Draft && _lines.Any(IsEmptyInvoiceLine));
+        Add("Invoice.CtxRecalculate", "Recalculate totals", RefreshTotals);
+        return menu;
+    }
+
+    private void AddInvoiceLine()
+    {
+        if (_doc.Status != InvDocStatus.Draft) return;
+        var line = new LineVm
+        {
+            TaxCode = Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture) ?? string.Empty,
+            TaxRate = ParseDec(_txtTaxRate.Text, TaxSvc.GetDefaultRate()),
+            TaxCalculationMode = _taxCodes.FirstOrDefault(x =>
+                string.Equals(x.Code, Convert.ToString(_cmbTaxCode.SelectedValue, CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))?.CalculationMode ?? "Exclusive",
+            WarehouseName = _txtWarehouse.Text.Trim()
+        };
+        var selectedIndex = _grid.SelectedItem is LineVm selected ? _lines.IndexOf(selected) : -1;
+        var insertAt = selectedIndex >= 0 ? selectedIndex + 1 : _lines.Count;
+        _lines.Insert(insertAt, line);
+        _grid.SelectedItem = line;
+        _grid.CurrentCell = new DataGridCellInfo(line, _descColumn);
+        _grid.ScrollIntoView(line, _descColumn);
+        RefreshTotals();
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _grid.Focus();
+            _grid.BeginEdit();
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void RemoveSelectedInvoiceLine()
+    {
+        if (_doc.Status != InvDocStatus.Draft || _grid.SelectedItem is not LineVm line) return;
+        _lines.Remove(line);
+        RefreshTotals();
+    }
+
+    private void DuplicateSelectedInvoiceLine()
+    {
+        if (_doc.Status != InvDocStatus.Draft || _grid.SelectedItem is not LineVm source) return;
+        var copy = LineVm.FromLine(source.ToLine());
+        var index = _lines.IndexOf(source);
+        _lines.Insert(index + 1, copy);
+        _grid.SelectedItem = copy;
+        _grid.CurrentCell = new DataGridCellInfo(copy, _descColumn);
+        RefreshTotals();
+    }
+
+    private static bool IsEmptyInvoiceLine(LineVm line)
+        => line.MaterialId is null && string.IsNullOrWhiteSpace(line.MaterialCode) &&
+           string.IsNullOrWhiteSpace(line.Description);
+
+    private void DeleteEmptyInvoiceLines()
+    {
+        if (_doc.Status != InvDocStatus.Draft) return;
+        foreach (var line in _lines.Where(IsEmptyInvoiceLine).ToList())
+            _lines.Remove(line);
+        RefreshTotals();
+    }
+
+    private static string Tsv(string? value)
+        => (value ?? string.Empty).Replace("\t", " ").Replace("\r", " ").Replace("\n", " ");
+
+    private void CopySelectedInvoiceLine()
+    {
+        if (_grid.SelectedItem is not LineVm line) return;
+        try
+        {
+            Clipboard.SetText(string.Join("\t", new[]
+            {
+                Tsv(line.MaterialCode), Tsv(line.Description), Tsv(line.Unit),
+                Tsv(line.QtyText), Tsv(line.UnitPriceText), Tsv(line.DiscountPctText),
+                Tsv(line.TaxRateText), Tsv(line.Notes)
+            }));
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.CopySelectedInvoiceLine");
+        }
+    }
+
+    private void CopyAllInvoiceLines()
+    {
+        if (_lines.Count == 0) return;
+        try
+        {
+            var rows = new List<string>
+            {
+                string.Join("\t", new[]
+                {
+                    Tf("Invoice.ColCode", "Code"), Tf("Invoice.ColMaterial", "Material"),
+                    Tf("Invoice.ColUnit", "Unit"), Tf("Invoice.ColQty", "Qty"),
+                    Tf("Invoice.ColUnitPrice", "Unit price"), Tf("Invoice.ColDiscount", "Discount %"),
+                    Tf("Invoice.ColTax", "Tax %"), Tf("Invoice.ColNotes", "Notes")
+                })
+            };
+            rows.AddRange(_lines.Select(line => string.Join("\t", new[]
+            {
+                Tsv(line.MaterialCode), Tsv(line.Description), Tsv(line.Unit),
+                Tsv(line.QtyText), Tsv(line.UnitPriceText), Tsv(line.DiscountPctText),
+                Tsv(line.TaxRateText), Tsv(line.Notes)
+            })));
+            Clipboard.SetText(string.Join(Environment.NewLine, rows));
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "InvoiceWin.CopyAllInvoiceLines");
+        }
+    }
+
+    private void ApplyInvoicePrice(string priceLevel, string priceLabel)
+    {
+        if (_doc.Status != InvDocStatus.Draft || _grid.SelectedItem is not LineVm selected)
+            return;
+
+        var scope = MessageBox.Show(
+            this,
+            Tf("Invoice.ApplyPriceScope", "Apply this price to all invoice lines? Choose No to apply it only to the selected line."),
+            priceLabel,
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+        if (scope == MessageBoxResult.Cancel) return;
+
+        var targets = scope == MessageBoxResult.Yes
+            ? _lines.ToList()
+            : new List<LineVm> { selected };
+        var updated = 0;
+        var missing = 0;
+        foreach (var line in targets)
+        {
+            if (line.MaterialId is not > 0 && string.IsNullOrWhiteSpace(line.MaterialCode))
+            {
+                missing++;
+                continue;
+            }
+            var price = TaxSvc.ResolveExplicitPrice(
+                _txtPartyCode.Text.Trim(), line.MaterialId, line.MaterialCode,
+                priceLevel, line.Unit, _doc.CurrencyCode,
+                _dtDate.SelectedDate ?? _doc.DocDate);
+            if (price is not decimal value || value <= 0m)
+            {
+                missing++;
+                continue;
+            }
+            line.UnitPriceText = value.ToString("0.####", CultureInfo.InvariantCulture);
+            line.NotifyTotals();
+            updated++;
+        }
+        RefreshTotals();
+        _lblStatus.Text = Tf("Invoice.PriceApplied", "Price applied to {0} line(s); no matching price was found for {1} line(s).")
+            .Replace("{0}", updated.ToString(CultureInfo.InvariantCulture))
+            .Replace("{1}", missing.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static DataGridRow? FindGridRow(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is DataGridRow row) return row;
+            source = VisualTreeHelper.GetParent(source);
+        }
+        return null;
+    }
+
+    private static DataGridCell? FindVisualCell(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is DataGridCell cell) return cell;
+            source = VisualTreeHelper.GetParent(source);
+        }
+        return null;
     }
 
     // ------------------------------------------------------------------
@@ -2359,6 +2605,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         _chkExport.Content = Tf("Invoice.ExportInvoice", "Export invoice");
 
         RefreshTotals();
+        _grid.ContextMenu = BuildInvoiceLineContextMenu();
     }
 
     // ---- Line view-model ----
