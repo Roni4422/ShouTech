@@ -25,6 +25,40 @@ public static class GridCellNavigator
     public readonly record struct CellPosition(int Row, int Column);
 
     /// <summary>
+    /// Moves in one arrow-key direction without wrapping. Read-only columns
+    /// are skipped; if no editable cell exists before the grid edge, returns null.
+    /// rowStep and columnStep must each be -1, 0, or +1 and cannot both be nonzero.
+    /// </summary>
+    public static CellPosition? MoveDirectional(
+        IReadOnlyList<bool> columnEditable,
+        int rowCount,
+        CellPosition current,
+        int rowStep,
+        int columnStep)
+    {
+        ArgumentNullException.ThrowIfNull(columnEditable);
+        if (columnEditable.Count == 0 || rowCount <= 0 ||
+            current.Row < 0 || current.Row >= rowCount ||
+            current.Column < 0 || current.Column >= columnEditable.Count ||
+            Math.Abs(rowStep) + Math.Abs(columnStep) != 1)
+            return null;
+
+        var row = current.Row + rowStep;
+        var column = current.Column + columnStep;
+        while (row >= 0 && row < rowCount &&
+               column >= 0 && column < columnEditable.Count)
+        {
+            if (columnEditable[column])
+                return new CellPosition(row, column);
+
+            row += rowStep;
+            column += columnStep;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Computes the next cell to move to.
     /// </summary>
     /// <param name="columnEditable">

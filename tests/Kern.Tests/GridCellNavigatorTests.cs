@@ -23,6 +23,37 @@ namespace Kern.Tests
             bool[] editable, int rows, int row, int col, int direction)
             => GridCellNavigator.Advance(editable, rows, Pos(row, col), direction);
 
+        [Theory]
+        [InlineData(0, -1, 0, 2)]
+        [InlineData(0, 1, 0, 2)]
+        [InlineData(-1, 0, 0, 0)]
+        [InlineData(1, 0, 2, 0)]
+        public void DirectionalMove_SkipsReadOnlyColumns(
+            int rowStep, int columnStep, int expectedRow, int expectedColumn)
+        {
+            var editable = new[] { true, false, true };
+            var actual = GridCellNavigator.MoveDirectional(
+                editable, 3, Pos(1, 0), rowStep, columnStep);
+            Assert.Equal(Pos(expectedRow, expectedColumn), actual);
+        }
+
+        [Fact]
+        public void DirectionalMove_StopsAtGridEdge()
+        {
+            var editable = new[] { true, false, true };
+            Assert.Null(GridCellNavigator.MoveDirectional(
+                editable, 2, Pos(0, 0), 0, -1));
+            Assert.Null(GridCellNavigator.MoveDirectional(
+                editable, 2, Pos(1, 2), 1, 0));
+        }
+
+        [Fact]
+        public void DirectionalMove_RejectsInvalidDirection()
+        {
+            Assert.Null(GridCellNavigator.MoveDirectional(
+                new[] { true }, 1, Pos(0, 0), 1, 1));
+        }
+
         [Fact]
         public void Forward_MovesToNextEditableCellInSameRow()
         {

@@ -103,8 +103,40 @@ public static class DataGridTableBehavior
             grid.ContextMenuOpening += Grid_ContextMenuOpening;
             grid.PreviewMouseRightButtonDown -= Grid_PreviewMouseRightButtonDown;
             grid.PreviewMouseRightButtonDown += Grid_PreviewMouseRightButtonDown;
+        }
+        else
+        {
+            grid.ContextMenuOpening -= Grid_ContextMenuOpening;
+            grid.PreviewMouseRightButtonDown -= Grid_PreviewMouseRightButtonDown;
+        }
+    }
+
+    public static readonly DependencyProperty EnableCellInteractionProperty =
+        DependencyProperty.RegisterAttached(
+            "EnableCellInteraction",
+            typeof(bool),
+            typeof(DataGridTableBehavior),
+            new PropertyMetadata(false, OnCellInteractionChanged));
+
+    public static void SetEnableCellInteraction(DependencyObject element, bool value) =>
+        element.SetValue(EnableCellInteractionProperty, value);
+
+    public static bool GetEnableCellInteraction(DependencyObject element) =>
+        (bool)element.GetValue(EnableCellInteractionProperty);
+
+    private static void OnCellInteractionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not DataGrid grid)
+            return;
+
+        if (e.NewValue is true)
+        {
             grid.PreviewMouseLeftButtonDown -= Grid_PreviewMouseLeftButtonDown;
             grid.PreviewMouseLeftButtonDown += Grid_PreviewMouseLeftButtonDown;
+            grid.PreviewTouchDown -= Grid_PreviewTouchDown;
+            grid.PreviewTouchDown += Grid_PreviewTouchDown;
+            grid.PreviewStylusDown -= Grid_PreviewStylusDown;
+            grid.PreviewStylusDown += Grid_PreviewStylusDown;
             grid.RemoveHandler(Keyboard.PreviewKeyDownEvent,
                 new KeyEventHandler(Grid_PreviewKeyDown));
             grid.AddHandler(Keyboard.PreviewKeyDownEvent,
@@ -113,12 +145,24 @@ public static class DataGridTableBehavior
         }
         else
         {
-            grid.ContextMenuOpening -= Grid_ContextMenuOpening;
-            grid.PreviewMouseRightButtonDown -= Grid_PreviewMouseRightButtonDown;
             grid.PreviewMouseLeftButtonDown -= Grid_PreviewMouseLeftButtonDown;
+            grid.PreviewTouchDown -= Grid_PreviewTouchDown;
+            grid.PreviewStylusDown -= Grid_PreviewStylusDown;
             grid.RemoveHandler(Keyboard.PreviewKeyDownEvent,
                 new KeyEventHandler(Grid_PreviewKeyDown));
         }
+    }
+
+    private static void Grid_PreviewTouchDown(object sender, TouchEventArgs e)
+    {
+        if (sender is DataGrid grid)
+            ActivateCell(grid, e.OriginalSource as DependencyObject);
+    }
+
+    private static void Grid_PreviewStylusDown(object sender, StylusDownEventArgs e)
+    {
+        if (sender is DataGrid grid)
+            ActivateCell(grid, e.OriginalSource as DependencyObject);
     }
 
     /// <summary>
@@ -128,15 +172,24 @@ public static class DataGridTableBehavior
     /// </summary>
     private static void Grid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not DataGrid grid || grid.IsReadOnly || !grid.IsEnabled)
+        if (sender is DataGrid grid)
+            ActivateCell(grid, e.OriginalSource as DependencyObject);
+    }
+
+    /// <summary>
+    /// Activates an editable cell from mouse, touch, or pen input. The native
+    /// DataGrid still receives the input so embedded controls and selection
+    /// retain their normal behavior; editing starts after selection settles.
+    /// </summary>
+    private static void ActivateCell(DataGrid grid, DependencyObject? source)
+    {
+        if (grid.IsReadOnly || !grid.IsEnabled)
             return;
 
-        var source = e.OriginalSource as DependencyObject;
         var cell = FindParent<DataGridCell>(source);
         if (cell == null || cell.IsReadOnly || cell.Column.IsReadOnly)
             return;
 
-        // Do not steal clicks intended for embedded interactive editors.
         if (FindParent<ComboBox>(source) != null ||
             FindParent<System.Windows.Controls.Primitives.ButtonBase>(source) != null ||
             FindParent<System.Windows.Controls.Primitives.ToggleButton>(source) != null)
@@ -149,8 +202,6 @@ public static class DataGridTableBehavior
         grid.SelectedItem = row.Item;
         grid.CurrentCell = new DataGridCellInfo(row.Item, cell.Column);
 
-        // Let DataGrid process selection first, then begin editing in this
-        // same click. This removes the old select-then-double-click workflow.
         grid.Dispatcher.BeginInvoke(new Action(() =>
         {
             if (!grid.IsLoaded || grid.IsReadOnly || !grid.IsEnabled ||
@@ -190,6 +241,25 @@ public static class DataGridTableBehavior
         {
             DiagEnter("received", sender as DataGrid, e,
                 $"effectiveKey={effectiveKey}");
+        }
+
+        if (effectiveKey == Key.Tab &&
+            sender is DataGrid tabGrid &&
+            !tabGrid.IsReadOnly && tabGrid.IsEnabled &&
+            !IsColumnHeaderFocused())
+        {
+            var tabOriginItem = tabGrid.CurrentCell.Item ?? tabGrid.SelectedItem;
+            var tabOriginColumn = tabGrid.CurrentCell.Column;
+            var tabDirection = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1;
+            e.Handled = true;
+            tabGrid.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                tabGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+                tabGrid.CommitEdit(DataGridEditingUnit.Row, true);
+                MoveToNextEditableCell(tabGrid, tabOriginItem, tabOriginColumn,
+                    edit: true, tabDirection);
+            }), System.Windows.Threading.DispatcherPriority.Input);
+            return;
         }
 
         // Only a plain Enter is grid navigation (Ctrl/Alt+Enter keeps its
@@ -428,39 +498,34 @@ public static class DataGridTableBehavior
         if (col < 0 || row < 0) return;
 
         var rtl = grid.FlowDirection == FlowDirection.RightToLeft;
-        var nextCol = col;
-        var nextRow = row;
-
-        switch (key)
+        var rowStep = key switch
         {
-            case Key.Left:
-                nextCol += rtl ? 1 : -1;
-                break;
-            case Key.Right:
-            case Key.Enter:
-                nextCol += rtl ? -1 : 1;
-                break;
-            case Key.Up:
-                nextRow--;
-                break;
-            case Key.Down:
-                nextRow++;
-                break;
-        }
+            Key.Up => -1,
+            Key.Down => 1,
+            _ => 0
+        };
+        var columnStep = key switch
+        {
+            Key.Left => rtl ? 1 : -1,
+            Key.Right => rtl ? -1 : 1,
+            _ => 0
+        };
+        var editable = columns.Select(c => !c.IsReadOnly).ToArray();
+        var target = GridCellNavigator.MoveDirectional(
+            editable, grid.Items.Count,
+            new GridCellNavigator.CellPosition(row, col),
+            rowStep, columnStep);
+        if (target is not { } position) return;
 
-        if (nextCol < 0 || nextCol >= columns.Count ||
-            nextRow < 0 || nextRow >= grid.Items.Count)
-            return;
-
-        var item = grid.Items[nextRow];
-        var column = columns[nextCol];
+        var item = grid.Items[position.Row];
+        var column = columns[position.Column];
 
         grid.SelectedItem = item;
         grid.CurrentCell = new DataGridCellInfo(item, column);
         grid.ScrollIntoView(item, column);
 
         grid.Dispatcher.BeginInvoke(
-            new Action(() => FocusCurrentCell(grid, item, column)),
+            new Action(() => FocusAndBeginEdit(grid, item, column)),
             System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
@@ -540,6 +605,9 @@ public static class DataGridTableBehavior
 
     private static void FocusAndBeginEdit(DataGrid grid, object item, DataGridColumn column)
     {
+        if (grid.IsReadOnly || !grid.IsEnabled || column.IsReadOnly)
+            return;
+
         try
         {
             FocusCurrentCell(grid, item, column);

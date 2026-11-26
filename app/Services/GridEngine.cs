@@ -34,6 +34,7 @@ public static class GridEngine
         grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, alternateRowBrushKey);
         if (showRowNumbers)
             DataGridTableBehavior.SetShowRowNumbers(grid, true);
+        DataGridTableBehavior.SetEnableCellInteraction(grid, true);
         if (enableContextMenu)
             DataGridTableBehavior.SetEnableStandardContextMenu(grid, true);
     }
