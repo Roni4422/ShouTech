@@ -1,4 +1,3 @@
-// cod/cor/Security.cs
 using System;
 using System.Threading.Tasks;
 
@@ -9,11 +8,18 @@ namespace ShouTech.Core.Security
         Task ValidatePermissionAsync(Guid userId, string permissionKey);
     }
 
-    public class DummySecurityEngine : ISecurityEngine
+    /// <summary>
+    /// Explicitly denies permission checks. This placeholder must never grant access.
+    /// Replace it with the application's configured authorization provider before
+    /// enabling protected operations.
+    /// </summary>
+    [Obsolete("DummySecurityEngine denies all permissions. Register a real authorization provider.")]
+    public sealed class DummySecurityEngine : ISecurityEngine
     {
         public Task ValidatePermissionAsync(Guid userId, string permissionKey)
         {
-            return Task.CompletedTask;
+            return Task.FromException(
+                new UnauthorizedAccessException("No authorization provider is configured."));
         }
     }
 }
