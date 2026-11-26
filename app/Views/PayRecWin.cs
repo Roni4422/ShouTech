@@ -458,10 +458,9 @@ public sealed class PayRecWin : BaseWin
         grid.SelectionUnit = DataGridSelectionUnit.FullRow;
         // Excel-like grids (owner spec item 1): numbered row
         // headers on the read-only allocation grids too.
-        DataGridTableBehavior.SetShowRowNumbers(grid, true);
+        GridEngine.ApplyStandard(grid, "TableSurfaceBrush", "TableAlternateRowBrush");
         grid.GridLinesVisibility = DataGridGridLinesVisibility.Horizontal;
         grid.AlternationCount = 2;
-        DataGridTableBehavior.SetEnableStandardContextMenu(grid, true);
     }
 
     private DataGridTextColumn TextCol(string key, string path, double width, bool numeric = false, bool center = false)

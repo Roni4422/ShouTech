@@ -199,7 +199,7 @@ public abstract class RptBase : BaseWin
         // Excel-like grids (owner spec item 1): numbered row
         // headers on every report grid — one central switch here
         // covers all 71 RptBase-derived report windows.
-        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+        GridEngine.ApplyStandard(_grid, "TableSurfaceBrush", "TableAlternateRowBrush");
         _grid.AlternationCount = 2;
         _grid.SetResourceReference(StyleProperty, "VisuDataGridStyle");
         _grid.SetResourceReference(DataGrid.ColumnHeaderStyleProperty, "VisuDataGridHeaderStyle");

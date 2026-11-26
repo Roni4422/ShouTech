@@ -238,7 +238,7 @@ public sealed class ChqWin : BaseWin, IWindowMode
         // column is dropped — numbers live in the fixed row-header
         // column (LineNo is still maintained by Renumber() and
         // persisted as before).
-        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+        GridEngine.ApplyStandard(_grid, "TableSurfaceBrush", "TableAlternateRowBrush");
         _chequeNoColumn = TextCol(nameof(ChqVm.ChequeNo), 110);
         _bankColumn = TextCol(nameof(ChqVm.BankName), 140);
         _branchColumn = TextCol(nameof(ChqVm.Branch), 100);

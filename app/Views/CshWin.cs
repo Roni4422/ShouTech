@@ -245,7 +245,7 @@ public sealed class CshWin : BaseWin, IWindowMode
         // dropped from the grid (LineNo is still maintained in code
         // and persisted as before). Account first (item 5), then the
         // amount, then the optional chooser columns (item 4).
-        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+        GridEngine.ApplyStandard(_grid, "TableSurfaceBrush", "TableAlternateRowBrush");
         _accountCodeColumn = TextCol(nameof(CshLineVm.AccountCode), 120);
         _accountNameColumn = TextCol(nameof(CshLineVm.AccountName), 220);
         _amountColumn = TextCol(nameof(CshLineVm.AmountText), 110);

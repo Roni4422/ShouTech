@@ -225,7 +225,7 @@ public sealed class JrnWin : BaseWin
         // maintained in code and persisted exactly as before).
         // Account first (item 5), then amounts, then the optional
         // columns managed by the chooser (item 4).
-        DataGridTableBehavior.SetShowRowNumbers(_grid, true);
+        GridEngine.ApplyStandard(_grid, "TableSurfaceBrush", "TableAlternateRowBrush");
         _accountCodeColumn = TextCol(nameof(JrnLineVm.AccountCode), 110);
         _accountNameColumn = TextCol(nameof(JrnLineVm.AccountName), 220, readOnly: true);
         _debitColumn = TextCol(nameof(JrnLineVm.DebitText), 100);
