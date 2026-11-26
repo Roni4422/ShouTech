@@ -19,7 +19,39 @@ PURPOSE = {
     ".github": "CI workflows and repository automation",
 }
 
+def validate_layout() -> None:
+    required = (
+        ROOT / "ShouTech.ERP.csproj",
+        ROOT / "ShouTech.sln",
+        ROOT / "App.xaml",
+        ROOT / "App.xaml.cs",
+    )
+    missing = [path.relative_to(ROOT).as_posix() for path in required if not path.is_file()]
+    if missing:
+        raise SystemExit("Canonical root entry-point files are missing: " + ", ".join(missing))
+
+    app_definitions = sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in ROOT.rglob("App.xaml")
+        if not any(part in SKIP for part in path.relative_to(ROOT).parts)
+    )
+    if app_definitions != ["App.xaml"]:
+        raise SystemExit("Expected exactly one WPF application definition at App.xaml; found: " +
+                         (", ".join(app_definitions) or "(none)"))
+
+    forbidden = (
+        ROOT / "ShouTech.ERP.Com",
+        ROOT / "cod",
+        ROOT / "src" / "Domain",
+        ROOT / "src" / "ShouTech.Domain",
+    )
+    present = [path.relative_to(ROOT).as_posix() for path in forbidden if path.exists()]
+    if present:
+        raise SystemExit("Legacy repository wrappers must not be reintroduced: " + ", ".join(present))
+
+
 def main() -> None:
+    validate_layout()
     files: list[str] = []
     dirs: set[str] = set()
     for path in ROOT.rglob("*"):
