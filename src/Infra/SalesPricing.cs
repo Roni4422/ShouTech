@@ -320,6 +320,16 @@ public sealed class SalesPriceResolver
             => value is null or DBNull ? null : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
 
         long resolvedId = materialId;
+        bool IsDefaultUnit()
+        {
+            if (string.IsNullOrWhiteSpace(unit)) return true;
+            using var defaultCommand = Create($"SELECT COALESCE(NULLIF(default_unit, ''), unit1, '') FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
+            Add(defaultCommand, "@mat", resolvedId);
+            var defaultUnit = Convert.ToString(defaultCommand.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
+            return defaultUnit.Length > 0 &&
+                   defaultUnit.Equals(unit.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
         decimal? ReadUnitPrice(string propertyName)
         {
             using var unitsCommand = Create($"SELECT units_json FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
@@ -397,6 +407,7 @@ public sealed class SalesPriceResolver
         var level = priceLevel.Trim();
         if (level.Equals("Customer", StringComparison.OrdinalIgnoreCase))
         {
+            if (!IsDefaultUnit()) return null;
             if (string.IsNullOrWhiteSpace(partyCode) ||
                 !PartyLedger.TableExists(connection, transaction, provider, "customer_prices"))
                 return null;
@@ -421,6 +432,7 @@ public sealed class SalesPriceResolver
 
         if (level.Equals("LastPurchase", StringComparison.OrdinalIgnoreCase))
         {
+            if (!IsDefaultUnit()) return null;
             using var last = Create($"SELECT last_purchase_cost FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
             Add(last, "@mat", resolvedId);
             return ReadPrice(last.ExecuteScalar());
@@ -483,7 +495,7 @@ public sealed class SalesPriceResolver
             "ONLINE" => "price_online",
             _ => null
         };
-        if (column is null) return null;
+        if (column is null || !IsDefaultUnit()) return null;
         using var card = Create($"SELECT {column} FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
         Add(card, "@mat", resolvedId);
         return ReadPrice(card.ExecuteScalar());
