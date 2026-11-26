@@ -41,6 +41,28 @@ File size is a review signal, not a deletion criterion.
 7. The repository contains archived SQL Server snapshots and legacy schema snapshots. They are reference artifacts, not active runtime code, and must remain clearly separated from supported SQLite/PostgreSQL paths.
 8. `AppHost` is currently a composition root/service-locator boundary. It must become the single explicit dependency-composition boundary rather than allowing new service-locator dependencies to spread.
 
+### Verified startup and composition inventory (2026-11-26)
+
+The current startup path was traced in `App.xaml.cs` and `app/Services/AppHost.cs`:
+
+1. `App.OnStartup` adopts user language and number-format preferences.
+2. It creates a Microsoft DI `ServiceCollection`, calls `ConfigureServices`, and builds a root `IServiceProvider`.
+3. The Microsoft DI container currently registers only `ICompanyRegistryService`, `ICoRegSvc`, and four transient startup windows (`Lang`, `SplWin`, `ComWin`, `LogWin`, `MWin`).
+4. The schema bootstrap runs before `AppHost.Initialize()`; therefore startup error handling at this point must not assume `AppHost.Logging` has been initialized.
+5. `AppHost.Initialize()` then manually constructs the majority of application-wide services and repositories and exposes them through static properties. This is a second, parallel composition mechanism/service locator.
+6. The company-switch path calls `AppHost.RebindDatabaseContext()` to reconstruct connection-bound services after the active company database changes.
+7. `App.OnExit` performs shutdown/audit and coordinator cleanup.
+
+**Confirmed architecture risks (not yet code changes):**
+
+- There are two service-construction mechanisms: Microsoft DI for a small set of windows/registrations, and manual static construction in `AppHost` for most application services.
+- The desktop executable and `src/Infra` both reference SQLite and Npgsql packages. Legacy services in the desktop assembly also access providers directly, so persistence is not isolated behind Infrastructure.
+- `AppHost` owns many nullable static service properties and manually rebuilds connection-bound services on company switch. This makes service lifetime, disposal, and company-context consistency harder to verify.
+- The current DI container is built without an explicit disposal scope in the inspected startup path. Before changing this, all resolved singleton/transient windows and shutdown behavior must be mapped.
+- The startup schema bootstrap executes before the logging service is initialized; any diagnostics in this window need a safe pre-host path.
+
+**Safe migration rule:** do not replace `AppHost`, change service lifetimes, move provider references, or alter company-switch rebinding as a bulk cleanup. First add characterization tests for startup order, service resolution, company switching, and provider selection. Then migrate one service family at a time into a single explicit composition root while preserving the current runtime behavior.
+
 ## 3. Target architecture
 
 Keep the Windows WPF desktop product and its offline SQLite capability. Adopt a modular-monolith architecture with strict dependency direction:
