@@ -746,9 +746,9 @@ public static class DataExportSvc
             .Where((_, index) => index != identityColumnIndex)
             .ToArray();
         if (visibleHeaders.Length != identity.Headers.Length ||
-            !visibleHeaders.OrderBy(x => x, StringComparer.Ordinal)
-                .SequenceEqual(identity.Headers.OrderBy(x => x, StringComparer.Ordinal), StringComparer.Ordinal))
-            throw new InvalidDataException("The workbook column headers were changed. Restore the original headers before importing.");
+            visibleHeaders.Any(string.IsNullOrWhiteSpace) ||
+            visibleHeaders.Distinct(StringComparer.OrdinalIgnoreCase).Count() != visibleHeaders.Length)
+            throw new InvalidDataException("The workbook columns do not match the exported dataset structure.");
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(ct);
@@ -784,9 +784,25 @@ public static class DataExportSvc
         if (companyColumn == null && !IsCompanyIndependent(option.TableName))
             throw new InvalidOperationException("This dataset cannot be safely restricted to the active company, so it was not imported.");
 
-        var headerToField = identity.Headers
-            .Select((header, i) => new { header, field = identity.Fields[i], type = identity.Types[i] })
-            .ToDictionary(x => x.header, x => (x.field, x.type), StringComparer.Ordinal);
+        // The hidden dataset identity remains authoritative for the target
+        // table, field set and value types, but visible Excel labels are editable.
+        // Re-resolve each edited label against that trusted field set so users
+        // can rename translated/business-facing headers without breaking import.
+        var fieldTypes = identity.Fields
+            .Select((field, i) => new { field, type = identity.Types[i] })
+            .ToDictionary(x => x.field, x => x.type, StringComparer.OrdinalIgnoreCase);
+        var headerToField = new Dictionary<string, (string field, string type)>(StringComparer.Ordinal);
+        var matchedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in visibleHeaders)
+        {
+            var field = MatchImportColumn(header, identity.Fields, option.TableName);
+            if (field == null || !fieldTypes.TryGetValue(field, out var type) || !matchedFields.Add(field))
+                throw new InvalidDataException($"Column '{header}' does not uniquely match a field in the exported dataset.");
+            headerToField.Add(header, (field, type));
+        }
+        if (matchedFields.Count != identity.Fields.Length)
+            throw new InvalidDataException("The workbook must retain every exported dataset column.");
+
         var columnIndexes = sheet.Headers
             .Select((header, index) => (header, index))
             .Where(x => x.index != identityColumnIndex)
