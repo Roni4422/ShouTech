@@ -41,7 +41,6 @@ flowchart BT
     Domain["Dom (Domain.dll)<br/>entities, enums, interfaces"]
     Application["App<br/>application services"]
     Infrastructure["Infra<br/>database repositories"]
-    Inventory["ShouTech.Core.Inv<br/>inventory core"]
     DesktopApp["ShouTech.ERP<br/>WPF desktop executable"]
     Tests["Kern.Tests<br/>xUnit test project"]
     Migrator["SqlMigrator<br/>standalone CLI"]
@@ -49,11 +48,9 @@ flowchart BT
 
     Application --> Domain
     Infrastructure --> Domain
-    Inventory --> Domain
     DesktopApp --> Domain
     DesktopApp --> Application
     DesktopApp --> Infrastructure
-    DesktopApp --> Inventory
     Tests --> DesktopApp
     Tests -. "build/reference only<br/>(ReferenceOutputAssembly=false)" .-> Migrator
 ```
@@ -71,7 +68,6 @@ flowchart LR
     Application["App"]
     Domain["Dom (Domain.dll)"]
     Infrastructure["Infra"]
-    Inventory["ShouTech.Core.Inv"]
     Providers["Microsoft.Data.Sqlite<br/>Npgsql"]
     DB[(SQLite or PostgreSQL)]
 
@@ -80,11 +76,9 @@ flowchart LR
     UI --> LegacyServices
     UI --> Application
     Application --> Domain
-    LegacyServices --> Inventory
     LegacyServices --> Infrastructure
     Infrastructure --> Domain
     Infrastructure --> Providers
-    Inventory --> Domain
     LegacyServices --> Providers
     Providers --> DB
 ```
@@ -132,7 +126,7 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 | `src/Dom/` | Domain entities, value types, contracts, and business rules |
 | `src/App/` | Application use cases and orchestration |
 | `src/Infra/` | SQLite/PostgreSQL persistence and infrastructure adapters |
-| `src/Inv/` | Inventory core library |
+| `archive/legacy_inventory/` | Archived SQL Server-only inventory adapter; excluded from active build |
 | `dba/` | Authoritative schema assets and provider-specific migration history |
 | `svc/` | Independent Windows background worker |
 | `tools/` | SQL migration CLI and developer verification harnesses |
@@ -144,7 +138,7 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 
 ## Architectural caveats
 
-- The WPF app combines older service/repository implementations with the newer `Dom` / `App` / `Infra` projects. Follow the actual feature call path before deciding where a change belongs.
+- The WPF app combines older service/repository implementations with the newer `Dom` / `App` / `Infra` projects. The legacy SQL Server inventory adapter is archived and must not be reintroduced as an active dependency. Follow the actual feature call path before deciding where a change belongs.
 - The `svc` and `SqlMigrator` projects reference their database providers directly; they do not depend on the infrastructure project.
 - Native security code has its own CMake and Visual Studio project files. Its presence does not, by itself, establish that a managed application build compiles or packages the native library.
 - Journal reversal creates a posted compensating journal entry (every source line copied with debit and credit swapped) linked through `reversal_of_entry_id`, marks the original entry as reversed, and writes audit events for both entries in one transaction. A unique partial index on `reversal_of_entry_id` prevents a second reversal of the same source entry. The legacy in-memory `AccServ` in `app` does not expose a reversal operation yet; posted corrections must go through the `src/` journal services. See [Accounting reversals](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md).
