@@ -395,6 +395,13 @@ public static class DataExportSvc
         }).ToArray();
         var rows = new List<IReadOnlyDictionary<string, object?>>();
 
+        var categoryCards = IsMaterialsTable(option.TableName) ? LoadCategoryCards() : new List<MatRepo.MatGroupRec>();
+        var categoryColumnKey = IsMaterialsTable(option.TableName)
+            ? Enumerable.Range(0, fields.Count)
+                .Where(i => fields[i].Name.Equals("category", StringComparison.OrdinalIgnoreCase))
+                .Select(i => columnKeys[i]).FirstOrDefault()
+            : null;
+
         while (await reader.ReadAsync(ct))
         {
             var row = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -403,6 +410,9 @@ public static class DataExportSvc
                 var value = reader.GetValue(fields[i].Index);
                 row[columnKeys[i]] = value is DBNull ? null : value;
             }
+            // Product cards: show the category NAME, not the stored card code.
+            if (categoryColumnKey != null && row[categoryColumnKey] is string categoryCode)
+                row[categoryColumnKey] = CategoryCodeToName(categoryCode, categoryCards);
             rows.Add(row);
         }
 
