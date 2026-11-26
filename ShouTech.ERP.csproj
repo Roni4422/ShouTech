@@ -107,7 +107,7 @@
   <ItemGroup>
 
     <Page Include="app\**\*.xaml"
-          Exclude="app\App.xaml;app\obj\**\*;app\bin\**\*">
+          Exclude="app\obj\**\*;app\bin\**\*">
       <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
     </Page>
 
@@ -122,7 +122,7 @@
     <!-- Application Source -->
     <Compile Include="App.xaml.cs" />
     <Compile Include="app\**\*.cs"
-             Exclude="app\App.xaml.cs;app\obj\**\*;app\bin\**\*" />
+             Exclude="app\obj\**\*;app\bin\**\*" />
 
   </ItemGroup>
 

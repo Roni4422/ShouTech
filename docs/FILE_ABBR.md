@@ -7,7 +7,7 @@ A reference that maps the current **abbreviated file names** in the project to t
 
 ---
 
-## WPF Application — `cod/app/src`
+## WPF Application — `app`
 
 ### Entry point
 
@@ -135,7 +135,7 @@ A reference that maps the current **abbreviated file names** in the project to t
 
 ---
 
-## Core / Inventory — `cod/cor/`
+## Core / Inventory — `src/Inv/`
 
 | Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|
@@ -204,7 +204,7 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 
 ## Batch 1 Foundation — Reports / Windows / Export (2026-10-05)
 
-### Views — `cod/app/src/Views/`
+### Views — `app/Views/`
 
 | Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|
@@ -212,7 +212,7 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 | `RptBase.cs` | Report base window | `RptBase` |
 | `ColChsWin.xaml` (+ `.cs`) | Column chooser window | `ColChsWin` |
 
-### Reporting — `cod/app/src/Reporting/`
+### Reporting — `app/Reporting/`
 
 | Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|
@@ -220,7 +220,7 @@ ComWin.xaml  ←→  ComWin.xaml.cs
 | `RptRend.cs` | Report renderer (print + PDF page composition) | `RptRend`, `RptPaginator` |
 | `InvTpl.cs` | Invoice design templates (encrypted) | `InvTpl` |
 
-### Services — `cod/app/src/Services/` (merged into existing folder)
+### Services — `app/Services/` (merged into existing folder)
 
 | Abbreviated file | Long name / meaning | Class |
 |-----------|-------------------|-------|

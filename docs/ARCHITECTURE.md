@@ -121,7 +121,7 @@ flowchart LR
 
 The migration tool discovers nested SQL migration files, applies each migration transactionally, and checks stored SHA-256 hashes to detect edits to already-applied files. For an existing database without migration history, it refuses automatic application; `--baseline-existing` should only be used after reviewing the schema and taking a backup.
 
-The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connectors and POS synchronization are not currently implemented as active service behavior. The desktop code also contains schema-bootstrap/ensure-schema paths; consult [Database Migrations](docs/DATABASE_MIGRATIONS.md) and the relevant feature code before changing or applying schema behavior.
+The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connectors and POS synchronization are not currently implemented as active service behavior. The desktop code also contains schema-bootstrap/ensure-schema paths; consult [Database Migrations](DATABASE_MIGRATIONS.md) and the relevant feature code before changing or applying schema behavior.
 
 ## Repository map
 
@@ -147,21 +147,21 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 - The WPF app combines older service/repository implementations with the newer `Domain` / `Application` / `Infrastructure` projects. Follow the actual feature call path before deciding where a change belongs.
 - The `svc` and `SqlMigrator` projects reference their database providers directly; they do not depend on the infrastructure project.
 - Native security code has its own CMake and Visual Studio project files. Its presence does not, by itself, establish that a managed application build compiles or packages the native library.
-- Journal reversal creates a posted compensating journal entry (every source line copied with debit and credit swapped) linked through `reversal_of_entry_id`, marks the original entry as reversed, and writes audit events for both entries in one transaction. A unique partial index on `reversal_of_entry_id` prevents a second reversal of the same source entry. The legacy in-memory `AccServ` in `cod/app` does not expose a reversal operation yet; posted corrections must go through the `src/` journal services. See [Accounting reversals](docs/ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md).
+- Journal reversal creates a posted compensating journal entry (every source line copied with debit and credit swapped) linked through `reversal_of_entry_id`, marks the original entry as reversed, and writes audit events for both entries in one transaction. A unique partial index on `reversal_of_entry_id` prevents a second reversal of the same source entry. The legacy in-memory `AccServ` in `app` does not expose a reversal operation yet; posted corrections must go through the `src/` journal services. See [Accounting reversals](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md).
 - Product documentation describes a wider ERP feature set than the architecture chart can certify as implemented end-to-end.
 
 ## Further reading
 
-- [Developer Roadmap](docs/DEVELOPER_ROADMAP.md) — canonical phased delivery plan and release gates.
-- [Developer Handbook](docs/DEVELOPER_HANDBOOK.md) — required engineering practices and quality gates.
-- [Module Catalog](docs/MODULE_CATALOG.md) — module responsibilities, dependencies and acceptance evidence.
-- [Engineering Reference Library](docs/ENGINEERING_REFERENCE_LIBRARY.md) — external standards and product references.
+- [Developer Roadmap](DEVELOPER_ROADMAP.md) — canonical phased delivery plan and release gates.
+- [Developer Handbook](DEVELOPER_HANDBOOK.md) — required engineering practices and quality gates.
+- [Module Catalog](MODULE_CATALOG.md) — module responsibilities, dependencies and acceptance evidence.
+- [Engineering Reference Library](ENGINEERING_REFERENCE_LIBRARY.md) — external standards and product references.
 
-- [Developer guide](README.dev.md)
-- [Database migrations](docs/DATABASE_MIGRATIONS.md)
-- [Accounting chart, periods, and year close](docs/ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md)
-- [Al-Ameen logic adaptation and caveats](docs/ALAMEEN_LOGIC_ADAPTATION.md)
+- [Developer guide](DEV.md)
+- [Database migrations](DATABASE_MIGRATIONS.md)
+- [Accounting chart, periods, and year close](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md)
+- [Al-Ameen logic adaptation and caveats](ALAMEEN_LOGIC_ADAPTATION.md)
 
 ## Architecture refactoring program
 
-The repository is being re-engineered incrementally. The audited target architecture, dependency rules, module boundaries, file-disposition policy and phase exit gates are maintained in [Architecture Refactoring Plan](docs/REFACTOR.md). Do not treat this target as evidence that all legacy paths have already been migrated.
+The repository is being re-engineered incrementally. The audited target architecture, dependency rules, module boundaries, file-disposition policy and phase exit gates are maintained in [Architecture Refactoring Plan](REFACTOR.md). Do not treat this target as evidence that all legacy paths have already been migrated.
