@@ -1064,11 +1064,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     {
         var options = new List<InvoicePriceOption>
         {
+            new("Sale", "Invoice.PriceSale", "Sale price"),
             new("Retail", "Invoice.PriceRetail", "Retail price"),
             new("Wholesale", "Invoice.PriceWholesale", "Wholesale price"),
             new("HalfWholesale", "Invoice.PriceHalfWholesale", "Half-wholesale price"),
             new("Special", "Invoice.PriceSpecial", "Special price"),
-            new("List", "Invoice.PriceList", "List price"),
             new("Distributor", "Invoice.PriceDistributor", "Distributor price"),
             new("Export", "Invoice.PriceExport", "Export price"),
             new("Online", "Invoice.PriceOnline", "Online price"),

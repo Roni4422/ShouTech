@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Text.Json;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
 
@@ -318,6 +319,70 @@ public sealed class SalesPriceResolver
         static decimal? ReadPrice(object? value)
             => value is null or DBNull ? null : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
 
+        decimal? ReadUnitPrice(string propertyName)
+        {
+            using var unitsCommand = Create($"SELECT units_json FROM materials WHERE company_id IN ({inList}) AND material_id = @mat AND {notDeleted} LIMIT 1");
+            Add(unitsCommand, "@mat", resolvedId);
+            var json = Convert.ToString(unitsCommand.ExecuteScalar(), CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return null;
+
+                JsonElement? fallback = null;
+                foreach (var row in document.RootElement.EnumerateArray())
+                {
+                    if (row.ValueKind != JsonValueKind.Object) continue;
+                    fallback ??= row;
+                    string unitName = string.Empty;
+                    foreach (var field in row.EnumerateObject())
+                    {
+                        if (field.Name.Equals("UnitName", StringComparison.OrdinalIgnoreCase))
+                        {
+                            unitName = field.Value.GetString() ?? string.Empty;
+                            break;
+                        }
+                    }
+                    if (!string.IsNullOrWhiteSpace(unit) &&
+                        !unitName.Equals(unit.Trim(), StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    foreach (var field in row.EnumerateObject())
+                    {
+                        if (!field.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (field.Value.ValueKind == JsonValueKind.Number &&
+                            field.Value.TryGetDecimal(out var amount))
+                            return amount;
+                        if (field.Value.ValueKind == JsonValueKind.String &&
+                            decimal.TryParse(field.Value.GetString(), NumberStyles.Any,
+                                CultureInfo.InvariantCulture, out amount))
+                            return amount;
+                    }
+                    if (string.IsNullOrWhiteSpace(unit))
+                        break;
+                }
+
+                if (string.IsNullOrWhiteSpace(unit) && fallback is JsonElement first)
+                {
+                    foreach (var field in first.EnumerateObject())
+                    {
+                        if (field.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase) &&
+                            field.Value.ValueKind == JsonValueKind.Number &&
+                            field.Value.TryGetDecimal(out var amount))
+                            return amount;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+            return null;
+        }
+
         long resolvedId = materialId;
         var code = materialCode?.Trim() ?? string.Empty;
         if (resolvedId <= 0)
@@ -390,12 +455,29 @@ public sealed class SalesPriceResolver
             if (listed is not null) return listed;
         }
 
+        var unitProperty = level.ToUpperInvariant() switch
+        {
+            "SALE" => "PriceSale",
+            "PURCHASE" => "PricePurchase",
+            "RETAIL" => "PriceRetail",
+            "WHOLESALE" => "PriceWholesale",
+            "SPECIAL" => "PriceSpecial",
+            "EXPORT" => "PriceExport",
+            "DISTRIBUTOR" => "PriceDistributor",
+            _ => null
+        };
+        if (unitProperty is not null)
+        {
+            var unitPrice = ReadUnitPrice(unitProperty);
+            if (unitPrice is not null) return unitPrice;
+        }
+
         var column = level.ToUpperInvariant() switch
         {
+            "SALE" => "price_list",
             "RETAIL" => "price_retail",
             "WHOLESALE" => "price_wholesale",
             "SPECIAL" => "price_special",
-            "LIST" => "price_list",
             "EXPORT" => "price_export",
             "DISTRIBUTOR" => "price_distributor",
             "ONLINE" => "price_online",

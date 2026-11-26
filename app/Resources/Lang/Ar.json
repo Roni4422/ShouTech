@@ -2190,11 +2190,10 @@
     "CtxPastePrices": "لصق الأسعار",
     "CtxDeleteEmpty": "حذف الأسطر الفارغة",
     "CtxRecalculate": "إعادة احتساب الإجماليات",
-    "PriceRetail": "سعر البيع",
+    "PriceRetail": "سعر التجزئة",
     "PriceWholesale": "سعر الجملة",
     "PriceHalfWholesale": "سعر نصف الجملة",
     "PriceSpecial": "السعر الخاص",
-    "PriceList": "سعر القائمة",
     "PriceDistributor": "سعر الموزع",
     "PriceExport": "سعر التصدير",
     "PriceOnline": "سعر الإنترنت",
@@ -2202,7 +2201,8 @@
     "PricePurchase": "سعر الشراء",
     "PriceLastPurchase": "سعر آخر شراء",
     "ApplyPriceScope": "هل تريد تطبيق هذا السعر على جميع أسطر الفاتورة؟ اختر لا لتطبيقه على السطر المحدد فقط.",
-    "PriceApplied": "تم تطبيق السعر على {0} سطر، ولا يوجد سعر مطابق لـ {1} سطر."
+    "PriceApplied": "تم تطبيق السعر على {0} سطر، ولا يوجد سعر مطابق لـ {1} سطر.",
+    "PriceSale": "سعر البيع"
   },
   "Vouchers": {
     "PartyCode": "رمز الطرف",

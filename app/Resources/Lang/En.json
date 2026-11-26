@@ -2055,7 +2055,6 @@
     "PriceWholesale": "Wholesale price",
     "PriceHalfWholesale": "Half-wholesale price",
     "PriceSpecial": "Special price",
-    "PriceList": "List price",
     "PriceDistributor": "Distributor price",
     "PriceExport": "Export price",
     "PriceOnline": "Online price",
@@ -2063,7 +2062,8 @@
     "PricePurchase": "Purchase price",
     "PriceLastPurchase": "Last purchase price",
     "ApplyPriceScope": "Apply this price to all invoice lines? Choose No to apply it only to the selected line.",
-    "PriceApplied": "Price applied to {0} line(s); no matching price was found for {1} line(s)."
+    "PriceApplied": "Price applied to {0} line(s); no matching price was found for {1} line(s).",
+    "PriceSale": "Sale price"
   },
   "Vouchers": {
     "PartyCode": "Party Code",
