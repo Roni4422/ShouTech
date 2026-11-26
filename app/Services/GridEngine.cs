@@ -17,6 +17,9 @@ public static class GridEngine
         ArgumentNullException.ThrowIfNull(grid);
         grid.AutoGenerateColumns = false;
         grid.AlternationCount = 2;
+        // Tables behave like spreadsheets: cells, not entire rows, are active.
+        grid.SelectionUnit = DataGridSelectionUnit.CellOrRowHeader;
+        grid.SelectionMode = DataGridSelectionMode.Extended;
         grid.EnableRowVirtualization = true;
         grid.EnableColumnVirtualization = true;
         VirtualizingPanel.SetIsVirtualizing(grid, true);

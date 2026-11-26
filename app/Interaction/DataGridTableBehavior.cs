@@ -91,16 +91,76 @@ public static class DataGridTableBehavior
 
     private static void OnEnableChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        if (d is not DataGrid grid || e.NewValue is not true) return;
+        if (d is not DataGrid grid) return;
 
-        // Selection must be row-based so the active record is visually obvious.
-        grid.SelectionUnit = DataGridSelectionUnit.FullRow;
-        grid.SelectionMode = DataGridSelectionMode.Extended;
-        grid.ContextMenuOpening += Grid_ContextMenuOpening;
-        grid.PreviewMouseRightButtonDown += Grid_PreviewMouseRightButtonDown;
-        grid.AddHandler(Keyboard.PreviewKeyDownEvent,
-            new KeyEventHandler(Grid_PreviewKeyDown),
-            handledEventsToo: true);
+        if (e.NewValue is true)
+        {
+            // CellOrRowHeader preserves row-header selection while allowing
+            // a real current cell. FullRow disables the Excel-like cell editor.
+            grid.SelectionUnit = DataGridSelectionUnit.CellOrRowHeader;
+            grid.SelectionMode = DataGridSelectionMode.Extended;
+            grid.ContextMenuOpening -= Grid_ContextMenuOpening;
+            grid.ContextMenuOpening += Grid_ContextMenuOpening;
+            grid.PreviewMouseRightButtonDown -= Grid_PreviewMouseRightButtonDown;
+            grid.PreviewMouseRightButtonDown += Grid_PreviewMouseRightButtonDown;
+            grid.PreviewMouseLeftButtonDown -= Grid_PreviewMouseLeftButtonDown;
+            grid.PreviewMouseLeftButtonDown += Grid_PreviewMouseLeftButtonDown;
+            grid.RemoveHandler(Keyboard.PreviewKeyDownEvent,
+                new KeyEventHandler(Grid_PreviewKeyDown));
+            grid.AddHandler(Keyboard.PreviewKeyDownEvent,
+                new KeyEventHandler(Grid_PreviewKeyDown),
+                handledEventsToo: true);
+        }
+        else
+        {
+            grid.ContextMenuOpening -= Grid_ContextMenuOpening;
+            grid.PreviewMouseRightButtonDown -= Grid_PreviewMouseRightButtonDown;
+            grid.PreviewMouseLeftButtonDown -= Grid_PreviewMouseLeftButtonDown;
+            grid.RemoveHandler(Keyboard.PreviewKeyDownEvent,
+                new KeyEventHandler(Grid_PreviewKeyDown));
+        }
+    }
+
+    /// <summary>
+    /// Enters edit mode on the first click in an editable data cell.
+    /// Native controls keep their own click behavior, and read-only formula
+    /// cells / report grids are never forced into edit mode.
+    /// </summary>
+    private static void Grid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not DataGrid grid || grid.IsReadOnly || !grid.IsEnabled)
+            return;
+
+        var source = e.OriginalSource as DependencyObject;
+        var cell = FindParent<DataGridCell>(source);
+        if (cell == null || cell.IsReadOnly || cell.Column.IsReadOnly)
+            return;
+
+        // Do not steal clicks intended for embedded interactive editors.
+        if (FindParent<ComboBox>(source) != null ||
+            FindParent<System.Windows.Controls.Primitives.ButtonBase>(source) != null ||
+            FindParent<System.Windows.Controls.Primitives.ToggleButton>(source) != null)
+            return;
+
+        var row = FindParent<DataGridRow>(cell);
+        if (row?.Item == null)
+            return;
+
+        grid.SelectedItem = row.Item;
+        grid.CurrentCell = new DataGridCellInfo(row.Item, cell.Column);
+
+        // Let DataGrid process selection first, then begin editing in this
+        // same click. This removes the old select-then-double-click workflow.
+        grid.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!grid.IsLoaded || grid.IsReadOnly || !grid.IsEnabled ||
+                cell.IsReadOnly || cell.Column.IsReadOnly)
+                return;
+
+            grid.CurrentCell = new DataGridCellInfo(row.Item, cell.Column);
+            if (!cell.IsEditing)
+                grid.BeginEdit();
+        }), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private static void Grid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
