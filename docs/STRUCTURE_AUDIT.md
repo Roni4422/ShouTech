@@ -6,8 +6,8 @@ Branch: `reduce-2-upgrade`
 
 | Path | Responsibility |
 |---|---|
-| `App.xaml`, `App.xaml.cs`, `ShouTech.ERP.csproj` | Sole Windows desktop startup and lifecycle |
-| `ShouTech.sln` | Single solution for the product and supported engineering projects |
+| `App.xaml`, `App.xaml.cs` | Sole WPF application definition and lifecycle at repository root |\n| `app/ShouTech.ERP.csproj` | Sole Windows desktop application project, alongside the presentation layer |
+| `ShouTech.sln` | Single root solution; the only .NET solution/project file at repository root is this solution, keeping plain `dotnet build` unambiguous |
 | `app/` | WPF presentation: views, view models, services, navigation, reporting, localization, themes and resources |
 | `src/Dom/` | Domain entities, value types, contracts and business rules |
 | `src/App/` | Application use cases and orchestration |
@@ -29,7 +29,7 @@ Branch: `reduce-2-upgrade`
 - Preserve the old SQL Server-only inventory adapter under `archive/legacy_inventory/`; it is excluded from the active solution and desktop build.
 - Use the compact `src/Dom/Dom.csproj` project path while preserving the public `Domain.dll` assembly identity. Standard .NET project conventions remain in use.
 - Keep Domain, App and Infra as separate bounded technical layers. Inventory workflows use the current application services and repositories.
-- Place the solution, service, database assets, docs, tools, tests, security code and configuration directly under the repository root.
+- Place the single solution, service, database assets, docs, tools, tests, security code and configuration directly under the repository root. Keep the desktop project beside its WPF presentation files under `app/` so root-level `dotnet build` selects the solution without ambiguity.
 - Preserve migration filenames, IDs, checksums and SQL contents.
 - Remove the obsolete nested company README; the root README remains the single repository landing page.
 - Keep the service, migration CLI, test projects and focused harnesses because each has a distinct operational or verification role.

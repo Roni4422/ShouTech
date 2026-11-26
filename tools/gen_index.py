@@ -47,14 +47,14 @@ def purpose_for(path: str) -> str:
 
 def validate_layout() -> None:
     required = (
-        ROOT / "ShouTech.ERP.csproj",
+        ROOT / "app" / "ShouTech.ERP.csproj",
         ROOT / "ShouTech.sln",
         ROOT / "App.xaml",
         ROOT / "App.xaml.cs",
     )
     missing = [path.relative_to(ROOT).as_posix() for path in required if not path.is_file()]
     if missing:
-        raise SystemExit("Canonical root entry-point files are missing: " + ", ".join(missing))
+        raise SystemExit(Canonical application/solution entry-point files are missing:  + ", ".join(missing))
 
     app_definitions = sorted(
         path.relative_to(ROOT).as_posix()

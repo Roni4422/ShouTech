@@ -1,13 +1,13 @@
 # ShouTech ERP
 
-The Windows desktop ERP application has one startup project at the repository root.
+The Windows desktop ERP application has one startup project in `app/` and one solution at the repository root.
 
 ## Main entry point
 
-- Project: `ShouTech.ERP.csproj`
+- Project: `app/ShouTech.ERP.csproj`
 - WPF application definition: `App.xaml`
 - Application bootstrap and lifecycle: `App.xaml.cs`
-- Solution: `ShouTech.sln`
+- Solution: `ShouTech.sln` (the only .NET solution in the repository root)
 
 ## Repository map
 
@@ -19,12 +19,12 @@ The Windows desktop ERP application has one startup project at the repository ro
 
 ## Build and run
 
-Run these commands from the repository root on Windows with the .NET 8 SDK:
+Run commands from the repository root on Windows with the .NET 8 SDK. The root contains only the solution file, so the standard SDK command resolves it automatically:
 
 ```powershell
-dotnet restore ShouTech.sln
-dotnet build ShouTech.sln --configuration Release --no-restore
-dotnet run --project ShouTech.ERP.csproj
+dotnet restore
+dotnet build --configuration Release --no-restore
+dotnet run --project app/ShouTech.ERP.csproj
 dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release
 ```
 

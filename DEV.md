@@ -21,6 +21,16 @@ ShouTech supports SQLite and PostgreSQL only. SQL Server-specific scripts and im
 
 ## Configure and run
 
+From the repository root, the standard build command automatically selects the single root solution:
+
+```powershell
+dotnet restore
+dotnet build --configuration Release --no-restore
+dotnet run --project app/ShouTech.ERP.csproj
+dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release
+```
+
+
 Use `cfg/appset.json` for non-secret provider defaults. Keep credentials out of source control and provide connection strings through `SHOUTECH_CONNECTION_STRING` or `SHOUTECH_DB_CONNECTION`. Select the provider with `SHOUTECH_DB_PROVIDER=sqlite` or `SHOUTECH_DB_PROVIDER=postgresql`.
 
 Run `dotnet run --project tools/SqlMigrator -- --provider sqlite --connection "Data Source=./shoutech_erp.sqlite3" --dry-run` to inspect migrations before applying them. Review `docs/DATABASE_MIGRATIONS.md` before migrating an existing database.
