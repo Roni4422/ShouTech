@@ -1334,7 +1334,7 @@ public static class DataExportSvc
         for (var i = 0; i < sheet.Headers.Count; i++)
         {
             var header = sheet.Headers[i];
-            var match = MatchImportColumn(header, columns);
+            var match = MatchImportColumn(header, columns, option.TableName);
             if (match == null || !used.Add(match))
                 continue;
             keepIndexes.Add(i);
@@ -1390,13 +1390,40 @@ public static class DataExportSvc
         return (identity, new ExcelSheet(headers, rows), skipped);
     }
 
-    private static string? MatchImportColumn(string header, IReadOnlyList<string> columns)
+    private static string? MatchImportColumn(
+        string header,
+        IReadOnlyList<string> columns,
+        string tableName)
     {
         if (string.IsNullOrWhiteSpace(header))
             return null;
 
         static string Compact(string value)
             => new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
+        // Material-card exports intentionally use business-facing labels
+        // ("Internal ID", "Item No") instead of the physical database names.
+        // The encrypted workbook marker normally preserves this mapping, but
+        // Excel editors and third-party spreadsheet tools may remove that
+        // hidden marker when a user edits/saves the workbook. Keep a stable
+        // fallback mapping so the exported workbook remains editable/importable.
+        if (tableName.Equals("materials", StringComparison.OrdinalIgnoreCase))
+        {
+            var alias = Compact(header);
+            var target = alias switch
+            {
+                "internalid" or "materialid" or "id" => "material_id",
+                "itemno" or "itemnumber" or "itemcode" or "itemnumbercode" => "code",
+                _ => null
+            };
+            if (target != null)
+            {
+                var actual = columns.FirstOrDefault(column =>
+                    column.Equals(target, StringComparison.OrdinalIgnoreCase));
+                if (actual != null)
+                    return actual;
+            }
+        }
 
         var compactHeader = Compact(header);
         var snakeHeader = Compact(ToSnakeCase(header.Replace(' ', '_')));
@@ -1406,7 +1433,8 @@ public static class DataExportSvc
                 return column;
             var compactColumn = Compact(column);
             if (compactColumn.Length > 0 &&
-                (compactColumn == compactHeader || compactColumn == snakeHeader || compactColumn == Compact(Humanize(column)) && compactColumn == compactHeader))
+                (compactColumn == compactHeader || compactColumn == snakeHeader ||
+                 compactColumn == Compact(Humanize(column)) && compactColumn == compactHeader))
                 return column;
             if (string.Equals(Humanize(column), header.Trim(), StringComparison.OrdinalIgnoreCase))
                 return column;
