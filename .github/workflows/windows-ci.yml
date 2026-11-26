@@ -25,7 +25,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Verify repository file index\n        shell: pwsh\n        run: |\n          python tools/gen_index.py\n          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n          git diff --exit-code -- docs/FILE_INDEX.md\n\n      - name: Setup .NET
+      - name: Verify repository file index
+        shell: pwsh
+        run: |
+          python tools/gen_index.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code -- docs/FILE_INDEX.md
+
+      - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
