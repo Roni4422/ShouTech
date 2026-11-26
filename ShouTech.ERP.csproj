@@ -106,8 +106,8 @@
        ================================================================ -->
   <ItemGroup>
 
-    <Page Include="ShouTech.ERP.Com\cod\app\src\**\*.xaml"
-          Exclude="ShouTech.ERP.Com\cod\app\src\App.xaml;ShouTech.ERP.Com\cod\app\src\obj\**\*;ShouTech.ERP.Com\cod\app\src\bin\**\*">
+    <Page Include="app\**\*.xaml"
+          Exclude="app\App.xaml;app\obj\**\*;app\bin\**\*">
       <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
     </Page>
 
@@ -121,8 +121,8 @@
 
     <!-- Application Source -->
     <Compile Include="App.xaml.cs" />
-    <Compile Include="ShouTech.ERP.Com\cod\app\src\**\*.cs"
-             Exclude="ShouTech.ERP.Com\cod\app\src\App.xaml.cs;ShouTech.ERP.Com\cod\app\src\obj\**\*;ShouTech.ERP.Com\cod\app\src\bin\**\*" />
+    <Compile Include="app\**\*.cs"
+             Exclude="app\App.xaml.cs;app\obj\**\*;app\bin\**\*" />
 
   </ItemGroup>
 
@@ -133,20 +133,20 @@
   <ItemGroup>
 
     <None Include="ShouTech.ERP.Com\cfg\appset.json" Link="cfg/appset.json" Condition="Exists('ShouTech.ERP.Com\cfg\appset.json')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\Errors\*.json" Link="Resources\Errors\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\Lang\*.json" Link="Resources\Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="app\Resources\Errors\*.json" Link="Resources\Errors\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="app\Resources\Lang\*.json" Link="Resources\Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="ShouTech.ERP.Com\docs\USER_GUIDE_EN.md" Link="docs/USER_GUIDE_EN.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="ShouTech.ERP.Com\cod\app\src\Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="app\Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="app\Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	
 
   </ItemGroup>
   
   <ItemGroup>
-	<Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.png"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
-    <Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.jpg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
-    <Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.svg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
-	<Resource Include="ShouTech.ERP.Com\cod\app\src\Resources\Ico\**\*.ico"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+	<Resource Include="app\Resources\Ico\**\*.png"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <Resource Include="app\Resources\Ico\**\*.jpg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+    <Resource Include="app\Resources\Ico\**\*.svg"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
+	<Resource Include="app\Resources\Ico\**\*.ico"><Link>Resources\Ico\%(RecursiveDir)%(Filename)%(Extension)</Link></Resource>
   </ItemGroup>
 
 

@@ -185,13 +185,7 @@ public sealed class HelpWin : BaseWin
             var candidate = Path.Combine(dir.FullName, "docs", "USER_GUIDE_EN.md");
             if (File.Exists(candidate))
                 return candidate;
-            candidate = Path.Combine(dir.FullName, "ShouTech.ERP.Com", "docs", "USER_GUIDE_EN.md");
-            if (File.Exists(candidate))
-                return candidate;
             candidate = Path.Combine(dir.FullName, "docs", "SHOUTECH_ERP_EN.md");
-            if (File.Exists(candidate))
-                return candidate;
-            candidate = Path.Combine(dir.FullName, "ShouTech.ERP.Com", "docs", "SHOUTECH_ERP_EN.md");
             if (File.Exists(candidate))
                 return candidate;
         }

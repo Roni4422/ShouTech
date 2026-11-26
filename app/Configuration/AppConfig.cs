@@ -1,5 +1,5 @@
 // ========================================================================
-// FILE: cod/app/src/Configuration/AppConfig.cs
+// FILE: app/Configuration/AppConfig.cs
 // PROJECT: SHOUTECH ERP V10 - Central Configuration
 // Merged: AppCfgSvc + AppSetng + AppPaths
 // ========================================================================
