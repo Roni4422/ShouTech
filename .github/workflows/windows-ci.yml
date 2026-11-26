@@ -38,10 +38,10 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore tests and application
-        run: dotnet restore
+        run: dotnet restore build/ShouTech.sln
 
       - name: Build application and tests
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build build/ShouTech.sln --configuration Release --no-restore
 
       - name: Run tests
         run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
