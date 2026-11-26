@@ -4,10 +4,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "FILE_INDEX.md"
-SKIP = {".git", ".vs", ".idea", ".cache", ".venv", "venv", "bin", "obj", "build", "dist", "publish", "artifacts", "coverage", "TestResults", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", "node_modules", "packages"}
+SKIP = {".git", ".vs", ".idea", ".cache", ".venv", "venv", "bin", "obj", "dist", "publish", "artifacts", "coverage", "TestResults", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", "node_modules", "packages"}
 PURPOSE = {
     ".github": "CI workflows and repository automation",
     "app": "Desktop presentation layer and user interaction",
+    "build": "Developer solution and build orchestration",
     "app/Common": "Shared UI primitives and common presentation helpers",
     "app/Configuration": "Desktop application configuration and options",
     "app/Converters": "WPF value and binding converters",
@@ -47,8 +48,8 @@ def purpose_for(path: str) -> str:
 
 def validate_layout() -> None:
     required = (
-        ROOT / "app" / "ShouTech.ERP.csproj",
-        ROOT / "ShouTech.sln",
+        ROOT / "ShouTech.ERP.csproj",
+        ROOT / "build" / "ShouTech.sln",
         ROOT / "App.xaml",
         ROOT / "App.xaml.cs",
     )
@@ -57,8 +58,8 @@ def validate_layout() -> None:
         raise SystemExit("Canonical application/solution entry-point files are missing: " + ", ".join(missing))
 
     root_projects = sorted(path.name for path in ROOT.glob("*.csproj"))
-    if root_projects:
-        raise SystemExit("Keep the root solution as the only root-level .NET build entry; found: " + ", ".join(root_projects))
+    if root_projects != ["ShouTech.ERP.csproj"]:
+        raise SystemExit("Expected only ShouTech.ERP.csproj at the repository root; found: " + (", ".join(root_projects) or "(none)"))
 
     app_definitions = sorted(
         path.relative_to(ROOT).as_posix()
