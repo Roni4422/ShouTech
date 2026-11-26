@@ -7,7 +7,7 @@ This chart describes the current repository structure and project references. It
 ```mermaid
 flowchart TB
     User[ERP user]
-    Desktop["MainApp<br/>Windows WPF client"]
+    Desktop["ShouTech.ERP<br/>Windows WPF client"]
     Service["svc<br/>Windows background service"]
     Migrator["SqlMigrator<br/>CLI migration tool"]
     Native["SecEng<br/>native C++ security library"]
@@ -38,11 +38,11 @@ The supported active database providers are SQLite and PostgreSQL. SQL Server as
 
 ```mermaid
 flowchart BT
-    Domain["ShouTech.Domain<br/>entities, enums, interfaces"]
-    Application["ShouTech.Application<br/>application services"]
-    Infrastructure["ShouTech.Infrastructure<br/>database repositories"]
+    Domain["Dom (Domain.dll)<br/>entities, enums, interfaces"]
+    Application["App<br/>application services"]
+    Infrastructure["Infra<br/>database repositories"]
     Inventory["ShouTech.Core.Inv<br/>inventory core"]
-    MainApp["MainApp<br/>WPF desktop executable"]
+    ShouTech.ERP["ShouTech.ERP<br/>WPF desktop executable"]
     Tests["Kern.Tests<br/>xUnit test project"]
     Migrator["SqlMigrator<br/>standalone CLI"]
     Service["svc<br/>Windows worker executable"]
@@ -50,15 +50,15 @@ flowchart BT
     Application --> Domain
     Infrastructure --> Domain
     Inventory --> Domain
-    MainApp --> Domain
-    MainApp --> Application
-    MainApp --> Infrastructure
-    MainApp --> Inventory
-    Tests --> MainApp
+    ShouTech.ERP --> Domain
+    ShouTech.ERP --> Application
+    ShouTech.ERP --> Infrastructure
+    ShouTech.ERP --> Inventory
+    Tests --> ShouTech.ERP
     Tests -. "build/reference only<br/>(ReferenceOutputAssembly=false)" .-> Migrator
 ```
 
-`ShouTech.sln` includes the projects shown above. `sec/` has a separate CMake/C++ build and is not listed as a solution project. The WPF client references both the newer `src/` layers and the inventory core; this is a transitional, mixed architecture rather than a strict single-direction clean-architecture stack.
+`ShouTech.sln` includes the projects shown above. `sec/` has a separate CMake/C++ build and is not listed as a solution project. The root WPF project is `ShouTech.ERP.csproj` (assembly `ShouTech.ERP`). It references `src/Dom/Dom.csproj` (assembly `Domain`), `src/App/App.csproj` (assembly `App`), `src/Infra/Infra.csproj` (assembly `Infra`), and `src/Inv/Inv.csproj` (assembly `ShouTech.Core.Inv`). The WPF client also retains legacy presentation-facing services; this is a transitional, mixed architecture rather than a strict single-direction clean-architecture stack.
 
 ## Desktop application
 
@@ -68,9 +68,9 @@ flowchart LR
     Host["Services/AppHost.cs<br/>composition root / service locator"]
     UI["Views, ViewModels,<br/>Navigation, Localization"]
     LegacyServices["Services and Reporting<br/>existing ERP behavior"]
-    Application["ShouTech.Application"]
-    Domain["ShouTech.Domain"]
-    Infrastructure["ShouTech.Infrastructure"]
+    Application["App"]
+    Domain["Dom (Domain.dll)"]
+    Infrastructure["Infra"]
     Inventory["ShouTech.Core.Inv"]
     Providers["Microsoft.Data.Sqlite<br/>Npgsql"]
     DB[(SQLite or PostgreSQL)]
@@ -90,7 +90,7 @@ flowchart LR
 ```
 
 - `AppHost.Initialize()` loads application configuration and initializes shared services. It exposes legacy app services and selected newer application/infrastructure services, including journal and accounting-structure services.
-- The WPF project includes provider packages directly, as does `ShouTech.Infrastructure`. Database access is therefore not exclusively routed through `ShouTech.Infrastructure`.
+- The root WPF project includes the SQLite and PostgreSQL provider packages directly, as does `src/Infra/Infra.csproj`. Database access is therefore not exclusively routed through the infrastructure project.
 - Configuration defaults are in `cfg/appset.json`; connection strings should be supplied through `SHOUTECH_CONNECTION_STRING` or `SHOUTECH_DB_CONNECTION`. Provider selection uses `SHOUTECH_DB_PROVIDER`.
 
 ## Database schema and background delivery
@@ -102,7 +102,7 @@ flowchart LR
     SQL["dba/mig/{sqlite,postgresql}<br/>ordered SQL migrations"]
     History["schema_migrations<br/>IDs and SHA-256 checksums"]
     DB[(SQLite / PostgreSQL)]
-    App["MainApp and repositories"]
+    App["ShouTech.ERP and repositories"]
     Outbox["outbound_messages"]
     Worker["svc / OutboundMessageWorker"]
     Endpoint["HTTP(S) webhook"]
@@ -144,7 +144,7 @@ The service polls the outbox and dispatches HTTP(S) webhooks. Email/SMS connecto
 
 ## Architectural caveats
 
-- The WPF app combines older service/repository implementations with the newer `Domain` / `Application` / `Infrastructure` projects. Follow the actual feature call path before deciding where a change belongs.
+- The WPF app combines older service/repository implementations with the newer `Dom` / `App` / `Infra` projects. Follow the actual feature call path before deciding where a change belongs.
 - The `svc` and `SqlMigrator` projects reference their database providers directly; they do not depend on the infrastructure project.
 - Native security code has its own CMake and Visual Studio project files. Its presence does not, by itself, establish that a managed application build compiles or packages the native library.
 - Journal reversal creates a posted compensating journal entry (every source line copied with debit and credit swapped) linked through `reversal_of_entry_id`, marks the original entry as reversed, and writes audit events for both entries in one transaction. A unique partial index on `reversal_of_entry_id` prevents a second reversal of the same source entry. The legacy in-memory `AccServ` in `app` does not expose a reversal operation yet; posted corrections must go through the `src/` journal services. See [Accounting reversals](ACCOUNTING_CHART_PERIODS_YEAR_CLOSE.md).
