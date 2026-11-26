@@ -658,7 +658,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.SearchDelivery" Label="Search delivery" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.CloseDriverCash" Label="Close driver cash" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
-
+                </ribbon:RibbonTab>
 
                 <ribbon:RibbonTab x:Name="TabView" Header="View" Visibility="Collapsed">
                    
