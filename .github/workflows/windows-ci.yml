@@ -40,7 +40,10 @@ jobs:
       - name: Restore tests and application
         run: dotnet restore build/ShouTech.sln
 
-      - name: Build application and tests
+      - name: Verify default root project build
+        run: dotnet build
+
+      - name: Build full solution and tests
         run: dotnet build build/ShouTech.sln --configuration Release --no-restore
 
       - name: Run tests
