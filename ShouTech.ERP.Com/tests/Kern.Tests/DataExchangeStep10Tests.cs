@@ -144,6 +144,35 @@ public class DataExchangeStep10Tests
     }
 
     [Fact]
+    public async Task ExcelImport_MaterialCardExportLabels_ImportWithoutHiddenIdentityMarker()
+    {
+        using var db = await MigratedDbAsync();
+        PointAppAt(db.Path);
+        SeedCompanyAndMaterial(db);
+        var xlsx = WriteWorkbook(db.Root,
+            ["Name", "Item No", "Internal ID", "Group Code", "Item Type"],
+            [["Updated Widget", "MAT-1", 1L, "GRP-01", "Stock"]]);
+        var option = new DataExportOption("Products", "Product cards and directory", "materials");
+        try
+        {
+            AppHost.Permissions.GrantAllCatalogPermissions("u1");
+            AppState.CurrentUser = new UserInfo { Id = "u1", Username = "admin", CompanyId = CompanyCode };
+            AppState.SetCompany(CompanyCode, "Step10 Co", "Step10 Co");
+
+            var preview = await DataExportSvc.PreviewExcelAsync(xlsx, option);
+            Assert.Contains("material_id", preview.MatchedColumns);
+            Assert.Contains("code", preview.MatchedColumns);
+
+            var result = await DataExportSvc.ImportExcelAsync(xlsx, option, CompanyCode);
+            Assert.Equal(1, result.UpsertedRows);
+            Assert.Equal("Updated Widget", db.Scalar("SELECT name FROM materials WHERE material_id = 1"));
+            Assert.Equal("GRP-01", db.Scalar("SELECT group_code FROM materials WHERE material_id = 1"));
+            Assert.Equal("Stock", db.Scalar("SELECT item_type FROM materials WHERE material_id = 1"));
+        }
+        finally { AppHost.Permissions.Clear(); }
+    }
+
+    [Fact]
     public void ExcelImport_DeclaredDecimalStorageType_RemainsFractional()
     {
         var map = typeof(DataExportSvc).GetMethod("MapStorageType", BindingFlags.Static | BindingFlags.NonPublic)!;
