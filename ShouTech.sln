@@ -3,23 +3,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "cod", "cod", "{F650D549-1C71-434A-B811-218FFEFED201}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "app", "app", "{4A48EEDB-D3A2-41E2-8CAB-9D46310B1795}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShouTech.ERP", "ShouTech.ERP.csproj", "{D1A9F596-70FE-4891-9913-E02C1E158272}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "svc", "ShouTech.ERP.Com\svc\svc.csproj", "{E88C7E6C-B6C6-4AA0-8369-27C7EF255BE9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShouTech.Core.Inv", "ShouTech.ERP.Com\cod\cor\inv.csproj", "{B92349F3-FDF5-4AF8-94A7-36A1821B2EA1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShouTech.Core.Inv", "src\Inv\inv.csproj", "{B92349F3-FDF5-4AF8-94A7-36A1821B2EA1}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E325E015-4B97-4AE3-A577-0E6D3DDEC87C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "ShouTech.ERP.Com\src\Domain\Domain.csproj", "{E9C0A4D6-0DD5-458F-8E37-0BA84377C098}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "src\Dom\Domain.csproj", "{E9C0A4D6-0DD5-458F-8E37-0BA84377C098}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "App", "ShouTech.ERP.Com\src\App\App.csproj", "{04030ACB-68EE-4463-925C-BB3CE75F9CAF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "App", "src\App\App.csproj", "{04030ACB-68EE-4463-925C-BB3CE75F9CAF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infra", "ShouTech.ERP.Com\src\Infra\Infra.csproj", "{13EF3696-C756-4064-A75B-9901C975B8A3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infra", "src\Infra\Infra.csproj", "{13EF3696-C756-4064-A75B-9901C975B8A3}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{657557B0-B19A-406A-8027-F1D5D2082980}"
 EndProject
