@@ -24,16 +24,17 @@ namespace Kern.Tests
             => GridCellNavigator.Advance(editable, rows, Pos(row, col), direction);
 
         [Theory]
-        [InlineData(0, -1, 0, 2)]
-        [InlineData(0, 1, 0, 2)]
-        [InlineData(-1, 0, 0, 0)]
-        [InlineData(1, 0, 2, 0)]
+        [InlineData(0, -1, 1, 2, 1, 0)]
+        [InlineData(0, 1, 1, 0, 1, 2)]
+        [InlineData(-1, 0, 1, 0, 0, 0)]
+        [InlineData(1, 0, 1, 0, 2, 0)]
         public void DirectionalMove_SkipsReadOnlyColumns(
-            int rowStep, int columnStep, int expectedRow, int expectedColumn)
+            int rowStep, int columnStep, int startRow, int startColumn,
+            int expectedRow, int expectedColumn)
         {
             var editable = new[] { true, false, true };
             var actual = GridCellNavigator.MoveDirectional(
-                editable, 3, Pos(1, 0), rowStep, columnStep);
+                editable, 3, Pos(startRow, startColumn), rowStep, columnStep);
             Assert.Equal(Pos(expectedRow, expectedColumn), actual);
         }
 
