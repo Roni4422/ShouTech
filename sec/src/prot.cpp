@@ -20,10 +20,6 @@
 // LAST AUDIT: 2024-01-15
 // ═══════════════════════════════════════════════════════════════════════════
 
-#define ST_SEC_EXPORTS
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include <Windows.h>
 #include <bcrypt.h>
@@ -1848,44 +1844,6 @@ ST_API bool ST_CALL ST_ConstantTimeCompare(const uint8_t* a, const uint8_t* b,
  */
 ST_API uint32_t ST_CALL ST_GetValidationCheckCount() {
     return g_state.validationCheckCount.load();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SECTION 11: DLL ENTRY POINT & CLEANUP
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * @brief DLL entry point (Windows).
- * 
- * Handles:
- * - Process attach: Initialize TLS
- * - Process detach: Cleanup (shutdown monitoring threads)
- * - Thread attach/detach: Thread-local state management (if needed)
- */
-BOOL WINAPI DllMain(HINSTANCE hInstance, DWORD dwReason, LPVOID lpReserved) {
-    (void)hInstance;
-    (void)lpReserved;
-    
-    switch (dwReason) {
-        case DLL_PROCESS_ATTACH:
-            // Initialize once per process
-            // Note: Actual init happens in ST_Initialize()
-            break;
-            
-        case DLL_PROCESS_DETACH:
-            // Cleanup on process shutdown
-            if (g_state.initialized.load()) {
-                ST_Shutdown();
-            }
-            break;
-            
-        case DLL_THREAD_ATTACH:
-        case DLL_THREAD_DETACH:
-            // No thread-specific cleanup needed
-            break;
-    }
-    
-    return TRUE;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
