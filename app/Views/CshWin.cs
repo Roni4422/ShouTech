@@ -503,7 +503,7 @@ public sealed class CshWin : BaseWin, IWindowMode
                 companyId, DateOnly.FromDateTime(selectedDate), description, actor, requests,
                 referenceNumber: string.IsNullOrWhiteSpace(_txtRefNo.Text) ? null : _txtRefNo.Text.Trim(),
                 currencyCode: currency, exchangeRate: rate,
-                documentNumber: _txtDocNo.Text.Trim(),
+                documentNumber: null,
                 partyLink: partyLink?.ToRequest(CurrentCompanyCode));
             _currentJournalId = id;
             _btnSave.IsEnabled = false;
