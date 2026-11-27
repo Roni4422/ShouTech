@@ -316,7 +316,11 @@ internal static class JsonDefs
             // router regime (RibbonNav/RptNav: Owner = shell).
             child.Owner = shellHost;
             child.StateChanged += (_, _) => OnStateChanged(child, shellHost);
-            child.Closed += (_, _) => Detach(child, shellHost);
+            child.Closed += (_, _) =>
+            {
+                Detach(child, shellHost);
+                WindowActivator.RestoreOwnerAfterClose(child);
+            };
         }
 
         private static void OnStateChanged(Window child, Window shellHost)
