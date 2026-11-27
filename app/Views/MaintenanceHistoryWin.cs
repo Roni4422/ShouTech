@@ -13,6 +13,7 @@ internal sealed class MaintenanceHistoryWin : BaseWin
     private readonly StackPanel _items = new() { Orientation = Orientation.Vertical };
     private readonly TextBlock _details = new() { TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas") };
     private readonly TextBlock _empty = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(8) };
+    private readonly Button _closeButton = new() { MinWidth = 100, Margin = new Thickness(4) };
 
     public MaintenanceHistoryWin()
     {
@@ -24,13 +25,18 @@ internal sealed class MaintenanceHistoryWin : BaseWin
         Loaded += async (_, _) => await LoadHistoryAsync();
     }
 
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("Maintenance.ReportWindowTitle");
+        _closeButton.Content = T("Maintenance.ReportClose");
+    }
+
     private void BuildUi()
     {
         Title = T("Maintenance.ReportWindowTitle");
         var root = new DockPanel { Margin = new Thickness(12) };
-        var close = new Button { Content = T("Maintenance.ReportClose"), MinWidth = 100, Margin = new Thickness(4) };
-        close.Click += (_, _) => Close();
-        var bottom = F2Ui.BottomBar(close);
+        _closeButton.Click += (_, _) => Close();
+        var bottom = F2Ui.BottomBar(_closeButton);
         DockPanel.SetDock(bottom, Dock.Bottom);
         root.Children.Add(bottom);
 
