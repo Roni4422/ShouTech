@@ -232,9 +232,9 @@ public abstract class BaseWin : Window
     /// Creates the one shared column grid of a form: <paramref name="pairs"/>
     /// repetitions of (label column = FormLabelWidth, field column = *).
     /// </summary>
-    protected static Grid CreateFormGrid(int pairs)
+    protected Grid CreateFormGrid(int pairs)
     {
-        var grid = new Grid();
+        var grid = new Grid { FlowDirection = this.FlowDirection };
         for (var i = 0; i < pairs; i++)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(VisuId.FormLabelWidth) });
@@ -250,7 +250,7 @@ public abstract class BaseWin : Window
     /// pairs, so a wide field (name, address, memo) still ends exactly on
     /// the shared column edges of the rows above and below it.
     /// </summary>
-    protected static void AddFormField(Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
+    protected void AddFormField(Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
     {
         EnsureFormRow(grid, row);
         var label = new TextBlock
@@ -279,7 +279,7 @@ public abstract class BaseWin : Window
     /// ApplyLocalizedText can set its text from the key, exactly as the old
     /// per-window Labeled helpers did.
     /// </summary>
-    protected static void AddFormField(
+    protected void AddFormField(
         List<(TextBlock Label, string Key)> labels,
         Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
     {
@@ -307,7 +307,7 @@ public abstract class BaseWin : Window
     /// no label into the field cell of the form grid, leaving the label
     /// cell empty so the column edges stay aligned.
     /// </summary>
-    protected static void AddFormElement(Grid grid, int row, int pair, UIElement control, int spanPairs = 1)
+    protected void AddFormElement(Grid grid, int row, int pair, UIElement control, int spanPairs = 1)
     {
         EnsureFormRow(grid, row);
         PlaceFormControl(grid, row, pair, control, spanPairs);
@@ -319,7 +319,7 @@ public abstract class BaseWin : Window
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
     }
 
-    private static void PlaceFormControl(Grid grid, int row, int pair, UIElement control, int spanPairs)
+    private void PlaceFormControl(Grid grid, int row, int pair, UIElement control, int spanPairs)
     {
         ApplyFieldStyle(control);
         if (control is FrameworkElement fe)
