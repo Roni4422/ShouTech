@@ -656,6 +656,8 @@ public sealed class OrdWin : BaseWin, IWindowMode
             if (_docId is null)
             {
                 _docId = await AppHost.Orders.CreateOrderAsync(draft, CurrentUserId, priceOverride);
+                var saved = await AppHost.Orders.FindByIdAsync(Side, _docId.Value);
+                if (saved is not null) ApplySnapshot(saved);
             }
             else
             {
