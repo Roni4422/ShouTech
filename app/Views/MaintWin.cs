@@ -18,6 +18,8 @@ public sealed class MaintenanceWin : BaseWin
     protected override string? ScheduleTintName => "Keel";
 
     private static readonly string[] IntegrityMetrics = { "foreign_key_violations", "invalid_indexes", "unvalidated_constraints" };
+    private static readonly char[] IntegritySeparators = { ';', '|', ' ' };
+    private static readonly JsonSerializerOptions ReportJsonOptions = new() { WriteIndented = true };
     private readonly OperationsService? _service;
     private readonly UniformGrid _checks = new() { Columns = 2 };
     private readonly TextBlock _statusBar = new();
@@ -168,7 +170,7 @@ public sealed class MaintenanceWin : BaseWin
         await RunChecksAsync();
     }
 
-    private Task RunChecksAsync()
+    private async Task RunChecksAsync()
     {
         if (_running)
             return Task.CompletedTask;
@@ -240,10 +242,9 @@ public sealed class MaintenanceWin : BaseWin
             _runButton.IsEnabled = true;
         }
 
-        return Task.CompletedTask;
     }
 
-    private async Task<string> CheckDatabaseConnectionAsync()
+    private async Task<string> CheckDatabaseConnectionAsync
     {
         if (AppHost.DatabaseHealth is not { } health)
             throw new InvalidOperationException(T("Maintenance.HealthUnavailable"));
@@ -313,7 +314,7 @@ public sealed class MaintenanceWin : BaseWin
             if (index < 0)
                 continue;
             var value = summary[(index + marker.Length)..].TrimStart();
-            var token = value.Split(new[] { ';', '|', ' ' }, StringSplitOptions.RemoveEmptyEntries)[0];
+            var token = value.Split(IntegritySeparators, StringSplitOptions.RemoveEmptyEntries)[0];
             if (!long.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count != 0)
                 return false;
         }
@@ -531,7 +532,7 @@ private sealed class MaintenanceChecksWin : BaseWin
                 state = item.State.Text == "✓" ? "Passed" : item.State.Text == "!" ? "Failed" : "NotRun",
                 detail = item.Detail.Text
             }).ToArray()
-        }, new JsonSerializerOptions { WriteIndented = true });
+        }, ReportJsonOptions);
 
         _summary.Text = _cancelRequested
             ? T("Maintenance.ChecksCancelled")
@@ -632,7 +633,7 @@ private sealed class MaintenanceHistoryWin : BaseWin
         }
     }
 
-    private string StatusText(string status)
+    private static string StatusText(string status)
         => string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
             ? T("Maintenance.ReportCancelled")
             : T("Maintenance.ReportCompleted");
@@ -652,7 +653,7 @@ private sealed class MaintenanceHistoryWin : BaseWin
         try
         {
             using var document = JsonDocument.Parse(report.ReportJson);
-            pretty = JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
+            pretty = JsonSerializer.Serialize(document, ReportJsonOptions);
         }
         catch (JsonException) { }
 
