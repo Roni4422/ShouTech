@@ -472,13 +472,20 @@ public partial class MatCard : BaseWin, IInfoContextProvider
     private void UpdateNavigationArrows()
     {
         var rtl = IsRtl;
-        BtnNavFirst.Content = rtl ? "\u25B6|" : "|\u25C0";
-        BtnNavPrev.Content  = rtl ? "\u25B6"  : "\u25C0";
+        BtnNavFirst.Content = rtl ? "▶|" : "|◀";
+        BtnNavPrev.Content = rtl ? "▶" : "◀";
         BtnNavPrevTen.Content = rtl ? "▶▶" : "◀◀";
-        BtnNavNext.Content  = rtl ? "\u25C0"  : "\u25B6";
+        BtnNavNext.Content = rtl ? "◀" : "▶";
         BtnNavNextTen.Content = rtl ? "◀◀" : "▶▶";
-        BtnNavLast.Content  = rtl ? "|\u25C0" : "\u25B6|";
+        BtnNavLast.Content = rtl ? "|◀" : "▶|";
 
+        var hasRecords = _cache.Count > 0 && !_isNew && _index >= 0 && _index < _cache.Count;
+        BtnNavFirst.IsEnabled = hasRecords && _index > 0;
+        BtnNavPrevTen.IsEnabled = hasRecords && _index > 0;
+        BtnNavPrev.IsEnabled = hasRecords && _index > 0;
+        BtnNavNext.IsEnabled = hasRecords && _index < _cache.Count - 1;
+        BtnNavNextTen.IsEnabled = hasRecords && _index < _cache.Count - 1;
+        BtnNavLast.IsEnabled = hasRecords && _index < _cache.Count - 1;
     }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
@@ -1063,9 +1070,6 @@ public partial class MatCard : BaseWin, IInfoContextProvider
 
     private void UpdateNav()
     {
-        // The navigator now carries the item-number field where the old
-        // "1 / 4" position text used to sit (owner directive 2026-11-17):
-        // keep it showing the current record's number on every navigation.
         try
         {
             TxtItemNo.Text = _cache.Count == 0 || _index < 0 || _index >= _cache.Count
@@ -1076,6 +1080,8 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         {
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL769, "MatCard.xaml.UpdateNav");
         }
+
+        UpdateNavigationArrows();
     }
 
     /// <summary>
