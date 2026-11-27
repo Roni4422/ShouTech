@@ -821,34 +821,86 @@ public sealed class OperationsRepository : IOperationsRepository
 
     public async Task VacuumAnalyzeAsync(CancellationToken cancellationToken = default)
     {
-        if (IsPg)
-            throw new NotSupportedException("VACUUM/ANALYZE from this window is SQLite-only; on PostgreSQL use the database server's autovacuum/maintenance tooling.");
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using (var vacuum = CreateCommand(connection, null, "VACUUM"))
-            await vacuum.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        await using (var analyze = CreateCommand(connection, null, "ANALYZE"))
+
+        // VACUUM must run outside an explicit transaction in both engines.
+        // PostgreSQL performs VACUUM and ANALYZE together; SQLite uses its
+        // native VACUUM followed by ANALYZE commands.
+        var sql = IsPg ? "VACUUM (ANALYZE)" : "VACUUM";
+        await using (var maintenance = CreateCommand(connection, null, sql))
+            await maintenance.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!IsPg)
+        {
+            await using var analyze = CreateCommand(connection, null, "ANALYZE");
             await analyze.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task<string> GetIntegritySummaryAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
         if (!IsPg)
         {
-            await using var cmd = CreateCommand(connection, null, "PRAGMA integrity_check");
-            var value = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            var tables = await ScalarLongAsync(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'", cancellationToken).ConfigureAwait(false);
-            return $"SQLite integrity_check: {Convert.ToString(value, CultureInfo.InvariantCulture)}; tables: {tables}";
+            var issues = new List<string>();
+            await using (var cmd = CreateCommand(connection, null, "PRAGMA integrity_check"))
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    var item = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                    if (!string.Equals(item, "ok", StringComparison.OrdinalIgnoreCase))
+                        issues.Add(item);
+                }
+            }
+
+            var foreignKeyIssues = 0L;
+            await using (var cmd = CreateCommand(connection, null, "PRAGMA foreign_key_check"))
+            await using (var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    foreignKeyIssues++;
+            }
+
+            var tables = await ScalarLongAsync(connection,
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+                cancellationToken).ConfigureAwait(false);
+            var state = issues.Count == 0 ? "ok" : string.Join(" | ", issues);
+            return $"SQLite integrity_check: {state}; foreign_key_violations: {foreignKeyIssues}; tables: {tables}";
         }
-        else
-        {
-            await using var cmd = CreateCommand(connection, null, "SELECT version()");
-            var version = Convert.ToString(await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-            var tables = await ScalarLongAsync(connection, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'", cancellationToken).ConfigureAwait(false);
-            return $"PostgreSQL reachable; tables (public): {tables}; {version}";
-        }
+
+        // PostgreSQL does not expose a built-in equivalent of SQLite's
+        // integrity_check for arbitrary table pages. Run read-only catalog
+        // consistency checks instead; do not mislabel SELECT version() as
+        // a database integrity test.
+        var invalidIndexes = await ScalarLongAsync(connection, """
+            SELECT COUNT(*)
+            FROM pg_catalog.pg_index i
+            JOIN pg_catalog.pg_class t ON t.oid = i.indrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND i.indisvalid = false
+            """, cancellationToken).ConfigureAwait(false);
+        var unvalidatedConstraints = await ScalarLongAsync(connection, """
+            SELECT COUNT(*)
+            FROM pg_catalog.pg_constraint c
+            JOIN pg_catalog.pg_class t ON t.oid = c.conrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+              AND c.convalidated = false
+            """, cancellationToken).ConfigureAwait(false);
+        var tablesPg = await ScalarLongAsync(connection, """
+            SELECT COUNT(*)
+            FROM pg_catalog.pg_class t
+            JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+            WHERE t.relkind IN ('r', 'p')
+              AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+            """, cancellationToken).ConfigureAwait(false);
+        var statePg = invalidIndexes == 0 && unvalidatedConstraints == 0 ? "ok" : "failed";
+        return $"PostgreSQL integrity_check: {statePg}; invalid_indexes: {invalidIndexes}; unvalidated_constraints: {unvalidatedConstraints}; tables: {tablesPg}";
     }
 
     /// <summary>
