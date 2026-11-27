@@ -53,6 +53,7 @@ public interface IJournalRepository
     /// source series. The source voucher number is used even after its GL
     /// document_number is replaced by the central JRN number.</summary>
     Task<string?> FindAdjacentDocumentNumberAsync(Guid companyId, string currentDocumentNumber, string seriesPrefix, int offset, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CashMovementRow>> ListSourceVouchersForDateAsync(Guid companyId, DateOnly entryDate, IReadOnlyList<string> seriesPrefixes, CancellationToken cancellationToken = default);
     /// <summary>Saves a draft journal entry in ONE transaction. When
     /// <paramref name="partyLink"/> is supplied (cash vouchers, G23) the
     /// voucher_party_links row is written inside that same transaction,
