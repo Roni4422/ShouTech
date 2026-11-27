@@ -2054,21 +2054,23 @@ public static class InvRepo
 
     public static long? FindAdjacentDocumentId(long currentDocId, InvDocKind kind, int offset)
     {
-        if (offset is not (-10 or -1 or 1 or 10))
-            throw new ArgumentOutOfRangeException(nameof(offset), "Navigation offset must be -10, -1, 1, or 10.");
+        if (offset is not (int.MinValue or int.MaxValue or -10 or -1 or 1 or 10))
+            throw new ArgumentOutOfRangeException(nameof(offset), "Navigation command must be first, last, -10, -1, 1, or 10.");
 
         var connectionString = DatabaseRuntime.GetConnectionString();
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new InvalidOperationException("No database connection.");
 
         var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
-        var order = offset < 0 ? "DESC" : "ASC";
+        var first = offset == int.MinValue;
+        var last = offset == int.MaxValue;
+        var order = (offset < 0 || last) ? "DESC" : "ASC";
         var comparison = offset < 0 ? "<" : ">";
-        var skip = Math.Abs(offset) - 1;
+        var skip = first || last ? 0 : Math.Abs(offset) - 1;
         using var connection = Open(connectionString);
         var companyGuid = ResolveCompanyGuidOrNull(connection, null)?.ToString("D") ?? Company;
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = currentDocId > 0
+        cmd.CommandText = !first && !last && currentDocId > 0
             ? $"""
                 SELECT doc_id FROM {table}
                 WHERE (company_id=$company OR company_id=$guid)
