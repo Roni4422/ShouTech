@@ -126,7 +126,7 @@ def normalize_lf(value: bytes) -> bytes:
     return value.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
 
 
-# Preserve checksums from legacy Windows, Linux and byte-exact migration runs.
+# Marker order is Windows canonical, LF-normalized legacy, exact raw source, then bundle content.
 def legacy_hashes(raw: bytes) -> tuple[str, str, str]:
     has_bom = raw.startswith(b"\xef\xbb\xbf")
     text = raw.decode("utf-8-sig")
