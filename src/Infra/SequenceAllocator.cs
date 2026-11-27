@@ -20,7 +20,7 @@ namespace ShouTech.Infra;
 /// </summary>
 public static class SequenceAllocator
 {
-    public const long MaxValue = 99999999;
+    public const long MaxValue = long.MaxValue - 1;
 
     /// <summary>Resolved configuration for one series (defaults applied).</summary>
     public sealed record SeriesConfig(
@@ -76,7 +76,7 @@ public static class SequenceAllocator
         var padding = reader.IsDBNull(1) ? defaults.Padding : Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture);
         var yearly = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture) != 0;
         var start = Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture);
-        if (prefix.Length == 0 || prefix.Length > 12 || padding is < 1 or > 8 || start < 1 || start > MaxValue)
+        if (prefix.Length == 0 || prefix.Length > 12 || start < 1 || start > MaxValue)
             throw new AppError(ErrorCodes.NumberingInvalidConfig,
                 $"Series '{seriesKey}' has an invalid numbering configuration (prefix '{prefix}', padding {padding}, start {start}).");
         return new SeriesConfig(prefix, padding, yearly, start);
@@ -252,6 +252,6 @@ public static class SequenceAllocator
     /// year segment, PREFIX-DDDD without one.</summary>
     public static string Format(SeriesConfig config, int segmentYear, long value) =>
         segmentYear > 0
-            ? $"{config.Prefix}-{segmentYear}-{value.ToString($"D{config.Padding}", CultureInfo.InvariantCulture)}"
+            ? $"{config.Prefix}-{segmentYear}-{value.ToString(CultureInfo.InvariantCulture)}"
             : $"{config.Prefix}-{value.ToString($"D{config.Padding}", CultureInfo.InvariantCulture)}";
 }
