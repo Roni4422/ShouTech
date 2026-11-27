@@ -38,7 +38,7 @@ Do not add runtime DDL to `InvRepo`, `DocSchema`, or a window. `DocSchema` valid
 
 ## Change policy
 
-Treat document numbering as an accounting control. Any change to prefixes, fiscal-year boundaries, reset policies, or concurrency behavior requires a forward migration where needed, provider-parity tests, and an explicit product decision. Do not change the current calendar-year policy implicitly.
+Treat document numbering as an accounting control. Prefix and start value may be configured; counters remain continuous across calendar years and are always displayed without leading zeroes. Any future change to series identity, continuity, or concurrency behavior requires provider-parity tests and an explicit product decision.
 
 ---
 
