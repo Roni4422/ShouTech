@@ -31,6 +31,18 @@ public sealed class JournalService
         return _repository.FindByDocumentNumberAsync(companyId, documentNumber.Trim(), entryDate, cancellationToken);
     }
 
+    public Task<string?> FindAdjacentDocumentNumberAsync(
+        Guid companyId,
+        string currentDocumentNumber,
+        string seriesPrefix,
+        int offset,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        if (string.IsNullOrWhiteSpace(seriesPrefix)) throw new ArgumentException("Series prefix is required.", nameof(seriesPrefix));
+        return _repository.FindAdjacentDocumentNumberAsync(companyId, currentDocumentNumber, seriesPrefix, offset, cancellationToken);
+    }
+
     public async Task<Guid> CreateDraftAsync(
         Guid companyId,
         DateOnly entryDate,
