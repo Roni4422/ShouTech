@@ -281,10 +281,9 @@ namespace ShouTech.App.Views
                 BuildTree();
                 FillParentCombo();
 
-                if (_items.Count == 0)
-                    PrepareNew();
-                else
-                    ShowAt(_items.Count - 1);  // last created (highest Id)
+                // Entry windows always start in a fresh, editable record.
+                // Existing warehouses remain reachable from the tree and navigator.
+                PrepareNew();
             }
             finally
             {
@@ -764,8 +763,9 @@ namespace ShouTech.App.Views
             FillParentCombo();
             BuildTree(saved.Id);
 
-            var idx = _items.FindIndex(x => x.Id == saved.Id);
-            ShowAt(idx >= 0 ? idx : _items.Count - 1);
+            // Keep the saved warehouse in the directory, then prepare the
+            // next new card instead of leaving the form on the saved record.
+            PrepareNew();
         }
 
         private void SaveExistingWarehouse()
