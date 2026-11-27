@@ -1295,7 +1295,7 @@ void stopRuntimeGuard() noexcept {
  */
 status validateLicense(const uint8_t* licenseData, uint32_t licenseDataLen,
                        const char* hwid) noexcept {
-    if (!licenseData || licenseDataLen == 0 || !hwid || hwid[0] == '\\0') {
+    if (!licenseData || licenseDataLen == 0 || !hwid || hwid[0] == '\0') {
         return status::invalid_parameter;
     }
 
