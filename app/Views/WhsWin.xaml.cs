@@ -901,6 +901,14 @@ namespace ShouTech.App.Views
             ShowAt(_index <= 0 ? _items.Count - 1 : _index - 1);
         }
 
+        private void PrevTen_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isBusy || _items.Count == 0) return;
+            if (_dirty && !AskConfirm("WhsWin.DiscardChanges")) return;
+            ClearDirty();
+            ShowAt(_isNew ? _items.Count - 1 : Math.Max(0, _index - 10));
+        }
+
         private void Next_Click(object sender, RoutedEventArgs e)
         {
             if (_isBusy || _items.Count == 0) return;
@@ -909,6 +917,14 @@ namespace ShouTech.App.Views
 
             if (_isNew) { ShowAt(0); return; }
             ShowAt(_index >= _items.Count - 1 ? 0 : _index + 1);
+        }
+
+        private void NextTen_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isBusy || _items.Count == 0) return;
+            if (_dirty && !AskConfirm("WhsWin.DiscardChanges")) return;
+            ClearDirty();
+            ShowAt(_isNew ? 0 : Math.Min(_items.Count - 1, _index + 10));
         }
 
 
