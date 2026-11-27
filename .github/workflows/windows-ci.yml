@@ -51,7 +51,7 @@ jobs:
           $app = $null
           while ((Get-Date) -lt $deadline) {
             $app = Get-CimInstance Win32_Process |
-              Where-Object { $_.ProcessId -ne $run.Id -and $_.CommandLine -match 'ShouTech\\.ERP(\\.dll|\\.exe)' } |
+              Where-Object { $_.ProcessId -ne $run.Id -and $_.CommandLine -match 'ShouTech\.ERP(\.dll|\.exe)' } |
               Select-Object -First 1
             if ($app) { break }
             if ($run.HasExited) { throw "dotnet run exited before app startup (exit code $($run.ExitCode))" }
