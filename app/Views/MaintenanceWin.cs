@@ -21,6 +21,7 @@ public sealed class MaintenanceWin : BaseWin
     private readonly ListBox _checks = new();
     private readonly ListBox _results = new();
     private readonly TextBlock _statusBar = new();
+    private readonly TextBlock _checksTitle = new();
     private readonly TextBlock _pendingNote = new();
     private readonly Button _runButton = new();
     private bool _running;
@@ -60,8 +61,9 @@ public sealed class MaintenanceWin : BaseWin
 
         F2Ui.StyleButton(_runButton, "Maintenance.RunChecks");
         _runButton.Click += async (_, _) => await ConfirmBackupAndRunAsync();
-        DockPanel.SetDock(F2Ui.BottomBar(_runButton), Dock.Bottom);
-        root.Children.Add(F2Ui.BottomBar(_runButton));
+        var bottomBar = F2Ui.BottomBar(_runButton);
+        DockPanel.SetDock(bottomBar, Dock.Bottom);
+        root.Children.Add(bottomBar);
 
         var content = new Grid();
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -69,10 +71,10 @@ public sealed class MaintenanceWin : BaseWin
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        var checksTitle = new TextBlock { Margin = new Thickness(0, 0, 0, 6), FontWeight = FontWeights.SemiBold };
-        checksTitle.SetResourceReference(TextBlock.TextProperty, "Maintenance.CheckListTitle");
-        Grid.SetRow(checksTitle, 0);
-        content.Children.Add(checksTitle);
+        _checksTitle.Margin = new Thickness(0, 0, 0, 6);
+        _checksTitle.FontWeight = FontWeights.SemiBold;
+        Grid.SetRow(_checksTitle, 0);
+        content.Children.Add(_checksTitle);
 
         _checks.Margin = new Thickness(0, 0, 0, 10);
         Grid.SetRow(_checks, 1);
@@ -95,6 +97,7 @@ public sealed class MaintenanceWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("Maintenance.Title");
+        _checksTitle.Text = T("Maintenance.CheckListTitle");
         _pendingNote.Text = T("Maintenance.PendingAudits");
         F2Ui.ApplyTexts(new List<(TextBlock Label, string Key)>(),
             new List<(DataGridColumn, string)>(), new[] { _runButton }, T);
@@ -107,9 +110,6 @@ public sealed class MaintenanceWin : BaseWin
         _checks.Items.Add(T("Maintenance.CheckDatabaseIntegrity"));
         _checks.Items.Add(T("Maintenance.CheckMigrationLedger"));
         _checks.Items.Add(T("Maintenance.CheckTrialBalance"));
-        _checks.Items.Add(T("Maintenance.CheckInvoicePosting"));
-        _checks.Items.Add(T("Maintenance.CheckVoucherPosting"));
-        _checks.Items.Add(T("Maintenance.CheckPriceVariance"));
     }
 
     private async Task ConfirmBackupAndRunAsync()
