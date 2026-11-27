@@ -1037,6 +1037,119 @@ public sealed class OperationsRepository : IOperationsRepository
         return result;
     }
 
+    // ------------------------------------------------------------ Maintenance reports
+
+    public async Task<long> SaveMaintenanceReportAsync(
+        string companyId, string userId, string provider, string status,
+        int checkCount, int passedCount, int warningCount, int failedCount,
+        string reportJson, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("A user is required.", nameof(userId));
+        if (string.IsNullOrWhiteSpace(reportJson)) throw new ArgumentException("A report snapshot is required.", nameof(reportJson));
+        if (checkCount < 0 || passedCount < 0 || warningCount < 0 || failedCount < 0 ||
+            passedCount + warningCount + failedCount > checkCount)
+            throw new ArgumentOutOfRangeException(nameof(checkCount), "Maintenance report counts are invalid.");
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null, IsPg
+            ? """
+              INSERT INTO maintenance_reports
+                (company_code, created_by, provider, status, check_count, passed_count, warning_count, failed_count, report_json)
+              VALUES (@company, @user, @provider, @status, @checks, @passed, @warnings, @failed, @json)
+              RETURNING report_no
+              """
+            : """
+              INSERT INTO maintenance_reports
+                (company_code, created_by, provider, status, check_count, passed_count, warning_count, failed_count, report_json)
+              VALUES (@company, @user, @provider, @status, @checks, @passed, @warnings, @failed, @json)
+              """);
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@user", userId.Trim());
+        Add(command, "@provider", provider.Trim());
+        Add(command, "@status", status.Trim());
+        Add(command, "@checks", checkCount);
+        Add(command, "@passed", passedCount);
+        Add(command, "@warnings", warningCount);
+        Add(command, "@failed", failedCount);
+        Add(command, "@json", reportJson);
+        if (IsPg)
+            return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        await using var idCommand = CreateCommand(connection, null, "SELECT last_insert_rowid()");
+        return Convert.ToInt64(await idCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    public async Task<IReadOnlyList<MaintenanceReportRecord>> GetMaintenanceReportsAsync(
+        string companyId, int limit = 100, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        var take = Math.Clamp(limit, 1, 500);
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null, """
+            SELECT report_no, CAST(run_at AS TEXT), created_by, provider, status,
+                   check_count, passed_count, warning_count, failed_count
+            FROM maintenance_reports
+            WHERE company_code = @company
+            ORDER BY report_no DESC
+            LIMIT @limit
+            """);
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@limit", take);
+        var rows = new List<MaintenanceReportRecord>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            rows.Add(new MaintenanceReportRecord
+            {
+                ReportNo = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                RunAt = ReadString(reader, 1) ?? string.Empty,
+                CreatedBy = ReadString(reader, 2) ?? string.Empty,
+                Provider = ReadString(reader, 3) ?? string.Empty,
+                Status = ReadString(reader, 4) ?? string.Empty,
+                CheckCount = Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture),
+                PassedCount = Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture),
+                WarningCount = Convert.ToInt32(reader.GetValue(7), CultureInfo.InvariantCulture),
+                FailedCount = Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture)
+            });
+        return rows;
+    }
+
+    public async Task<MaintenanceReportRecord?> GetMaintenanceReportAsync(
+        string companyId, long reportNo, CancellationToken cancellationToken = default)
+    {
+        RequireCompany(companyId);
+        if (reportNo <= 0) throw new ArgumentOutOfRangeException(nameof(reportNo));
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = CreateCommand(connection, null, """
+            SELECT report_no, CAST(run_at AS TEXT), created_by, provider, status,
+                   check_count, passed_count, warning_count, failed_count, report_json
+            FROM maintenance_reports
+            WHERE company_code = @company AND report_no = @report
+            """);
+        Add(command, "@company", companyId.Trim());
+        Add(command, "@report", reportNo);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return null;
+        return new MaintenanceReportRecord
+        {
+            ReportNo = Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+            RunAt = ReadString(reader, 1) ?? string.Empty,
+            CreatedBy = ReadString(reader, 2) ?? string.Empty,
+            Provider = ReadString(reader, 3) ?? string.Empty,
+            Status = ReadString(reader, 4) ?? string.Empty,
+            CheckCount = Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture),
+            PassedCount = Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture),
+            WarningCount = Convert.ToInt32(reader.GetValue(7), CultureInfo.InvariantCulture),
+            FailedCount = Convert.ToInt32(reader.GetValue(8), CultureInfo.InvariantCulture),
+            ReportJson = ReadString(reader, 9) ?? "{}"
+        };
+    }
+
     // ------------------------------------------------------------ Fiscal roll-over
 
     public async Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken cancellationToken = default)

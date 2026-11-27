@@ -93,6 +93,13 @@ public interface IOperationsRepository
     /// <summary>Applied-migration facts from schema_migrations (count + highest id); both dialects.</summary>
     Task<SchemaVersionInfo> GetSchemaVersionAsync(CancellationToken cancellationToken = default);
 
+    // ------------------------------------------------------------ Maintenance reports
+    Task<long> SaveMaintenanceReportAsync(string companyId, string userId, string provider, string status,
+        int checkCount, int passedCount, int warningCount, int failedCount, string reportJson,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<MaintenanceReportRecord>> GetMaintenanceReportsAsync(string companyId, int limit = 100, CancellationToken cancellationToken = default);
+    Task<MaintenanceReportRecord?> GetMaintenanceReportAsync(string companyId, long reportNo, CancellationToken cancellationToken = default);
+
     // ------------------------------------------------------------ Fiscal roll-over
     Task<IReadOnlyList<FiscalYearRow>> GetFiscalYearsAsync(string companyId, CancellationToken cancellationToken = default);
     Task CreateNextFiscalYearAsync(string companyId, string userId, CancellationToken cancellationToken = default);

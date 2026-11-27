@@ -288,6 +288,17 @@ public sealed class OperationsService
     public Task<TrialBalanceIntegrityResult> GetTrialBalanceIntegrityAsync(string companyId, CancellationToken ct = default)
         => _repository.GetTrialBalanceIntegrityAsync(RequireCompany(companyId), ct);
 
+    public Task<long> SaveMaintenanceReportAsync(string companyId, string userId, string provider, string status,
+        int checkCount, int passedCount, int warningCount, int failedCount, string reportJson, CancellationToken ct = default)
+        => _repository.SaveMaintenanceReportAsync(RequireCompany(companyId), RequireUser(userId), provider, status,
+            checkCount, passedCount, warningCount, failedCount, reportJson, ct);
+
+    public Task<IReadOnlyList<MaintenanceReportRecord>> GetMaintenanceReportsAsync(string companyId, int limit = 100, CancellationToken ct = default)
+        => _repository.GetMaintenanceReportsAsync(RequireCompany(companyId), limit, ct);
+
+    public Task<MaintenanceReportRecord?> GetMaintenanceReportAsync(string companyId, long reportNo, CancellationToken ct = default)
+        => _repository.GetMaintenanceReportAsync(RequireCompany(companyId), reportNo, ct);
+
     /// <summary>Applied-migration facts (count + highest id) for the Tools health panel.</summary>
     public Task<SchemaVersionInfo> GetSchemaVersionAsync(CancellationToken ct = default)
         => _repository.GetSchemaVersionAsync(ct);

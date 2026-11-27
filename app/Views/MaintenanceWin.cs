@@ -20,6 +20,7 @@ public sealed class MaintenanceWin : BaseWin
     private readonly UniformGrid _checks = new() { Columns = 2 };
     private readonly TextBlock _statusBar = new();
     private readonly TextBlock _checksTitle = new();
+    private readonly TextBlock _historyLink = new() { TextDecorations = TextDecorations.Underline, Foreground = Brushes.RoyalBlue, Cursor = System.Windows.Input.Cursors.Hand, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button _runButton = new();
     private readonly ProgressBar _progress = new() { Minimum = 0, Maximum = 100, Width = 190, Height = 16, Margin = new Thickness(14, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _progressText = new() { MinWidth = 48, VerticalAlignment = VerticalAlignment.Center };
@@ -74,8 +75,14 @@ public sealed class MaintenanceWin : BaseWin
 
         _checksTitle.Margin = new Thickness(0, 0, 0, 8);
         _checksTitle.FontWeight = FontWeights.SemiBold;
-        Grid.SetRow(_checksTitle, 0);
-        content.Children.Add(_checksTitle);
+        _historyLink.Text = T("Maintenance.History");
+        _historyLink.MouseLeftButtonUp += (_, _) => new MaintenanceHistoryWin { Owner = this }.ShowDialog();
+        var heading = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel.SetDock(_historyLink, Dock.Right);
+        heading.Children.Add(_historyLink);
+        heading.Children.Add(_checksTitle);
+        Grid.SetRow(heading, 0);
+        content.Children.Add(heading);
 
         _checks.Margin = new Thickness(0, 0, 0, 8);
         Grid.SetRow(_checks, 1);
@@ -90,10 +97,11 @@ public sealed class MaintenanceWin : BaseWin
     {
         Title = T("Maintenance.Title");
         _checksTitle.Text = T("Maintenance.CheckListTitle");
+        _historyLink.Text = T("Maintenance.History");
         if (_checks.Children.Count > 0)
             PopulateCheckCatalog();
         F2Ui.ApplyTexts(new List<(TextBlock Label, string Key)>(),
-            new List<(DataGridColumn, string)>(), new[] { _runButton }, T);
+            new List<(DataGridColumn, string)>(), new List<Button> { _runButton }, T);
         _progressText.Text = Tf("Maintenance.ChecksProgress", (int)_progress.Value);
     }
 
@@ -198,6 +206,30 @@ public sealed class MaintenanceWin : BaseWin
                     : Tf("Maintenance.ChecksCompletedWithErrors", window.FailedCount);
                 _progress.Value = 100;
                 _progressText.Text = Tf("Maintenance.ChecksProgress", 100);
+            }
+
+            if (_service is not null)
+            {
+                try
+                {
+                    var reportNo = await _service.SaveMaintenanceReportAsync(
+                        CurrentCompanyCode,
+                        AppHost.Session.CurrentUser ?? "system",
+                        DatabaseRuntime.GetProvider(),
+                        window.WasCancelled ? "Cancelled" : "Completed",
+                        window.CheckCount,
+                        window.PassedCount,
+                        0,
+                        window.FailedCount,
+                        window.ReportJson);
+                    _statusBar.Text = Tf("Maintenance.ReportSaved", reportNo);
+                }
+                catch (Exception reportError)
+                {
+                    _statusBar.Text = T("Maintenance.ReportSaveFailed");
+                    MessageBox.Show(this, Tf("Maintenance.ReportSaveFailed", reportError.Message),
+                        Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
         }
         finally

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -25,6 +26,10 @@ internal sealed class MaintenanceChecksWin : BaseWin
     public bool WasCancelled => _cancelRequested;
 
     public int FailedCount { get; private set; }
+    public int PassedCount { get; private set; }
+    public int CheckCount => _items.Count;
+    public string ReportJson { get; private set; } = "{}";
+    private readonly DateTimeOffset _startedAt = DateTimeOffset.Now;
 
     public MaintenanceChecksWin(
         IReadOnlyList<(string LabelKey, Func<Task<string>> Execute)> checks,
@@ -134,6 +139,7 @@ internal sealed class MaintenanceChecksWin : BaseWin
             try
             {
                 var detail = await item.Execute();
+                PassedCount++;
                 item.Detail.Text = Tf("Maintenance.CheckPassed", T(item.LabelKey), detail);
                 item.State.Text = "✓";
                 item.State.Foreground = Brushes.Gray;
@@ -153,6 +159,20 @@ internal sealed class MaintenanceChecksWin : BaseWin
                 _progress.Report(completed * 100d / Math.Max(1, _items.Count));
             }
         }
+
+        ReportJson = JsonSerializer.Serialize(new
+        {
+            startedAt = _startedAt,
+            completedAt = DateTimeOffset.Now,
+            status = _cancelRequested ? "Cancelled" : "Completed",
+            checks = _items.Select(item => new
+            {
+                key = item.LabelKey,
+                label = T(item.LabelKey),
+                state = item.State.Text == "✓" ? "Passed" : item.State.Text == "!" ? "Failed" : "NotRun",
+                detail = item.Detail.Text
+            }).ToArray()
+        }, new JsonSerializerOptions { WriteIndented = true });
 
         _summary.Text = _cancelRequested
             ? T("Maintenance.ChecksCancelled")
