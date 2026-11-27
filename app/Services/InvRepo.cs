@@ -80,39 +80,39 @@ public static class InvRepo
         var config = SequenceAllocator.ReadConfig(
             connection, transaction, isPg, Company, prefix,
             SequenceAllocator.DefaultConfig(prefix));
-        var year = DateTime.Today.Year;
-        var segmentYear = config.YearlySegment ? year : 0;
-        var documentPrefix = config.YearlySegment
-            ? $"{config.Prefix}-{year}-"
-            : $"{config.Prefix}-";
-        var suffixStart = documentPrefix.Length + 1;
-        var numericSuffixPredicate = DatabaseRuntime.IsPostgreSql()
-            ? "SUBSTR(doc_no, $suffixStart) ~ '^[0-9]+$'"
-            : "SUBSTR(doc_no, $suffixStart) GLOB '[0-9]*' AND SUBSTR(doc_no, $suffixStart) NOT GLOB '*[^0-9]*'";
-
+        // Document families run one continuous company-scoped sequence.
+        // Read numeric tails from legacy (PREFIX-YEAR-NNNN) and current
+        // (PREFIX-N) numbers so upgrades never reissue a historical value.
+        const int segmentYear = 0;
+        long maximum = 0;
         using (var maxCommand = connection.CreateCommand())
         {
             maxCommand.Transaction = transaction;
             maxCommand.CommandText = $"""
-                SELECT COALESCE(MAX(CAST(SUBSTR(doc_no, $suffixStart) AS BIGINT)), 0)
+                SELECT doc_no
                 FROM {table}
                 WHERE company_id = $company
                   AND doc_kind = $kind
-                  AND doc_no LIKE $pattern
-                  AND {numericSuffixPredicate};
+                  AND doc_no LIKE $pattern;
                 """;
             Add(maxCommand, "$company", Company);
             Add(maxCommand, "$kind", prefix);
-            Add(maxCommand, "$pattern", $"{documentPrefix}%");
-            Add(maxCommand, "$suffixStart", suffixStart);
-            var maximum = Convert.ToInt64(
-                maxCommand.ExecuteScalar() ?? 0,
-                CultureInfo.InvariantCulture);
-            var allocated = SequenceAllocator.Allocate(
-                connection, transaction, isPg, Company, prefix, segmentYear,
-                maximum, config.StartValue - 1);
-            return SequenceAllocator.Format(config, segmentYear, allocated);
+            Add(maxCommand, "$pattern", $"{config.Prefix}-%");
+            using var reader = maxCommand.ExecuteReader();
+            while (reader.Read())
+            {
+                var existing = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                var lastDash = existing.LastIndexOf('-');
+                if (lastDash >= 0
+                    && long.TryParse(existing.AsSpan(lastDash + 1), NumberStyles.None,
+                        CultureInfo.InvariantCulture, out var suffix))
+                    maximum = Math.Max(maximum, suffix);
+            }
         }
+        var allocated = SequenceAllocator.Allocate(
+            connection, transaction, isPg, Company, prefix, segmentYear,
+            maximum, config.StartValue - 1);
+        return SequenceAllocator.Format(config, segmentYear, allocated);
     }
 
     /// <summary>
