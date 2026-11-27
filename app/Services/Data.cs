@@ -762,7 +762,8 @@ private readonly ILogServ _logger;
             var fingerprintInput = string.Join("|",
                 exceptionType,
                 source.File ?? "Unknown",
-                source.Method ?? "Unknown");
+                source.Method ?? "Unknown",
+                exception?.Message ?? requestedCode ?? "UnknownError");
             var fingerprint = Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput)));
             var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
