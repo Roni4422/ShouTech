@@ -1679,11 +1679,7 @@ public static class DataExportSvc
 
     private static string CategoryDisplayName(MatRepo.ProductCategoryRec card)
     {
-        var arabic = string.Equals(App.CurrentLanguageCode?.Trim(), "ar", StringComparison.OrdinalIgnoreCase);
-        var name = arabic
-            ? (string.IsNullOrWhiteSpace(card.Name) ? card.NameEn : card.Name)
-            : (string.IsNullOrWhiteSpace(card.NameEn) ? card.Name : card.NameEn);
-        return string.IsNullOrWhiteSpace(name) ? card.Code : name.Trim();
+        return string.IsNullOrWhiteSpace(card.Name) ? card.Code : card.Name.Trim();
     }
 
     /// <summary>Export: category ID or code -> category display name.</summary>
@@ -1710,8 +1706,7 @@ public static class DataExportSvc
             string.Equals(c.Code, text, StringComparison.OrdinalIgnoreCase));
         if (byIdOrCode != null) return byIdOrCode.Id;
         var byName = cards.Where(c =>
-                string.Equals(c.Name?.Trim(), text, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(c.NameEn?.Trim(), text, StringComparison.OrdinalIgnoreCase))
+                string.Equals(c.Name?.Trim(), text, StringComparison.OrdinalIgnoreCase))
             .Select(c => c.Id)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
