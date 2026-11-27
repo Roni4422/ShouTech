@@ -19,7 +19,7 @@ The Windows desktop ERP application has one startup project at the repository ro
 
 ## Build and run
 
-Run commands from the repository root on Windows with the .NET 8 SDK. The root project is the sole default entry point, so both commands work without a project or solution name:
+Install the .NET 10 SDK on Windows. The repository CI currently builds with the .NET 10 SDK, while the application and supporting projects still target .NET 8; the target-framework migration is a separate, not-yet-completed step. The root project is the sole default entry point, so both commands work without a project or solution name:
 
 ```powershell
 dotnet build
