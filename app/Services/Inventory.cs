@@ -926,7 +926,27 @@ internal static class MatRepo
         return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
     }
 
+    // Compatibility allocator for callers that explicitly reserve a code.
     public static string NextCode(string? groupPrefix = null)
+    {
+        var prefix = groupPrefix ?? string.Empty;
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs)) throw new InvalidOperationException("No connection to the current company database.");
+        EnsureSchema();
+        var company = AppState.CurrentCompanyCode ?? string.Empty;
+        using var connection = Open(cs);
+        using var transaction = connection is SqliteConnection sqliteConnection
+            ? sqliteConnection.BeginTransaction(deferred: false)
+            : connection.BeginTransaction();
+        var code = AllocateCode(connection, transaction, company, prefix);
+        transaction.Commit();
+        return code;
+    }
+
+    // Non-consuming preview for data-entry forms. The value is only a hint;
+    // Save allocates under the write transaction and may advance it if another
+    // user saves the same preview first.
+    public static string PreviewCode(string? groupPrefix = null)
     {
         var prefix = groupPrefix ?? string.Empty;
         var cs = DatabaseRuntime.GetConnectionString();
