@@ -951,8 +951,9 @@ public sealed class JournalRepository : IJournalRepository
         {
             var config = SequenceAllocator.ReadConfig(connection, transaction, isPg, companyCode.Trim(), key,
                 new SequenceAllocator.SeriesConfig("JRN", 8, false, 1));
-            var segment = config.YearlySegment ? entryDate.Year : 0;
-            var documentPrefix = config.YearlySegment ? $"{config.Prefix}-{entryDate.Year}-" : $"{config.Prefix}-";
+            // Journal numbering never resets at year boundaries.
+            const int segment = 0;
+            var documentPrefix = $"{config.Prefix}-";
             var suffixStart = documentPrefix.Length + 1;
             var substr = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
             var predicate = isPg
