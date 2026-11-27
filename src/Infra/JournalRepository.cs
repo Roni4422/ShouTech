@@ -918,11 +918,11 @@ public sealed class JournalRepository : IJournalRepository
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Allocates the next sequential voucher number for a
-    /// series (JV / RCV / PAY) through the central SequenceAllocator
-    /// (NUMBERING_STUDY §3): the counter is keyed by the company CODE,
-    /// seeded from the highest existing journal number with the
-    /// effective prefix INCLUDING soft-deleted entries, and advanced
+    /// <summary>Allocates the next number from the one company-wide journal sequence
+    /// shared by manual journals, receipts, payments and system postings
+    /// (NUMBERING_STUDY §3): the counter is keyed by the company CODE and JRN series,
+    /// seeded from the highest existing JRN journal number INCLUDING
+    /// soft-deleted entries, and advanced
     /// inside its own transaction — the timestamp pre-fills the
     /// windows used before are gone. Synchronous because the voucher
     /// windows reset synchronously; both providers support the sync
@@ -930,7 +930,9 @@ public sealed class JournalRepository : IJournalRepository
     public string NextDocumentNumber(string companyCode, string seriesKey, DateOnly entryDate)
     {
         if (string.IsNullOrWhiteSpace(companyCode)) throw new ArgumentException("Company code is required.", nameof(companyCode));
-        var key = seriesKey.Trim().ToUpperInvariant();
+        // All journal sources share one sequence. The caller’s legacy series
+        // label (JV/RCV/PAY) is intentionally not a separate counter.
+        const string key = "JRN";
         var isPg = _provider == "PostgreSQL";
         using var connection = CreateConnection();
         connection.Open();
@@ -948,7 +950,7 @@ public sealed class JournalRepository : IJournalRepository
         try
         {
             var config = SequenceAllocator.ReadConfig(connection, transaction, isPg, companyCode.Trim(), key,
-                SequenceAllocator.DefaultConfig(key));
+                new SequenceAllocator.SeriesConfig("JRN", 8, false, 1));
             var segment = config.YearlySegment ? entryDate.Year : 0;
             var documentPrefix = config.YearlySegment ? $"{config.Prefix}-{entryDate.Year}-" : $"{config.Prefix}-";
             var suffixStart = documentPrefix.Length + 1;
