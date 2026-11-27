@@ -195,6 +195,14 @@ public class GlPostingTests
         Assert.Equal("JRN-1", entry.DocumentNumber);
         Assert.Equal(doc.DocNo, entry.SourceNo);
         AssertBalanced(entry);
+
+        var journalStore = new JournalRepository("SQLite", db.ConnectionString);
+        var loadedByCentralNumber = await journalStore.FindByDocumentNumberAsync(
+            db.CompanyId, "JRN-1", new DateOnly(2026, 3, 10));
+        Assert.NotNull(loadedByCentralNumber);
+        Assert.Equal("JRN-1", loadedByCentralNumber!.DocumentNumber);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => journalStore.FindByDocumentNumberAsync(db.CompanyId, "JRN-1"));
         Assert.Equal(200m, Line(entry, "1201").Debit);
 
         var second = await PostInvoiceAsync(db, InvDocKind.PurchaseInvoice, qty: 1m, price: 25m, taxRate: 0m);
