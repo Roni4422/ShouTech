@@ -449,6 +449,7 @@ public abstract class BaseWin : Window
             if (current is StackPanel panel &&
                 string.Equals(panel.Tag as string, "RecordNavigationBar", StringComparison.Ordinal))
             {
+                panel.FlowDirection = FlowDirection;
                 panel.HorizontalAlignment = FlowDirection == FlowDirection.RightToLeft
                     ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             }
