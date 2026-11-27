@@ -1981,9 +1981,23 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         if (_index > 0) { _index--; LoadCurrent(); }
     }
 
+    private void NavPrevTen_Click(object sender, RoutedEventArgs e)
+    {
+        if (_cache.Count == 0) return;
+        _index = Math.Max(0, _index - 10);
+        LoadCurrent();
+    }
+
     private void NavNext_Click(object sender, RoutedEventArgs e)
     {
         if (_index < _cache.Count - 1) { _index++; LoadCurrent(); }
+    }
+
+    private void NavNextTen_Click(object sender, RoutedEventArgs e)
+    {
+        if (_cache.Count == 0) return;
+        _index = Math.Min(_cache.Count - 1, _index + 10);
+        LoadCurrent();
     }
 
     private void NavLast_Click(object sender, RoutedEventArgs e)
