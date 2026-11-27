@@ -578,13 +578,8 @@ namespace ShouTech.App.Views
             }
         }
 
-        private string SuggestNextCardNo()
-        {
-            long max = 0;
-            foreach (var x in _items)
-                if (x.CardNo > max) max = x.CardNo;
-            return (max + 1).ToString(CultureInfo.InvariantCulture);
-        }
+        private static string SuggestNextCardNo()
+            => MatRepo.NextWarehouseCardNo().ToString(CultureInfo.InvariantCulture);
 
         // -----------------------------------------------------------------
         // Edit mode
