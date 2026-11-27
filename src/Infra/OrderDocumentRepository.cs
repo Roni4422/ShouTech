@@ -868,6 +868,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         seed = Math.Max(seed, suffix);
                 }
             }
+            seed = Math.Max(seed, SequenceAllocator.PeekMax(connection, transaction, companyCode, kind));
             var allocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyCode, kind,
                 segment, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false);
 
