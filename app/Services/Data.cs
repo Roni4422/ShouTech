@@ -775,10 +775,22 @@ private readonly ILogServ _logger;
                     var entries = new Dictionary<string, ErrorIndexEntry>(StringComparer.OrdinalIgnoreCase);
                     if (File.Exists(_errorIndexPath))
                     {
-                        var loaded = JsonSerializer.Deserialize<Dictionary<string, ErrorIndexEntry>>(
-                            File.ReadAllText(_errorIndexPath, Utf8NoBom));
-                        if (loaded != null)
-                            entries = new Dictionary<string, ErrorIndexEntry>(loaded, StringComparer.OrdinalIgnoreCase);
+                        try
+                        {
+                            var loaded = JsonSerializer.Deserialize<Dictionary<string, ErrorIndexEntry>>(
+                                File.ReadAllText(_errorIndexPath, Utf8NoBom));
+                            if (loaded != null)
+                                entries = new Dictionary<string, ErrorIndexEntry>(loaded, StringComparer.OrdinalIgnoreCase);
+                        }
+                        catch (JsonException corruptIndex)
+                        {
+                            // Preserve a damaged index for diagnostics, then
+                            // rebuild a clean index from newly observed errors.
+                            var quarantinePath = _errorIndexPath + ".corrupt-" +
+                                DateTime.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture);
+                            File.Move(_errorIndexPath, quarantinePath, overwrite: false);
+                            Debug.WriteLine($"Corrupt error index preserved at {quarantinePath}: {corruptIndex.Message}");
+                        }
                     }
 
                     if (entries.TryGetValue(fingerprint, out var existing))
