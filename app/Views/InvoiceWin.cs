@@ -868,7 +868,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             TextWrapping = TextWrapping.Wrap,
             // Keep the label-to-field gap on the inner edge in both
             // directions: label is column 0, editor is column 1.
-            Margin = FlowDirection == FlowDirection.RightToLeft
+            Margin = host.FlowDirection == FlowDirection.RightToLeft
                 ? new Thickness(8, 0, 0, 8)
                 : new Thickness(0, 0, 8, 8)
         };
