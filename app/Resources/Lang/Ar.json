@@ -3438,7 +3438,8 @@
     "CheckPassed": "ناجح — {0}: {1}",
     "CheckFailed": "فشل — {0}: {1}",
     "ChecksRunning": "جارٍ تنفيذ فحوصات قاعدة البيانات...",
-    "ChecksCompleted": "اكتملت فحوصات الصيانة."
+    "ChecksCompleted": "اكتملت فحوصات الصيانة.",
+    "ChecksCompletedWithErrors": "اكتملت الفحوصات مع وجود {0} مشكلة."
   },
   "Rollover": {
     "Title": "ترحيل السنة المالية",
