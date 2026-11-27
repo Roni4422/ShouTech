@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <TargetFramework Condition="'$(DatabaseOnly)' != 'true'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(DatabaseOnly)' == 'true'">net8.0</TargetFramework>
+    <UseWPF Condition="'$(DatabaseOnly)' != 'true'">true</UseWPF>
+    <EnableWindowsTargeting Condition="'$(DatabaseOnly)' != 'true'">true</EnableWindowsTargeting>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -14,20 +15,23 @@
   <ItemGroup>
     <!-- Phase 4: the svc webhook signer is a standalone file; compile it
          directly so its HMAC vectors are covered by this test project. -->
-    <Compile Include="..\..\svc\WebhookSigner.cs" Link="WebhookSigner.cs" />
+    <Compile Include="..\..\svc\WebhookSigner.cs" Link="WebhookSigner.cs" Condition="'$(DatabaseOnly)' != 'true'" />
+    <Compile Remove="**\*.cs" Condition="'$(DatabaseOnly)' == 'true'" />
+    <Compile Include="OperationsServiceTests.cs" Condition="'$(DatabaseOnly)' == 'true'" />
+    <Compile Include="MaintTests.cs" Condition="'$(DatabaseOnly)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\ShouTech.ERP.csproj" />
+    <ProjectReference Include="..\..\ShouTech.ERP.csproj" Condition="'$(DatabaseOnly)' != 'true'" />
     <ProjectReference Include="..\..\src\Infra\Infra.csproj" />
-    <ProjectReference Include="..\..\tools\SqlMigrator\SqlMigrator.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\tools\SqlMigrator\SqlMigrator.csproj" ReferenceOutputAssembly="false" Condition="'$(DatabaseOnly)' != 'true'" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(DatabaseOnly)' != 'true'">
     <None Include="..\..\app\Resources\COA\**\*" Link="Resources\COA\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\app\Resources\Currencies\**\*" Link="Resources\Currencies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <Target Name="CopySqlMigratorForIntegrationTests" AfterTargets="Build">
+  <Target Name="CopySqlMigratorForIntegrationTests" AfterTargets="Build" Condition="'$(DatabaseOnly)' != 'true'">
     <ItemGroup>
       <SqlMigratorOutput Include="$(MSBuildProjectDirectory)\..\..\tools\SqlMigrator\bin\$(Configuration)\net8.0\**\*" />
     </ItemGroup>

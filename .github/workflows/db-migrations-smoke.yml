@@ -168,4 +168,4 @@ jobs:
       - name: Run PostgreSQL maintenance integration checks
         env:
           SHOUTECH_TEST_POSTGRES: Host=localhost;Port=5432;Database=shoutest;Username=shoutest;Password=shoutest
-        run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --filter FullyQualifiedName~Maintenance_PostgreSql_ChecksAndVacuumAnalyze
+        run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release -p:DatabaseOnly=true --filter FullyQualifiedName~Maintenance_PostgreSql_ChecksAndVacuumAnalyze
