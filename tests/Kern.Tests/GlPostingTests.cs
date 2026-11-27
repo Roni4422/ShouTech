@@ -192,7 +192,7 @@ public class GlPostingTests
         var doc = await PostInvoiceAsync(db, InvDocKind.SalesInvoice, qty: 2m, price: 100m, taxRate: 0m);
 
         var entry = SingleEntry(db, "SAL", doc.DocId);
-        Assert.Equal("JV-" + doc.DocNo, entry.DocumentNumber);
+        Assert.Equal("JRN-1", entry.DocumentNumber);
         Assert.Equal(doc.DocNo, entry.SourceNo);
         AssertBalanced(entry);
         Assert.Equal(200m, Line(entry, "1201").Debit);
@@ -427,7 +427,7 @@ public class GlPostingTests
                 new("1201", 10m, 0m), new("301", 0m, 10m)
             });
         var first = await store.PostDocumentAsync(request, Actor);
-        Assert.StartsWith("JV-SAL-999", first.DocumentNumber);
+        Assert.Equal("JRN-1", first.DocumentNumber);
         var error = await Assert.ThrowsAsync<AppError>(() => store.PostDocumentAsync(request, Actor));
         Assert.Equal(ErrorCodes.DocumentAlreadyPostedToGl, error.Code);
 
