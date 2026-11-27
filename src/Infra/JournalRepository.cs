@@ -134,7 +134,7 @@ public sealed class JournalRepository : IJournalRepository
             var notDeleted = _provider == "PostgreSQL" ? "is_deleted=false" : "is_deleted=0";
             header.CommandText = $"""
                 SELECT journal_entry_id, company_id, entry_date, description, status,
-                       reference_number, currency_code, exchange_rate, document_number
+                       reference_number, currency_code, exchange_rate, document_number, source_doc_no
                 FROM journal_entries
                 WHERE company_id = @company AND (document_number = @documentNumber OR source_doc_no = @documentNumber)
                   AND (@period IS NULL OR fiscal_period_id = @period) AND {notDeleted}
@@ -161,7 +161,11 @@ public sealed class JournalRepository : IJournalRepository
             referenceNumber = reader.IsDBNull(5) ? null : reader.GetString(5);
             currencyCode = reader.GetString(6);
             exchangeRate = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
-            storedDocumentNumber = reader.IsDBNull(8) ? null : reader.GetString(8);
+            var centralDocumentNumber = reader.IsDBNull(8) ? null : reader.GetString(8);
+            var sourceDocumentNumber = reader.IsDBNull(9) ? null : reader.GetString(9);
+            storedDocumentNumber = documentNumber.Trim().StartsWith("JRN-", StringComparison.OrdinalIgnoreCase)
+                ? centralDocumentNumber
+                : sourceDocumentNumber ?? centralDocumentNumber;
 
             if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 throw new InvalidOperationException(
