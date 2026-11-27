@@ -382,6 +382,9 @@
     "Columns": {
       "material_id": "Internal ID",
       "code": "Item No",
+      "name": "Material Name",
+      "category": "Category",
+      "group_code": "Group Code",
       "name_ar": "Name",
       "name_en": "English Name"
     },
