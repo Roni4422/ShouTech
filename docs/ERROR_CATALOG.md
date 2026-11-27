@@ -256,7 +256,7 @@ failed — this is what makes per-file maintenance practical.
 ## 5. Log format — logs are compatible with this catalog
 
 `LogServ` (in `Services/Data.cs`) writes `log.log` and mirrors every error
-line to `errors.log`. Compatibility with the catalog is **structural**: the
+line to `error.log`. Compatibility with the catalog is **structural**: the
 logging API itself takes the code, so no caller can produce an uncoded
 error line by forgetting to paste a code into message text.
 
