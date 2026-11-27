@@ -7,6 +7,9 @@ on:
       - 'dba/mig/**'
       - 'tools/SqlMigrator/**'
       - 'app/Services/SchMig.cs'
+      - 'src/Infra/OperationsRepository.cs'
+      - 'src/Dom/Interfaces/IOperationsRepository.cs'
+      - 'tests/Kern.Tests/OperationsServiceTests.cs'
       - '.github/workflows/db-migrations-smoke.yml'
   pull_request:
     branches: [main, reduce-2-upgrade]
@@ -153,3 +156,7 @@ jobs:
           PGPASSWORD=shoutest psql -h localhost -U shoutest -d shoutest_existing_history -v ON_ERROR_STOP=1 -c "CREATE TABLE schema_migrations (migration_id text PRIMARY KEY, checksum char(64) NOT NULL, applied_at timestamptz NOT NULL DEFAULT now());"
           dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"
           dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"
+      - name: Run PostgreSQL maintenance integration checks
+        env:
+          SHOUTECH_TEST_POSTGRES: Host=localhost;Port=5432;Database=shoutest;Username=shoutest;Password=shoutest
+        run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --filter FullyQualifiedName~Maintenance_PostgreSql_ChecksAndVacuumAnalyze
