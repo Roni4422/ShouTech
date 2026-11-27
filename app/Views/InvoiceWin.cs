@@ -200,8 +200,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         _cmbTaxCode.SelectedValue = _doc.TaxCode;
         ApplyLanguageDirection();
 
-        _doc.DocNo = InvRepo.NextDocNo(kind);
-        _txtDocNo.Text = _doc.DocNo;
+        _txtDocNo.Text = InvRepo.PreviewDocNo(kind);
         _txtTaxRate.Text = _doc.DefaultTaxRate.ToString("0.##", CultureInfo.InvariantCulture);
         _txtCurrency.Text = _doc.CurrencyCode;
         _txtWarehouse.Text = _doc.WarehouseName;
@@ -1602,7 +1601,10 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
 
     private InvDoc CaptureDoc()
     {
-        _doc.DocNo = _txtDocNo.Text.Trim();
+        // New documents show a non-consuming preview in the UI. The repository
+        // allocates the actual number inside the save transaction, using the
+        // document date's company sequence; existing drafts retain their number.
+        _doc.DocNo = _doc.DocId > 0 ? _txtDocNo.Text.Trim() : string.Empty;
         _doc.DocDate = _dtDate.SelectedDate ?? DateTime.Today;
         _doc.DueDate = _doc.Kind == InvDocKind.PurchaseInvoice ? _dtDueDate.SelectedDate?.Date : null;
         _doc.PartyCode = _txtPartyCode.Text.Trim();
