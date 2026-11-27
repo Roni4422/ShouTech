@@ -379,6 +379,29 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public void DataExportSvc_ShouldResolveMaterialCategoryIdToItsNameAndBack()
+        {
+            var assembly = typeof(DataExportSvc).Assembly;
+            var categoryType = assembly.GetType("ShouTech.App.Services.MatRepo+ProductCategoryRec")!;
+            var category = Activator.CreateInstance(categoryType)!;
+            categoryType.GetProperty("Id")!.SetValue(category, "category-guid-1");
+            categoryType.GetProperty("Code")!.SetValue(category, "CAT-01");
+            categoryType.GetProperty("Name")!.SetValue(category, "الصنف التجريبي");
+            categoryType.GetProperty("NameEn")!.SetValue(category, "Test Category");
+            var categories = Array.CreateInstance(categoryType, 1);
+            categories.SetValue(category, 0);
+
+            var export = typeof(DataExportSvc).GetMethod(
+                "CategoryCodeToName", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var import = typeof(DataExportSvc).GetMethod(
+                "CategoryNameToCode", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+            Assert.Equal("Test Category", export.Invoke(null, new object?[] { "category-guid-1", categories }));
+            Assert.Equal("category-guid-1", import.Invoke(null, new object?[] { "Test Category", categories }));
+            Assert.Equal("category-guid-1", import.Invoke(null, new object?[] { "CAT-01", categories }));
+        }
+
+        [Fact]
         public void PwdHash_ShouldVerifyOnlyTheOriginalPassword()
         {
             var password = "test-" + Guid.NewGuid().ToString("N") + "!";
