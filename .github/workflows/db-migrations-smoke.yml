@@ -49,8 +49,7 @@ jobs:
         if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
         run: |
           git fetch origin reduce
-          git checkout origin/reduce -- dba/mig/sqlite dba/mig/postgresql
-          python3 tools/bundle_migrations.py apply
+          python3 tools/bundle_migrations.py apply --source-ref origin/reduce
       - name: Regenerate file index for migration bundles
         if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
         run: python3 tools/gen_index.py
@@ -155,10 +154,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Verify migration classification and bundle checksums
+        if: github.event_name != 'push' || github.ref_name != 'reduce-2-upgrade' || !contains(github.event.head_commit.message, '[bundle-migrations]')
         run: python3 tools/bundle_migrations.py verify
       - name: Generate compact migration bundles for this consolidation
         if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
-        run: python3 tools/bundle_migrations.py apply
+        run: |
+          git fetch origin reduce
+          python3 tools/bundle_migrations.py apply --source-ref origin/reduce
       - name: Regenerate file index for migration bundles
         if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
         run: python3 tools/gen_index.py
@@ -234,8 +236,7 @@ jobs:
       - name: Build and verify compact migration bundles
         run: |
           git fetch origin reduce
-          git checkout origin/reduce -- dba/mig/sqlite dba/mig/postgresql
-          python3 tools/bundle_migrations.py apply
+          python3 tools/bundle_migrations.py apply --source-ref origin/reduce
           python3 tools/bundle_migrations.py verify
           python3 tools/gen_index.py
       - name: Commit consolidated migrations
