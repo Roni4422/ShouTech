@@ -230,7 +230,6 @@ public static class RibbonNav
             case "View.MaterialTree": Show(new MatDirWin(), owner); return true;
             case "View.ManufacturingTree": Show(new MfgListWin(), owner); return true;
             case "View.CostCenterTree": Show(new CcListWin(), owner); return true;
-            case "View.PaymentMethods": ShowDef(DefSets.PaymentMethods, owner); return true;
             case "View.CompanyInfo": Show(new ComWin(ComWinMode.Management), owner); return true;
             case "View.ExportData": Show(new DatWin(true), owner); return true;
             case "View.InfoWindow": ShowAbout(owner); return true;
