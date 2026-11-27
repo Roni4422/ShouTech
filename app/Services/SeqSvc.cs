@@ -30,31 +30,31 @@ public static class SeqSvc
 
     public static IReadOnlyList<SeriesDef> Catalog { get; } = new[]
     {
-        new SeriesDef("SAL", "Numbering.Series.SAL", "SAL", true),
-        new SeriesDef("SRT", "Numbering.Series.SRT", "SRT", true),
-        new SeriesDef("POS", "Numbering.Series.POS", "POS", true),
-        new SeriesDef("PUR", "Numbering.Series.PUR", "PUR", true),
-        new SeriesDef("PRT", "Numbering.Series.PRT", "PRT", true),
-        new SeriesDef("ENT", "Numbering.Series.ENT", "ENT", true),
-        new SeriesDef("EXT", "Numbering.Series.EXT", "EXT", true),
-        new SeriesDef("TRN", "Numbering.Series.TRN", "TRN", true),
-        new SeriesDef("OPN", "Numbering.Series.OPN", "OPN", true),
-        new SeriesDef("CNT", "Numbering.Series.CNT", "CNT", true),
-        new SeriesDef("QUO", "Numbering.Series.QUO", "QUO", true),
-        new SeriesDef("SO", "Numbering.Series.SO", "SO", true),
-        new SeriesDef("PO", "Numbering.Series.PO", "PO", true),
-        new SeriesDef("RFQ", "Numbering.Series.RFQ", "RFQ", true),
-        new SeriesDef("SQ", "Numbering.Series.SQ", "SQ", true),
-        new SeriesDef("PRQ", "Numbering.Series.PRQ", "PRQ", true),
-        new SeriesDef("DLV", "Numbering.Series.DLV", "DLV", true),
-        new SeriesDef("RCR", "Numbering.Series.RCR", "RCR", true),
+        new SeriesDef("SAL", "Numbering.Series.SAL", "SAL", false),
+        new SeriesDef("SRT", "Numbering.Series.SRT", "SRT", false),
+        new SeriesDef("POS", "Numbering.Series.POS", "POS", false),
+        new SeriesDef("PUR", "Numbering.Series.PUR", "PUR", false),
+        new SeriesDef("PRT", "Numbering.Series.PRT", "PRT", false),
+        new SeriesDef("ENT", "Numbering.Series.ENT", "ENT", false),
+        new SeriesDef("EXT", "Numbering.Series.EXT", "EXT", false),
+        new SeriesDef("TRN", "Numbering.Series.TRN", "TRN", false),
+        new SeriesDef("OPN", "Numbering.Series.OPN", "OPN", false),
+        new SeriesDef("CNT", "Numbering.Series.CNT", "CNT", false),
+        new SeriesDef("QUO", "Numbering.Series.QUO", "QUO", false),
+        new SeriesDef("SO", "Numbering.Series.SO", "SO", false),
+        new SeriesDef("PO", "Numbering.Series.PO", "PO", false),
+        new SeriesDef("RFQ", "Numbering.Series.RFQ", "RFQ", false),
+        new SeriesDef("SQ", "Numbering.Series.SQ", "SQ", false),
+        new SeriesDef("PRQ", "Numbering.Series.PRQ", "PRQ", false),
+        new SeriesDef("DLV", "Numbering.Series.DLV", "DLV", false),
+        new SeriesDef("RCR", "Numbering.Series.RCR", "RCR", false),
         // RCV is ONE series shared by chain purchase receipts and cash
         // receipt vouchers (both print RCV- numbers; sharing the
         // counter keeps the printed numbers unique across families).
-        new SeriesDef("JV", "Numbering.Series.JV", "JV", true),
-        new SeriesDef("RCV", "Numbering.Series.RCV", "RCV", true),
-        new SeriesDef("PAY", "Numbering.Series.PAY", "PAY", true),
-        new SeriesDef("SES", "Numbering.Series.SES", "SES", true),
+        new SeriesDef("JV", "Numbering.Series.JV", "JV", false),
+        new SeriesDef("RCV", "Numbering.Series.RCV", "RCV", false),
+        new SeriesDef("PAY", "Numbering.Series.PAY", "PAY", false),
+        new SeriesDef("SES", "Numbering.Series.SES", "SES", false),
         new SeriesDef("MFG", "Numbering.Series.MFG", "MFG", false),
         new SeriesDef("CUS", "Numbering.Series.CUS", "CUS", false),
         new SeriesDef("SUP", "Numbering.Series.SUP", "SUP", false),
@@ -92,10 +92,10 @@ public static class SeqSvc
         {
             var config = SequenceAllocator.ReadConfig(connection, transaction, isPg, Company, def.Key,
                 SequenceAllocator.DefaultConfig(def.DefaultPrefix, def.DefaultYearly));
-            var segment = config.YearlySegment ? DateTime.Today.Year : 0;
+            const int segment = 0;
             var current = SequenceAllocator.Peek(connection, transaction, Company, def.Key, segment);
-            rows.Add(new SeriesRow(def.Key, def.NameKey, config.Prefix, config.Padding,
-                config.YearlySegment, config.StartValue, current));
+            rows.Add(new SeriesRow(def.Key, def.NameKey, config.Prefix, 1,
+                false, config.StartValue, current));
         }
         transaction.Commit();
         return rows;
@@ -109,7 +109,6 @@ public static class SeqSvc
         foreach (var row in list)
         {
             if (string.IsNullOrWhiteSpace(row.Prefix) || row.Prefix.Trim().Length > 12
-                || row.Padding is < 1 or > 8
                 || row.StartValue < 1 || row.StartValue > SequenceAllocator.MaxValue)
                 throw new AppError(ErrorCodes.NumberingInvalidConfig,
                     $"Series '{row.Key}' has an invalid numbering configuration.");
@@ -141,8 +140,8 @@ public static class SeqSvc
                 Add(command, "@company", Company);
                 Add(command, "@series", row.Key);
                 Add(command, "@prefix", row.Prefix.Trim());
-                Add(command, "@padding", row.Padding);
-                Add(command, "@yearly", row.Yearly ? 1 : 0);
+                Add(command, "@padding", 1);
+                Add(command, "@yearly", 0);
                 Add(command, "@start", row.StartValue);
                 Add(command, "@actor", actor);
                 Add(command, "@at", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
