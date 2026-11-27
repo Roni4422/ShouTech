@@ -54,7 +54,7 @@
 #include <optional>
 #include <version>
 
-using namespace ST;
+using namespace shoutech::security;
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "crypt32.lib")
