@@ -459,7 +459,7 @@ public partial class DatWin : BaseWin, IWindowMode
                         $"Export attempted without DATA.EXPORT | mode={_mode} | user={GetCurrentUserName()}",
                         GetCurrentUserName());
             }
-            catch (Exception ex) { LogError("Security audit forwarding failed", ex); }
+            catch (Exception ex) { AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "DatWin.SecurityAuditForwarding"); }
 
             MessageBox.Show(
                 L("ExportNotPermitted", "You do not have permission to export data (DATA.EXPORT)."),
@@ -707,7 +707,7 @@ public partial class DatWin : BaseWin, IWindowMode
             ResultTextBox.Text = BuildFailureText(ex);
             _lastDetails = ResultTextBox.Text;
             DetailsButton.IsEnabled = true;
-            LogError($"Data exchange failed | mode={_mode} | {ex.Message}", ex);
+            AppHost.Errors.Report(_mode == DataExchangeMode.Import ? ErrorCodes.ImportFailed : ErrorCodes.ExportFailed, ex, $"DatWin.Execute{_mode}");
         }
         finally
         {
@@ -805,7 +805,7 @@ public partial class DatWin : BaseWin, IWindowMode
             if (user is not null)
                 return !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.Username;
         }
-        catch (Exception ex) { LogError("Current user name resolution failed", ex); }
+        catch (Exception ex) { AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "DatWin.GetCurrentUserName"); }
         return Environment.UserName;
     }
 
@@ -830,7 +830,7 @@ public partial class DatWin : BaseWin, IWindowMode
                     return builder.Database;
             }
         }
-        catch (Exception ex) { LogError("Target database name resolution failed", ex); }
+        catch (Exception ex) { AppHost.Errors.Report(ErrorCodes.DatabaseConnectionFailed, ex, "DatWin.GetCurrentDatabaseName"); }
 
         return "-";
     }
