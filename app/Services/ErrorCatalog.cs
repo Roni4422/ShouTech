@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 using ShouTech.Domain;
 
 namespace ShouTech.App.Services
@@ -79,7 +80,13 @@ namespace ShouTech.App.Services
         /// errors.log / log.log through the coded LogError overload.
         /// Never throws.
         /// </summary>
-        void Report(string code, Exception? exception = null, string? context = null);
+        void Report(
+            string code,
+            Exception? exception = null,
+            string? context = null,
+            [CallerFilePath] string sourceFile = "",
+            [CallerMemberName] string sourceMember = "",
+            [CallerLineNumber] int sourceLine = 0);
 
         /// <summary>All codes registered in the English catalog (the index).</summary>
         IReadOnlyCollection<string> KnownCodes { get; }
@@ -233,16 +240,34 @@ namespace ShouTech.App.Services
             }
         }
 
-        public void Report(string code, Exception? exception = null, string? context = null)
+        public void Report(
+            string code,
+            Exception? exception = null,
+            string? context = null,
+            [CallerFilePath] string sourceFile = "",
+            [CallerMemberName] string sourceMember = "",
+            [CallerLineNumber] int sourceLine = 0)
         {
             // Reporting must never throw into the caller's error path.
             try
             {
                 var appArgs = (exception as AppError)?.Args;
                 var info = Resolve(code, appArgs == null ? Array.Empty<object>() : new List<object>(appArgs).ToArray());
+                // Capture the reporting call site at compile time. This is
+                // more reliable than guessing the originating window from a
+                // translated message or from a later global exception handler.
+                var normalizedPath = (sourceFile ?? string.Empty)
+                    .Replace('\\\\', '/');
+                var fileName = string.IsNullOrWhiteSpace(normalizedPath)
+                    ? "Unknown"
+                    : Path.GetFileName(normalizedPath);
+                var windowName = normalizedPath.Contains("/Views/", StringComparison.OrdinalIgnoreCase)
+                    ? Path.GetFileNameWithoutExtension(fileName)
+                    : "Non-Window";
+                var source = $"Window={windowName} | SourceFile={fileName} | Method={sourceMember} | Line={sourceLine}";
                 var message = string.IsNullOrWhiteSpace(context)
-                    ? info.Name
-                    : $"{info.Name} | {context}";
+                    ? $"{info.Name} | {source}"
+                    : $"{info.Name} | {context} | {source}";
 
                 if (!info.IsKnown)
                     message += $" | UnregisteredCode={info.RequestedCode}";
