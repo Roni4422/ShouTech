@@ -536,7 +536,7 @@ public sealed class SalesReturnWin : BaseWin
         var doc = new InvDoc
         {
             Kind = InvDocKind.SalesReturn,
-            DocNo = _pendingDoc?.DocNo ?? InvRepo.NextDocNo(InvDocKind.SalesReturn),
+            DocNo = _pendingDoc?.DocNo ?? string.Empty,
             DocId = _pendingDoc?.DocId ?? 0,
             DocDate = DateTime.Today,
             ReturnReasonCode = reason.Code,
