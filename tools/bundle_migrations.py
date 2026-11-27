@@ -8,6 +8,9 @@ import hashlib
 import re
 import sys
 import tempfile
+import io
+import subprocess
+import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -210,11 +213,32 @@ def verify_provider(provider: str) -> tuple[int, dict[str, int]]:
     return len(migrations), counts
 
 
-def apply_bundles() -> None:
+def apply_bundles(source_ref: str | None = None) -> None:
     generated: dict[str, dict[str, bytes]] = {}
-    for provider in PROVIDERS:
-        directory = migration_directory(provider)
-        sources = sorted(directory.glob("*.sql"), key=lambda path: path.name.casefold())
+    with tempfile.TemporaryDirectory() as temporary:
+        source_root = ROOT / "dba" / "mig"
+        if source_ref:
+            archive = subprocess.run(
+                ["git", "archive", "--format=tar", source_ref, "dba/mig/sqlite", "dba/mig/postgresql"],
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
+            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as tar:
+                for member in tar.getmembers():
+                    relative = Path(member.name)
+                    if not member.isfile() or relative.is_absolute() or ".." in relative.parts:
+                        continue
+                    destination = Path(temporary) / relative
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    extracted = tar.extractfile(member)
+                    if extracted is None:
+                        raise ValueError(f"Could not read archived migration: {member.name}")
+                    destination.write_bytes(extracted.read())
+            source_root = Path(temporary) / "dba" / "mig"
+
+        for provider in PROVIDERS:
+            directory = source_root / provider
+            sources = sorted(directory.glob("*.sql"), key=lambda path: path.name.casefold())
         if not sources:
             raise ValueError(f"No source migrations found for {provider}")
         if any(MARKER.search(path.read_bytes()) for path in sources):
@@ -238,13 +262,13 @@ def apply_bundles() -> None:
         if len(ids) != len(set(ids)):
             raise ValueError(f"Duplicate IDs generated for {provider}")
 
-    # Both providers are fully generated and verified before replacing any source files.
-    for provider in PROVIDERS:
-        directory = migration_directory(provider)
-        for path in directory.glob("*.sql"):
-            path.unlink()
-        for filename, content in generated[provider].items():
-            (directory / filename).write_bytes(content)
+        # Both providers are fully generated and verified before replacing any active files.
+        for provider in PROVIDERS:
+            directory = migration_directory(provider)
+            for path in directory.glob("*.sql"):
+                path.unlink()
+            for filename, content in generated[provider].items():
+                (directory / filename).write_bytes(content)
 
 
 def append_migration(provider: str, bundle: str, migration_id: str, source: Path) -> None:
@@ -283,11 +307,12 @@ def main() -> int:
     parser.add_argument("--bundle", choices=BUNDLES)
     parser.add_argument("--id", dest="migration_id")
     parser.add_argument("--source", type=Path)
+    parser.add_argument("--source-ref", help="Read original migrations from a Git ref before bundling")
     args = parser.parse_args()
 
     try:
         if args.command == "apply":
-            apply_bundles()
+            apply_bundles(args.source_ref)
             for provider in PROVIDERS:
                 total, counts = verify_provider(provider)
                 print(f"{provider}: {total} migrations in {len(counts)} bundles: {counts}")
