@@ -102,12 +102,12 @@ Check("A5 start floor applies on first allocation", floored == 100, floored.ToSt
 Exec($"INSERT INTO number_series_config (company_id, series_key, prefix, padding, yearly_segment, start_value, updated_by, updated_at) VALUES ('{CompanyCode}', 'SAL', 'INV', 5, 1, 100, '{Actor}', '2026-11-24');");
 var configured1 = InvRepo.NextDocNo(InvDocKind.SalesInvoice);
 var configured2 = InvRepo.NextDocNo(InvDocKind.SalesInvoice);
-Check("B1 config prefix/padding/start drive the document number",
-    configured1 == $"INV-{year}-00100" && configured2 == $"INV-{year}-00101",
+Check("B1 config prefix/start drive unpadded document numbering",
+    configured1 == "INV-100" && configured2 == "INV-101",
     $"{configured1} / {configured2}");
 var unconfigured = InvRepo.NextDocNo(InvDocKind.PurchaseInvoice);
-Check("B2 unconfigured series keep the defaults",
-    unconfigured == $"PUR-{year}-0001", unconfigured);
+Check("B2 unconfigured series start at one without padding",
+    unconfigured == "PUR-1", unconfigured);
 
 // ------------------------------------------ C: bin interaction (purge)
 var stockIn = new InvDoc
@@ -143,10 +143,10 @@ var chainRepo = new OrderDocumentRepository("SQLite", cs);
 var so1 = await chainRepo.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
 var so2 = await chainRepo.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesOrder);
 Check("E1 chain documents use the unified format, sequentially",
-    so1 == $"SO-{year}-0001" && so2 == $"SO-{year}-0002", $"{so1} / {so2}");
+    so1 == "SO-1" && so2 == "SO-2", $"{so1} / {so2}");
 var chainSal = await chainRepo.NextDocNoAsync(CommercialDocSide.Sales, companyId, CommercialDocKinds.SalesInvoice);
 Check("E2 chain SAL shares InvRepo's counter AND its config (INV-00102 after B)",
-    chainSal == $"INV-{year}-00102", chainSal);
+    chainSal == "INV-102", chainSal);
 
 var posRepo = new PosRepository("SQLite", cs);
 var ses1 = await posRepo.OpenSessionAsync(CompanyCode, "T1", "cashier", 1, "SAR", 0m, Actor);
@@ -177,7 +177,7 @@ var jv1 = journalRepo.NextDocumentNumber(CompanyCode, "JV", DateOnly.FromDateTim
 var jv2 = journalRepo.NextDocumentNumber(CompanyCode, "JV", DateOnly.FromDateTime(DateTime.Today));
 var rcv1 = journalRepo.NextDocumentNumber(CompanyCode, "RCV", DateOnly.FromDateTime(DateTime.Today));
 Check("I1 journal/voucher numbers are sequential per series (no timestamps)",
-    jv1 == $"JV-{year}-0001" && jv2 == $"JV-{year}-0002" && rcv1 == $"RCV-{year}-0001",
+    jv1 == "JV-1" && jv2 == "JV-2" && rcv1 == "RCV-1",
     $"{jv1} / {jv2} / {rcv1}");
 
 var masterRepo = new MasterCardRepository("SQLite", cs);
@@ -185,14 +185,14 @@ var cus1 = await masterRepo.NextPartyCodeAsync(CompanyCode, "C");
 var cus2 = await masterRepo.NextPartyCodeAsync(CompanyCode, "C");
 var sup1 = await masterRepo.NextPartyCodeAsync(CompanyCode, "S");
 Check("J1 party codes allocate per kind, seeded above existing CUS-1",
-    cus1 == "CUS-0002" && cus2 == "CUS-0003" && sup1 == "SUP-0001",
+    cus1 == "CUS-2" && cus2 == "CUS-3" && sup1 == "SUP-1",
     $"{cus1} / {cus2} / {sup1}");
 
 var hrRepo = new HrRepository("SQLite", cs);
 var emp1 = await hrRepo.NextEmployeeCodeAsync(CompanyCode);
 var emp2 = await hrRepo.NextEmployeeCodeAsync(CompanyCode);
 Check("K1 employee codes allocate sequentially",
-    emp1 == "EMP-0001" && emp2 == "EMP-0002", $"{emp1} / {emp2}");
+    emp1 == "EMP-1" && emp2 == "EMP-2", $"{emp1} / {emp2}");
 
 var seriesRows = SeqSvc.LoadSeries();
 Check("L1 SeqSvc lists the series catalog with counters",
@@ -201,8 +201,8 @@ Check("L1 SeqSvc lists the series catalog with counters",
 var jvRow = seriesRows.First(r => r.Key == "JV");
 SeqSvc.SaveSeries(new[] { jvRow with { Prefix = "JX", Padding = 3, StartValue = 50 } }, Actor);
 var jx = journalRepo.NextDocumentNumber(CompanyCode, "JV", DateOnly.FromDateTime(DateTime.Today));
-Check("L2 saved OptWin config drives the next allocation (prefix/padding/start)",
-    jx == $"JX-{year}-050", jx);
+Check("L2 saved OptWin config drives the next unpadded allocation (prefix/start)",
+    jx == "JX-50", jx);
 
 // ------------------------------------------ P4: POS terminal bindings
 var termId = PosTermRepo.Save(new PosTermRepo.PosTermRec(
