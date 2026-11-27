@@ -9,6 +9,8 @@ standard in `docs/ERROR_CATALOG.md` §6.
 
 ## How the audit works
 
+> **Audit snapshot warning:** the before/after counts below are the recorded output of the original error-catalog sweep, not a fresh scan of this branch head. Follow-up fixes are listed at the end of this document; do not treat the historical totals as current measured totals.
+
 Mechanical scan of every `.cs` file: each `catch` block is extracted
 (brace-matched) and classified as **reporting** when its body calls the
 central reporting path (`AppHost.Errors.Report(...)`, any
@@ -153,7 +155,7 @@ kind). Counts before: 33 REPORTS-CENTRALLY, 29 SILENT-CATCH,
 | Views/CshWin.cs | REPORTS-CENTRALLY | 0 | 0 | 0 | ALL REPORT |
 | Views/CstCard.cs | REPORTS-CENTRALLY | 0 | 0 | 0 | ALL REPORT |
 | Views/CurCard.cs | REPORTS-CENTRALLY | 0 | 0 | 0 | ALL REPORT |
-| Views/DatWin.xaml.cs | REPORTS-CENTRALLY | 11 | 7 | 11 | 1/11 report |
+| Views/DatWin.xaml.cs | REPORTS-CENTRALLY | 11 | 7 | 11 | Updated: all operational catches report centrally; logger guards remain terminal fallbacks |
 | Views/InvoiceWin.cs | SILENT-CATCH | 17 | 8 | 17 | ALL REPORT |
 | Views/JrnWin.cs | REPORTS-CENTRALLY | 4 | 0 | 4 | ALL REPORT |
 | Views/Lang.xaml.cs | SILENT-CATCH | 8 | 6 | 8 | ALL REPORT |
@@ -273,14 +275,26 @@ separate, test-updating change. The one conversion made is
 `JournalEntry.EnsureBalanced` → ACC-5001/5002/5003, with its two test
 assertions updated to match.
 
-## 5. DatWin — owned by the parallel fixes branch
+## 5. DatWin — follow-up completed on reduce-2-upgrade
 
-`Views/DatWin.xaml.cs` has 10 non-reporting catches (7 silent). DatWin's
-behavior is owned by `fix/rtl-and-datwin`; this branch does not edit it.
-They are listed here so the gap is explicit, and the DATA-4001
-export-permission code is catalogued as **reserved** in
-`docs/ERROR_CATALOG.md` for that branch to wire. On merge, DatWin's
-catches get the same one-line `Report` treatment.
+The previous audit snapshot recorded DatWin as an outstanding parallel
+branch gap. That gap has now been addressed on this branch:
+
+- Export option loading reports DATA-4002 with its call-site metadata.
+- Import preview reports DATA-4003 with its call-site metadata.
+- Security-audit forwarding failures report SYS-0005.
+- Main import/export execution failures report DATA-4002 or DATA-4003
+  according to the active exchange mode.
+- User and database context resolution failures report SYS-0005 / DB-1001.
+- Cancellation remains a warning, not an error.
+- The small catches inside DatWin's own logging helper methods remain
+  terminal logger guards: they write to Debug because a failed logging
+  sink cannot safely report through itself.
+
+This removes DatWin from the list of outstanding user-operation catch gaps.
+The current branch has not yet had a fresh repository-wide mechanical
+coverage scan, so the historical totals above are intentionally retained
+as historical evidence only, not represented as a current pass result.
 
 ## 6. Silent catches that were hiding user-visible failures
 
