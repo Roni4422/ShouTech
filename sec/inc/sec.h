@@ -121,13 +121,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 #if defined(ST_SEC_BUILDING_DLL)
-    #define ST_API extern "C" __declspec(dllexport)
+    #define ST_API __declspec(dllexport)
     #define ST_CXX_API __declspec(dllexport)
 #elif defined(ST_SEC_STATIC_LIB)
-    #define ST_API extern "C"
+    #define ST_API
     #define ST_CXX_API
 #else
-    #define ST_API extern "C" __declspec(dllimport)
+    #define ST_API __declspec(dllimport)
     #define ST_CXX_API __declspec(dllimport)
 #endif
 
@@ -606,6 +606,10 @@ using ST_DONGLE_INFO = shoutech::security::dongle_info;
 using ST_CRYPTO_PARAMS = shoutech::security::crypto_params;
 using ST_FILE_HEADER = shoutech::security::file_header;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // ───────────────────────────────────────────────────────────────────────────
 // Initialization & Lifecycle
 // Thread safety: Must be called from single thread
@@ -821,6 +825,10 @@ ST_API void ST_CALL ST_SecureZeroMemory(
     void* buffer,
     std::size_t size
 );
+
+#ifdef __cplusplus
+}
+#endif
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SECTION 6: COMPILER SECURITY DIRECTIVES
