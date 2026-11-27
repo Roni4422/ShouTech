@@ -606,6 +606,16 @@ private readonly ILogServ _logger;
 
             Debug.WriteLine($"LOG DIRECTORY = {_logDir}");
 
+            try
+            {
+                if (!File.Exists(_errorIndexPath))
+                    File.WriteAllText(_errorIndexPath, "{}" + Environment.NewLine, Utf8NoBom);
+            }
+            catch (Exception indexInitException)
+            {
+                Debug.WriteLine($"Error index initialization failed: {indexInitException.GetType().Name}: {indexInitException.Message}");
+            }
+
             WriteHeader();
         }
 
