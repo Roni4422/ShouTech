@@ -980,6 +980,8 @@ namespace Kern.Tests
 
             public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, CancellationToken cancellationToken = default) =>
                 Task.FromResult<JournalEntrySnapshot?>(null);
+            public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, DateOnly? entryDate, CancellationToken cancellationToken = default) =>
+                Task.FromResult<JournalEntrySnapshot?>(null);
             public Task<string?> FindAdjacentDocumentNumberAsync(Guid companyId, string currentDocumentNumber, string seriesPrefix, int offset, CancellationToken cancellationToken = default)
                 => Task.FromResult<string?>(null);
 
