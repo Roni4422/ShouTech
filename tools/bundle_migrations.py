@@ -16,7 +16,8 @@ PROVIDERS = ("sqlite", "postgresql")
 BUNDLES = ("sys", "card", "inv", "acc", "vch", "pur", "sal_crm", "mfg", "hr", "pos_tax")
 MARKER = re.compile(
     rb"^-- @shoutech-migration (?P<id>[A-Za-z0-9_.-]+) "
-    rb"(?P<legacy>[0-9A-Fa-f]{64}) (?P<content>[0-9A-Fa-f]{64})[ \t]*\r?$",
+    rb"(?P<windows>[0-9A-Fa-f]{64}) (?P<linux>[0-9A-Fa-f]{64}) "
+    rb"(?P<raw>[0-9A-Fa-f]{64}) (?P<content>[0-9A-Fa-f]{64})[ \t]*\r?$",
     re.MULTILINE,
 )
 
@@ -118,12 +119,27 @@ def source_body(raw: bytes) -> bytes:
     return body if body.endswith(b"\n") else body + b"\n"
 
 
+def normalize_lf(value: bytes) -> bytes:
+    return value.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def legacy_hashes(raw: bytes) -> tuple[str, str, str]:
+    has_bom = raw.startswith(b"\xef\xbb\xbf")
+    text = raw.decode("utf-8-sig")
+    lf = normalize_lf(text.encode("utf-8"))
+    prefix = b"\xef\xbb\xbf" if has_bom else b""
+    linux_hash = hashlib.sha256(prefix + lf).hexdigest().upper()
+    windows_hash = hashlib.sha256(prefix + lf.replace(b"\n", b"\r\n")).hexdigest().upper()
+    raw_hash = hashlib.sha256(raw).hexdigest().upper()
+    return windows_hash, linux_hash, raw_hash
+
+
 def segment_bytes(raw: bytes, migration_id: str) -> bytes:
     body = source_body(raw)
-    legacy_hash = hashlib.sha256(raw).hexdigest().upper()
-    content_hash = hashlib.sha256(body).hexdigest().upper()
+    windows_hash, linux_hash, raw_hash = legacy_hashes(raw)
+    content_hash = hashlib.sha256(normalize_lf(body)).hexdigest().upper()
     marker = (
-        f"-- @shoutech-migration {migration_id} {legacy_hash} {content_hash}\n"
+        f"-- @shoutech-migration {migration_id} {windows_hash} {linux_hash} {raw_hash} {content_hash}\n"
     ).encode("ascii")
     return marker + body
 
@@ -145,13 +161,15 @@ def parse_bundle(path: Path, content: bytes) -> list[tuple[str, str]]:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
         segment = content[start:end]
         expected = match.group("content").decode("ascii").upper()
-        actual = hashlib.sha256(segment).hexdigest().upper()
+        actual = hashlib.sha256(normalize_lf(segment)).hexdigest().upper()
         if actual != expected:
             migration_id = match.group("id").decode("ascii")
             raise ValueError(f"Segment checksum mismatch: {migration_id} in {path}")
         migrations.append((
             match.group("id").decode("ascii"),
-            match.group("legacy").decode("ascii").upper(),
+            match.group("windows").decode("ascii").upper(),
+            match.group("linux").decode("ascii").upper(),
+            match.group("raw").decode("ascii").upper(),
         ))
     return migrations
 
@@ -172,7 +190,7 @@ def verify_provider(provider: str) -> tuple[int, dict[str, int]]:
             rows = parse_bundle(path, path.read_bytes())
             counts[path.stem] = len(rows)
             migrations.extend(rows)
-        ids = [migration_id.casefold() for migration_id, _ in migrations]
+        ids = [migration[0].casefold() for migration in migrations]
         if len(ids) != len(set(ids)):
             raise ValueError(f"Duplicate migration IDs in {provider} bundles")
         return len(migrations), counts
@@ -216,7 +234,7 @@ def apply_bundles() -> None:
         all_ids = []
         for name, content in generated[provider].items():
             all_ids.extend(parse_bundle(directory / name, content))
-        ids = [migration_id.casefold() for migration_id, _ in all_ids]
+        ids = [migration[0].casefold() for migration in all_ids]
         if len(ids) != len(set(ids)):
             raise ValueError(f"Duplicate IDs generated for {provider}")
 

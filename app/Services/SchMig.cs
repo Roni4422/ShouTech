@@ -149,7 +149,7 @@ public static class SchemaMigrator
 
                 if (applied.TryGetValue(migration.Id, out var existingHash))
                 {
-                    if (!string.Equals(existingHash, migration.Hash, StringComparison.OrdinalIgnoreCase))
+                    if (!migration.MatchesHash(existingHash))
                     {
                         return new MigrationResult
                         {

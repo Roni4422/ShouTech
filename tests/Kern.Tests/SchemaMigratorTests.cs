@@ -100,21 +100,25 @@ public sealed class SchemaMigratorTests
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "sys.sql");
         const string sql = "CREATE TABLE bundle_probe (id INTEGER PRIMARY KEY);\n";
-        const string legacyHash = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        const string windowsHash = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        const string linuxHash = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+        const string rawHash = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
         var segmentHash = MigrationBundleReader.ComputeHash(sql);
 
         try
         {
             File.WriteAllText(path,
-                $"-- @shoutech-migration 001_probe.sql {legacyHash} {segmentHash}\n{sql}");
+                $"-- @shoutech-migration 001_probe.sql {windowsHash} {linuxHash} {rawHash} {segmentHash}\n{sql}");
 
             var migration = Assert.Single(MigrationBundleReader.Load(directory));
             Assert.Equal("001_probe.sql", migration.Id);
-            Assert.Equal(legacyHash, migration.Hash);
+            Assert.Equal(windowsHash, migration.Hash);
+            Assert.True(migration.MatchesHash(linuxHash));
+            Assert.True(migration.MatchesHash(rawHash));
             Assert.Equal(sql, migration.Sql);
 
             File.WriteAllText(path,
-                $"-- @shoutech-migration 001_probe.sql {legacyHash} {segmentHash}\n{sql}-- tampered");
+                $"-- @shoutech-migration 001_probe.sql {windowsHash} {linuxHash} {rawHash} {segmentHash}\n{sql}-- tampered");
             Assert.Throws<InvalidDataException>(() => MigrationBundleReader.Load(directory));
         }
         finally

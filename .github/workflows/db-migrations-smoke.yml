@@ -43,10 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Verify migration classification and bundle checksums
+        if: github.event_name != 'push' || github.ref_name != 'reduce-2-upgrade' || !contains(github.event.head_commit.message, '[bundle-migrations]')
         run: python3 tools/bundle_migrations.py verify
       - name: Generate compact migration bundles for this consolidation
         if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
-        run: python3 tools/bundle_migrations.py apply
+        run: |
+          git fetch origin reduce
+          git checkout origin/reduce -- dba/mig/sqlite dba/mig/postgresql
+          python3 tools/bundle_migrations.py apply
       - name: Regenerate file index for migration bundles
         if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
         run: python3 tools/gen_index.py
@@ -104,7 +108,7 @@ jobs:
           import sqlite3, os, re
           from pathlib import Path
           path = os.path.join(os.environ["RUNNER_TEMP"], "shoutech-existing-history.db")
-          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/sqlite/sys.sql").read_bytes())
+          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\.sql ([0-9A-Fa-f]{64}) ([0-9A-Fa-f]{64}) ([0-9A-Fa-f]{64}) ", Path("dba/mig/sqlite/sys.sql").read_bytes())
           if not match:
               raise SystemExit("SQLite history migration marker was not found")
           con = sqlite3.connect(path)
@@ -113,7 +117,7 @@ jobs:
               checksum TEXT NOT NULL,
               applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
           )""")
-          con.execute("INSERT INTO schema_migrations (migration_id, checksum) VALUES (?, ?)", ("000_history.sql", match.group(1).decode("ascii")))
+          con.execute("INSERT INTO schema_migrations (migration_id, checksum) VALUES (?, ?)", ("000_history.sql", match.group(2).decode("ascii")))
           con.commit()
           con.close()
           PY
@@ -203,7 +207,7 @@ jobs:
           history_hash=$(python3 - <<'PY'
           import re
           from pathlib import Path
-          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/postgresql/sys.sql").read_bytes())
+          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\.sql ([0-9A-Fa-f]{64}) ([0-9A-Fa-f]{64}) ([0-9A-Fa-f]{64}) ", Path("dba/mig/postgresql/sys.sql").read_bytes())
           if not match:
               raise SystemExit("PostgreSQL history migration marker was not found")
           print(match.group(1).decode("ascii"))
@@ -229,6 +233,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build and verify compact migration bundles
         run: |
+          git fetch origin reduce
+          git checkout origin/reduce -- dba/mig/sqlite dba/mig/postgresql
           python3 tools/bundle_migrations.py apply
           python3 tools/bundle_migrations.py verify
           python3 tools/gen_index.py

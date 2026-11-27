@@ -101,7 +101,7 @@ internal static class Program
             {
                 if (applied.TryGetValue(migration.Id, out var existingHash))
                 {
-                    if (!string.Equals(existingHash, migration.Hash, StringComparison.OrdinalIgnoreCase))
+                    if (!migration.MatchesHash(existingHash))
                     {
                         Console.Error.WriteLine($"Migration checksum mismatch: {migration.Id}. Applied migrations must be immutable; add a new migration instead.");
                         return 3;
