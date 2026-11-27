@@ -217,7 +217,7 @@ public sealed class PurchaseReturnWin : BaseWin
             var returnDoc = new InvDoc
             {
                 Kind = InvDocKind.PurchaseReturn,
-                DocNo = InvRepo.NextDocNo(InvDocKind.PurchaseReturn),
+                DocNo = string.Empty,
                 DocDate = DateTime.Today,
                 PartyId = _original.PartyId,
                 PartyCode = _original.PartyCode,
