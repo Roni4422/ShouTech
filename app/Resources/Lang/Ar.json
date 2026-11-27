@@ -3439,7 +3439,9 @@
     "CheckFailed": "فشل — {0}: {1}",
     "ChecksRunning": "جارٍ تنفيذ فحوصات قاعدة البيانات...",
     "ChecksCompleted": "اكتملت فحوصات الصيانة.",
-    "ChecksCompletedWithErrors": "اكتملت الفحوصات مع وجود {0} مشكلة."
+    "ChecksCompletedWithErrors": "اكتملت الفحوصات مع وجود {0} مشكلة.",
+    "BackupVerifyFailed": "فشل التحقق من سلامة ملف النسخة الاحتياطية. لم يتم بدء فحوصات الصيانة.",
+    "BackupVerified": "تم إنشاء النسخة الاحتياطية والتحقق من سلامتها."
   },
   "Rollover": {
     "Title": "ترحيل السنة المالية",
