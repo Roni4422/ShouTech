@@ -852,6 +852,10 @@ public abstract class BaseWin : Window
 
     private void OnBaseClosed(object? sender, EventArgs e)
     {
+        // Child forms must return activation to the shell instead of leaving
+        // the entire ERP window group behind unrelated desktop applications.
+        WindowActivator.RestoreOwnerAfterClose(this);
+
         if (LocSvc != null && _langHandler != null)
             LocSvc.LanguageChanged -= _langHandler;
         _langHandler = null;
