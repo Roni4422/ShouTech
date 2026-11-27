@@ -273,10 +273,11 @@ namespace ShouTech.App.Services
                     ? $"{info.Name} | {source}"
                     : $"{info.Name} | {context} | {source}";
 
-                if (!info.IsKnown)
-                    message += $" | UnregisteredCode={info.RequestedCode}";
-
-                AppHost.Logging?.LogError("Errors", info.Code, message, exception);
+                // Pass the original unknown key to LogServ. It will
+                // look it up in the persistent error index and register it
+                // only when no matching fingerprint already exists.
+                var reportCode = info.IsKnown ? info.Code : info.RequestedCode;
+                AppHost.Logging?.LogError("Errors", reportCode, message, exception);
             }
             catch
             {
