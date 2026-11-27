@@ -1295,26 +1295,14 @@ void stopRuntimeGuard() noexcept {
  */
 status validateLicense(const uint8_t* licenseData, uint32_t licenseDataLen,
                        const char* hwid) noexcept {
-    if (!licenseData || licenseDataLen == 0 || !hwid) {
+    if (!licenseData || licenseDataLen == 0 || !hwid || hwid[0] == '\\0') {
         return status::invalid_parameter;
     }
-    
-    // Stub: Replace with actual license decryption + validation
-    // Real implementation would:
-    // 1. Decrypt license blob using embedded public key
-    // 2. Verify signature
-    // 3. Extract edition, expiration, limits
-    // 4. Verify HWID match
-    
-    g_state.editionType = edition::professional;
-    strcpy_s(g_state.editionName, "Professional");
-    g_state.maxDevices = 10;
-    g_state.maxCompanies = 5;
-    g_state.maxUsers = 100;
-    g_state.daysRemaining = 365;
-    strcpy_s(g_state.expiresAt, "2025-12-31");
-    
-    return status::ok;
+
+    // No production license format and trusted signing key are configured yet.
+    // Reject every non-empty payload until signature, HWID, expiry and limits
+    // are validated by the completed license provider.
+    return status::license_invalid;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1347,47 +1335,50 @@ ST_API status ST_CALL ST_Initialize(const init_params* params) {
 /**
  * @brief Simple initialization (license-only).
  */
-ST_API status ST_CALL ST_InitializeSimple(const uint8_t* licenseData, 
+ST_API status ST_CALL ST_InitializeSimple(const uint8_t* licenseData,
                                           uint32_t licenseDataLen) {
     std::unique_lock lock(g_state.stateMutex);
-    
+
     if (g_state.initialized.load()) return status::already_initialized;
-    
-    // Perform comprehensive security checks
+
+    // This function owns stateMutex; update status directly to avoid
+    // recursively acquiring the non-recursive shared mutex.
+    const auto recordFailure = [](status code, const char* message) {
+        g_state.lastErrorDetail = message;
+        g_state.lastStatus.store(code, std::memory_order_release);
+        g_state.lastValidationTime = std::chrono::system_clock::now();
+        return code;
+    };
+
     if (!performSecurityChecks()) {
-        setLastErrorDetail(status::runtime_violation, "Security check failed");
-        return status::runtime_violation;
+        return recordFailure(status::runtime_violation, "Security check failed");
     }
-    
-    // Generate HWID
+
     status st = generateHWID(g_state.hwid, sizeof(g_state.hwid));
     if (st != status::ok) {
-        setLastErrorDetail(st, "HWID generation failed");
-        return st;
+        return recordFailure(st, "HWID generation failed");
     }
-    
-    // Validate license
-    if (licenseData && licenseDataLen > 0) {
-        st = validateLicense(licenseData, licenseDataLen, g_state.hwid);
-        if (st != status::ok) {
-            setLastErrorDetail(st, "License validation failed");
-            return st;
-        }
-        g_state.sessionValid.store(true);
-    } else {
-        setLastErrorDetail(status::license_not_found, "No license provided");
-        return status::license_not_found;
+
+    if (!licenseData || licenseDataLen == 0) {
+        return recordFailure(status::license_not_found, "No license provided");
     }
-    
-    // Start runtime monitoring
+
+    st = validateLicense(licenseData, licenseDataLen, g_state.hwid);
+    if (st != status::ok) {
+        return recordFailure(st, "License validation is not implemented; payload rejected");
+    }
+
+    g_state.sessionValid.store(true);
+
     startRuntimeGuard();
-    
+
     g_state.initialized.store(true);
-    setLastErrorDetail(status::ok, "");
-    
+    g_state.lastErrorDetail.clear();
+    g_state.lastStatus.store(status::ok, std::memory_order_release);
+    g_state.lastValidationTime = std::chrono::system_clock::now();
+
     return status::ok;
 }
-
 /**
  * @brief Shuts down the security engine and releases all resources.
  * 
