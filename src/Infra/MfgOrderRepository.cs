@@ -123,8 +123,11 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             if (existingStatus is not null && existingStatus != MfgOrderStatuses.Draft)
                 throw new InvalidOperationException($"Manufacturing order in status '{existingStatus}' cannot be edited; cancel and re-create it.");
 
-            if (order.DocNo <= 0)
+            if (existingStatus is null)
             {
+                // The number shown by the form is only a preview. Allocate
+                // the definitive value inside this save transaction so two
+                // users opening New simultaneously cannot collide.
                 await using var next = CreateCommand(connection, transaction,
                     "SELECT COALESCE(MAX(doc_no), 0) + 1 FROM mfg_orders WHERE company_id = @company");
                 Add(next, "@company", companyId.Trim());
