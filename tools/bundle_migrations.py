@@ -239,28 +239,28 @@ def apply_bundles(source_ref: str | None = None) -> None:
         for provider in PROVIDERS:
             directory = source_root / provider
             sources = sorted(directory.glob("*.sql"), key=lambda path: path.name.casefold())
-        if not sources:
-            raise ValueError(f"No source migrations found for {provider}")
-        if any(MARKER.search(path.read_bytes()) for path in sources):
-            raise ValueError(f"{provider} already contains bundled migrations; refusing to rebuild")
+            if not sources:
+                raise ValueError(f"No source migrations found for {provider}")
+            if any(MARKER.search(path.read_bytes()) for path in sources):
+                raise ValueError(f"{provider} already contains bundled migrations; refusing to rebuild")
 
-        grouped: dict[str, list[Path]] = {name: [] for name in BUNDLES}
-        for path in sources:
-            grouped[classify(path.name)].append(path)
+            grouped: dict[str, list[Path]] = {name: [] for name in BUNDLES}
+            for path in sources:
+                grouped[classify(path.name)].append(path)
 
-        generated[provider] = {}
-        for bundle in BUNDLES:
-            content = b"".join(segment_bytes(path.read_bytes(), path.name) for path in grouped[bundle])
-            if not content:
-                raise ValueError(f"Empty migration bundle: {provider}/{bundle}.sql")
-            generated[provider][f"{bundle}.sql"] = content
+            generated[provider] = {}
+            for bundle in BUNDLES:
+                content = b"".join(segment_bytes(path.read_bytes(), path.name) for path in grouped[bundle])
+                if not content:
+                    raise ValueError(f"Empty migration bundle: {provider}/{bundle}.sql")
+                generated[provider][f"{bundle}.sql"] = content
 
-        all_ids = []
-        for name, content in generated[provider].items():
-            all_ids.extend(parse_bundle(directory / name, content))
-        ids = [migration[0].casefold() for migration in all_ids]
-        if len(ids) != len(set(ids)):
-            raise ValueError(f"Duplicate IDs generated for {provider}")
+            all_ids = []
+            for name, content in generated[provider].items():
+                all_ids.extend(parse_bundle(directory / name, content))
+            ids = [migration[0].casefold() for migration in all_ids]
+            if len(ids) != len(set(ids)):
+                raise ValueError(f"Duplicate IDs generated for {provider}")
 
         # Both providers are fully generated and verified before replacing any active files.
         for provider in PROVIDERS:
