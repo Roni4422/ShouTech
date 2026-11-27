@@ -261,10 +261,14 @@ namespace ShouTech.App.Services
                 var fileName = string.IsNullOrWhiteSpace(normalizedPath)
                     ? "Unknown"
                     : Path.GetFileName(normalizedPath);
+                var appRootIndex = normalizedPath.LastIndexOf("/app/", StringComparison.OrdinalIgnoreCase);
+                var sourcePath = appRootIndex >= 0
+                    ? normalizedPath[(appRootIndex + 1)..]
+                    : fileName;
                 var windowName = normalizedPath.Contains("/Views/", StringComparison.OrdinalIgnoreCase)
                     ? Path.GetFileNameWithoutExtension(fileName)
                     : "Non-Window";
-                var source = $"Window={windowName} | SourceFile={fileName} | Method={sourceMember} | Line={sourceLine}";
+                var source = $"Window={windowName} | SourceFile={sourcePath} | Method={sourceMember} | Line={sourceLine}";
                 var message = string.IsNullOrWhiteSpace(context)
                     ? $"{info.Name} | {source}"
                     : $"{info.Name} | {context} | {source}";
