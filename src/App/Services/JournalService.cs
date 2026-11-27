@@ -18,10 +18,17 @@ public sealed class JournalService
         Guid companyId,
         string documentNumber,
         CancellationToken cancellationToken = default)
+        => FindByDocumentNumberAsync(companyId, documentNumber, null, cancellationToken);
+
+    public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(
+        Guid companyId,
+        string documentNumber,
+        DateOnly? entryDate,
+        CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
         if (string.IsNullOrWhiteSpace(documentNumber)) throw new ArgumentException("Document number is required.", nameof(documentNumber));
-        return _repository.FindByDocumentNumberAsync(companyId, documentNumber.Trim(), cancellationToken);
+        return _repository.FindByDocumentNumberAsync(companyId, documentNumber.Trim(), entryDate, cancellationToken);
     }
 
     public async Task<Guid> CreateDraftAsync(
