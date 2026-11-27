@@ -20,7 +20,12 @@
 // LAST AUDIT: 2024-01-15
 // ═══════════════════════════════════════════════════════════════════════════
 
+#define ST_SEC_EXPORTS
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+
 #include "sec.h"
+#include "../internal/keyvault_internal.h"
 #include <Windows.h>
 #include <bcrypt.h>
 #include <wincrypt.h>
@@ -1417,6 +1422,7 @@ ST_API status ST_CALL ST_Shutdown() {
         g_state.stopGuard.store(false, std::memory_order_release);
     }
 
+    shoutech::security::internal::keyvault::clear_all();
     return status::ok;
 }
 
@@ -1848,4 +1854,3 @@ ST_API uint32_t ST_CALL ST_GetValidationCheckCount() {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // END OF FILE
-// ═══════════════════════════════════════════════════════════════════════════
