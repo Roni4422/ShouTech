@@ -918,21 +918,16 @@ public sealed class JournalRepository : IJournalRepository
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Allocates the next number from the one company-wide journal sequence
-    /// shared by manual journals, receipts, payments and system postings
-    /// (NUMBERING_STUDY §3): the counter is keyed by the company CODE and JRN series,
-    /// seeded from the highest existing JRN journal number INCLUDING
-    /// soft-deleted entries, and advanced
-    /// inside its own transaction — the timestamp pre-fills the
-    /// windows used before are gone. Synchronous because the voucher
-    /// windows reset synchronously; both providers support the sync
-    /// ADO surface used here.</summary>
+    /// <summary>
+    /// Allocates the next number from the single company-wide journal
+    /// sequence. The same transactional allocator is used by automatic
+    /// document posting and reversal, so every source shares one counter.
+    /// </summary>
     public string NextDocumentNumber(string companyCode, string seriesKey, DateOnly entryDate)
     {
-        if (string.IsNullOrWhiteSpace(companyCode)) throw new ArgumentException("Company code is required.", nameof(companyCode));
-        // All journal sources share one sequence. The caller’s legacy series
-        // label (JV/RCV/PAY) is intentionally not a separate counter.
-        const string key = "JRN";
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new ArgumentException("Company code is required.", nameof(companyCode));
+
         var isPg = _provider == "PostgreSQL";
         using var connection = CreateConnection();
         connection.Open();
@@ -943,38 +938,17 @@ public sealed class JournalRepository : IJournalRepository
             Add(resolve, "@code", companyCode.Trim());
             companyGuid = Convert.ToString(resolve.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
         }
-        if (string.IsNullOrWhiteSpace(companyGuid))
+        if (string.IsNullOrWhiteSpace(companyGuid) || !Guid.TryParse(companyGuid, out var companyId))
             throw new AppError(ErrorCodes.NumberingAllocationFailed,
-                $"Company '{companyCode.Trim()}' could not be resolved for number allocation.");
+                $"Company '{companyCode.Trim()}' could not be resolved for journal number allocation.");
+
         using var transaction = connection.BeginTransaction();
         try
         {
-            var config = SequenceAllocator.ReadConfig(connection, transaction, isPg, companyCode.Trim(), key,
-                new SequenceAllocator.SeriesConfig("JRN", 8, false, 1));
-            // Journal numbering never resets at year boundaries.
-            const int segment = 0;
-            var documentPrefix = $"{config.Prefix}-";
-            var suffixStart = documentPrefix.Length + 1;
-            var substr = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
-            var predicate = isPg
-                ? $"{substr} ~ '^[0-9]+$'"
-                : $"{substr} GLOB '[0-9]*' AND {substr} NOT GLOB '*[^0-9]*'";
-            long seed;
-            using (var maxCommand = CreateCommand(connection, transaction, $"""
-                SELECT COALESCE(MAX(CAST({substr} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
-                FROM journal_entries
-                WHERE company_id = @company AND document_number LIKE @pattern AND {predicate}
-                """))
-            {
-                Add(maxCommand, "@company", companyGuid);
-                Add(maxCommand, "@pattern", $"{documentPrefix}%");
-                Add(maxCommand, "@start", suffixStart);
-                seed = Convert.ToInt64(maxCommand.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-            }
-            var allocated = SequenceAllocator.Allocate(connection, transaction, isPg, companyCode.Trim(), key,
-                segment, seed, config.StartValue - 1);
+            var number = SequenceAllocator.AllocateJournalNumber(
+                connection, transaction, isPg, companyId);
             transaction.Commit();
-            return SequenceAllocator.Format(config, segment, allocated);
+            return number;
         }
         catch
         {
