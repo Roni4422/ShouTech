@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Globalization;
 using ShouTech.Domain;
 using ShouTech.Domain.Entities;
+using ShouTech.Infra;
 
 namespace ShouTech.Infrastructure;
 
@@ -175,15 +176,8 @@ public static class GlPosting
         }
 
         var entryId = Guid.NewGuid();
-        var documentNumber = "JV-" + request.SourceDocNo.Trim();
-        using (var exists = CreateCommand(connection, transaction,
-            "SELECT COUNT(*) FROM journal_entries WHERE company_id = @company AND document_number = @doc"))
-        {
-            Add(exists, "@company", FormatGuid(prov, request.CompanyId));
-            Add(exists, "@doc", documentNumber);
-            if (Convert.ToInt64(exists.ExecuteScalar(), CultureInfo.InvariantCulture) > 0)
-                documentNumber = documentNumber + "-" + entryId.ToString("N")[..8];
-        }
+        var documentNumber = SequenceAllocator.AllocateJournalNumber(
+            connection, transaction, prov == "PostgreSQL", FormatGuid(prov, request.CompanyId), request.EntryDate);
 
         object entryDateValue = prov == "PostgreSQL"
             ? request.EntryDate
@@ -410,7 +404,8 @@ public static class GlPosting
             Add(insert, "@reference", (object?)referenceNumber ?? DBNull.Value);
             Add(insert, "@currency", currencyCode);
             Add(insert, "@rate", exchangeRate);
-            Add(insert, "@documentNumber", $"REV-{reversalId.ToString("N")[..12]}");
+            Add(insert, "@documentNumber", SequenceAllocator.AllocateJournalNumber(
+                connection, transaction, prov == "PostgreSQL", companyIdText, entryDate));
             Add(insert, "@sourceType", (object?)sourceType ?? DBNull.Value);
             Add(insert, "@sourceId", (object?)sourceId ?? DBNull.Value);
             Add(insert, "@sourceNo", (object?)sourceNo ?? DBNull.Value);
