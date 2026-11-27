@@ -196,6 +196,10 @@ public class GlPostingTests
         Assert.Equal(doc.DocNo, entry.SourceNo);
         AssertBalanced(entry);
         Assert.Equal(200m, Line(entry, "1201").Debit);
+
+        var second = await PostInvoiceAsync(db, InvDocKind.PurchaseInvoice, qty: 1m, price: 25m, taxRate: 0m);
+        var secondEntry = SingleEntry(db, "PUR", second.DocId);
+        Assert.Equal("JRN-2", secondEntry.DocumentNumber);
         Assert.Equal(200m, Line(entry, "301").Credit);
         // COGS at the material's current cost (avg 40 x 2).
         Assert.Equal(80m, Line(entry, "401").Debit);
