@@ -49,6 +49,10 @@ public interface IJournalRepository
 {
     Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, CancellationToken cancellationToken = default);
     Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(Guid companyId, string documentNumber, DateOnly? entryDate, CancellationToken cancellationToken = default);
+    /// <summary>Finds the first/last or adjacent existing document number in one
+    /// source series. The source voucher number is used even after its GL
+    /// document_number is replaced by the central JRN number.</summary>
+    Task<string?> FindAdjacentDocumentNumberAsync(Guid companyId, string currentDocumentNumber, string seriesPrefix, int offset, CancellationToken cancellationToken = default);
     /// <summary>Saves a draft journal entry in ONE transaction. When
     /// <paramref name="partyLink"/> is supplied (cash vouchers, G23) the
     /// voucher_party_links row is written inside that same transaction,
