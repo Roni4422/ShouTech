@@ -177,7 +177,7 @@ public static class GlPosting
 
         var entryId = Guid.NewGuid();
         var documentNumber = SequenceAllocator.AllocateJournalNumber(
-            connection, transaction, prov == "PostgreSQL", request.CompanyId);
+            connection, transaction, prov == "PostgreSQL", request.CompanyId, periodId);
 
         object entryDateValue = prov == "PostgreSQL"
             ? request.EntryDate
@@ -405,7 +405,7 @@ public static class GlPosting
             Add(insert, "@currency", currencyCode);
             Add(insert, "@rate", exchangeRate);
             Add(insert, "@documentNumber", SequenceAllocator.AllocateJournalNumber(
-                connection, transaction, prov == "PostgreSQL", companyId));
+                connection, transaction, prov == "PostgreSQL", companyId, periodId));
             Add(insert, "@sourceType", (object?)sourceType ?? DBNull.Value);
             Add(insert, "@sourceId", (object?)sourceId ?? DBNull.Value);
             Add(insert, "@sourceNo", (object?)sourceNo ?? DBNull.Value);
