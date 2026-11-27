@@ -407,6 +407,7 @@ namespace ShouTech.App.Views
 
             SelectTreeNode(_current.Id);
             RefreshStatusBar();
+            UpdateNavigationState();
         }
 
         private void PrepareNew()
@@ -431,6 +432,7 @@ namespace ShouTech.App.Views
 
             ClearTreeSelection();
             RefreshStatusBar();
+            UpdateNavigationState();
             try { TxtCode?.Focus(); } catch (Exception exL426) {
                 AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL426, "CatWin.xaml.PrepareNew"); }
         }
@@ -832,6 +834,47 @@ namespace ShouTech.App.Views
                 _isBusy = false;
                 RefreshStatusBar();
             }
+        }
+
+        private void NavFirst_Click(object sender, RoutedEventArgs e) => NavigateRecords(int.MinValue);
+        private void NavPrevTen_Click(object sender, RoutedEventArgs e) => NavigateRecords(-10);
+        private void NavPrev_Click(object sender, RoutedEventArgs e) => NavigateRecords(-1);
+        private void NavNext_Click(object sender, RoutedEventArgs e) => NavigateRecords(1);
+        private void NavNextTen_Click(object sender, RoutedEventArgs e) => NavigateRecords(10);
+        private void NavLast_Click(object sender, RoutedEventArgs e) => NavigateRecords(int.MaxValue);
+
+        private void NavigateRecords(int offset)
+        {
+            if (_isBusy || _items.Count == 0) return;
+            if ((_isNew || _isEditing) &&
+                MessageBox.Show(this, L("DiscardChanges", "Discard unsaved changes and navigate?"),
+                    L("Title", "Category Card"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+
+            var currentIndex = _current is null ? -1 : _items.FindIndex(x => x.Id == _current.Id);
+            var target = offset switch
+            {
+                int.MinValue => 0,
+                int.MaxValue => _items.Count - 1,
+                -10 => Math.Max(0, (currentIndex < 0 ? 0 : currentIndex) - 10),
+                -1 => Math.Max(0, (currentIndex < 0 ? 0 : currentIndex) - 1),
+                1 => Math.Min(_items.Count - 1, (currentIndex < 0 ? -1 : currentIndex) + 1),
+                10 => Math.Min(_items.Count - 1, (currentIndex < 0 ? -1 : currentIndex) + 10),
+                _ => currentIndex < 0 ? 0 : currentIndex
+            };
+            ShowCard(target);
+        }
+
+        private void UpdateNavigationState()
+        {
+            var index = _current is null ? -1 : _items.FindIndex(x => x.Id == _current.Id);
+            var hasCurrent = !_isNew && index >= 0;
+            BtnNavFirst.IsEnabled = hasCurrent && index > 0;
+            BtnNavPrevTen.IsEnabled = hasCurrent && index > 0;
+            BtnNavPrev.IsEnabled = hasCurrent && index > 0;
+            BtnNavNext.IsEnabled = hasCurrent && index < _items.Count - 1;
+            BtnNavNextTen.IsEnabled = hasCurrent && index < _items.Count - 1;
+            BtnNavLast.IsEnabled = hasCurrent && index < _items.Count - 1;
         }
 
         private void New_Click(object sender, RoutedEventArgs e)
