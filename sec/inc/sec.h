@@ -431,7 +431,7 @@ struct version_info {
     char build_time[16]{};
     char compiler[32]{};
     std::uint32_t feature_flags{};
-    std::uint32_t reserved[3]{};
+    std::uint32_t reserved[4]{};
 };
 
 struct init_params {
@@ -516,11 +516,11 @@ struct file_header {
 
 // Compile-time validations
 static_assert(sizeof(version_info) == 128);
-static_assert(sizeof(init_params) == 64);
-static_assert(sizeof(session_info) == 848);
-static_assert(sizeof(dongle_info) == 176);
-static_assert(sizeof(crypto_params) == 48);
-static_assert(sizeof(file_header) == 144);
+static_assert(sizeof(init_params) == 72);
+static_assert(sizeof(session_info) == 768);
+static_assert(sizeof(dongle_info) == 216);
+static_assert(sizeof(crypto_params) == 72);
+static_assert(sizeof(file_header) == 120);
 
 static_assert(sizeof(version_info) % 8 == 0);
 static_assert(sizeof(init_params) % 8 == 0);
