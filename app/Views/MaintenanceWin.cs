@@ -25,6 +25,7 @@ public sealed class MaintenanceWin : BaseWin
     private readonly TextBlock _pendingNote = new();
     private readonly Button _runButton = new();
     private bool _running;
+    private int _failedChecks;
 
     public MaintenanceWin()
     {
@@ -56,8 +57,9 @@ public sealed class MaintenanceWin : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        DockPanel.SetDock(_statusBar, Dock.Bottom);
-        root.Children.Add(F2Ui.StatusBar(_statusBar));
+        var statusBar = F2Ui.StatusBar(_statusBar);
+        DockPanel.SetDock(statusBar, Dock.Bottom);
+        root.Children.Add(statusBar);
 
         F2Ui.StyleButton(_runButton, "Maintenance.RunChecks");
         _runButton.Click += async (_, _) => await ConfirmBackupAndRunAsync();
@@ -117,6 +119,7 @@ public sealed class MaintenanceWin : BaseWin
         if (_running)
             return;
 
+        _results.Items.Clear();
         var decision = MessageBox.Show(this, T("Maintenance.BackupPrompt"),
             T("Maintenance.BackupPromptTitle"), MessageBoxButton.YesNoCancel,
             MessageBoxImage.Warning, MessageBoxResult.Yes);
@@ -158,7 +161,7 @@ public sealed class MaintenanceWin : BaseWin
 
         _running = true;
         _runButton.IsEnabled = false;
-        _results.Items.Clear();
+        _failedChecks = 0;
         _statusBar.Text = T("Maintenance.ChecksRunning");
 
         try
@@ -214,7 +217,9 @@ public sealed class MaintenanceWin : BaseWin
                 return T("Maintenance.TbOk");
             });
 
-            _statusBar.Text = T("Maintenance.ChecksCompleted");
+            _statusBar.Text = _failedChecks == 0
+                ? T("Maintenance.ChecksCompleted")
+                : Tf("Maintenance.ChecksCompletedWithErrors", _failedChecks);
         }
         finally
         {
@@ -232,6 +237,7 @@ public sealed class MaintenanceWin : BaseWin
         }
         catch (Exception ex)
         {
+            _failedChecks++;
             _results.Items.Add(Tf("Maintenance.CheckFailed", T(labelKey), ex.Message));
         }
     }
