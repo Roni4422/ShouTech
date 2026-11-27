@@ -854,8 +854,9 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     /// edges align down the whole group (Phenix rule — labels beside the
     /// field, never above it).
     /// </summary>
-    private void AddLabeledCell(Grid host, int row, string label, FrameworkElement control)
+    private static void AddLabeledCell(Grid host, int row, string label, FrameworkElement control)
     {
+        host.Tag = "SharedFormGrid";
         if (host.ColumnDefinitions.Count == 0)
         {
             host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ShouTech.App.Services.VisuId.FormLabelWidth) });
@@ -868,9 +869,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             TextWrapping = TextWrapping.Wrap,
             // Keep the label-to-field gap on the inner edge in both
             // directions: label is column 0, editor is column 1.
-            Margin = this.FlowDirection == FlowDirection.RightToLeft
-                ? new Thickness(8, 0, 0, 8)
-                : new Thickness(0, 0, 8, 8)
+            Margin = new Thickness(0, 0, 8, 8)
         };
         labelBlock.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
         Grid.SetRow(labelBlock, row);
