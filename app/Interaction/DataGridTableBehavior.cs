@@ -153,7 +153,7 @@ public static class DataGridTableBehavior
         }
     }
 
-    private static void Grid_PreviewTouchDown(object sender, TouchEventArgs e)
+    private static void Grid_PreviewTouchDown(object? sender, TouchEventArgs e)
     {
         if (sender is DataGrid grid)
             ActivateCell(grid, e.OriginalSource as DependencyObject);
