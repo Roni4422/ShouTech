@@ -1114,7 +1114,7 @@ public sealed class JournalRepository : IJournalRepository
 
             long seed = SequenceAllocator.PeekMax(connection, transaction, companyCode, key);
             var pattern = config.Prefix + "-%";
-            if (TableExists(connection, transaction, isPg, "journal_entries"))
+            if (PartyLedger.TableExists(connection, transaction, _provider, "journal_entries"))
             {
                 using var entries = CreateCommand(connection, transaction,
                     "SELECT document_number FROM journal_entries WHERE CAST(company_id AS TEXT) = @company AND document_number LIKE @pattern");
@@ -1129,7 +1129,7 @@ public sealed class JournalRepository : IJournalRepository
                         seed = Math.Max(seed, suffix);
                 }
             }
-            if (key == "RCV" && TableExists(connection, transaction, isPg, "purchase_documents"))
+            if (key == "RCV" && PartyLedger.TableExists(connection, transaction, _provider, "purchase_documents"))
             {
                 using var receipts = CreateCommand(connection, transaction,
                     "SELECT doc_no FROM purchase_documents WHERE CAST(company_id AS TEXT) IN (@company, @code) AND doc_kind = 'RCV' AND doc_no LIKE @pattern");
