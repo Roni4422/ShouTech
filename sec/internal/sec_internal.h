@@ -48,7 +48,7 @@ namespace stbk2 {
     #pragma pack(push, 1)
     struct header
     {
-        std::uint32_t magic{ magic };
+        std::uint32_t magic{ stbk2::magic };
         std::uint16_t format_version{ stbk2::format_version };
         std::uint16_t header_size{ stbk2::header_size };
         std::uint8_t  backup_id[16]{};
