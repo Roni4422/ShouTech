@@ -1,4 +1,4 @@
--- @shoutech-migration 078_purchase_receipt_invoice_matches.sql 777643F6F07587E98D83A1A35B78E432560F027AA530B290B55FA2E3FA71EB5F 777643F6F07587E98D83A1A35B78E432560F027AA530B290B55FA2E3FA71EB5F
+-- @shoutech-migration 078_purchase_receipt_invoice_matches.sql BD8F8F889FEFD73B404A7B6635FBEAA4A4148DC11EA064B46BD571E139F52216 777643F6F07587E98D83A1A35B78E432560F027AA530B290B55FA2E3FA71EB5F 777643F6F07587E98D83A1A35B78E432560F027AA530B290B55FA2E3FA71EB5F 777643F6F07587E98D83A1A35B78E432560F027AA530B290B55FA2E3FA71EB5F
 -- Line-level three-way match between purchase receipts and supplier invoices.
 -- The match quantity is the authoritative quantity consumed from each receipt
 -- line; cost and FX snapshots make GRNI and price variance auditable.
@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS ix_purchase_receipt_matches_invoice
     ON purchase_receipt_invoice_matches(company_id, invoice_doc_id);
 CREATE INDEX IF NOT EXISTS ix_purchase_receipt_matches_order
     ON purchase_receipt_invoice_matches(company_id, purchase_order_id, material_id);
--- @shoutech-migration 080_purchase_return_line_allocations.sql 9F50578277D54B3D5B8E528CC8D54B1B0D78B8832B4519378BE2D32B3594E061 9F50578277D54B3D5B8E528CC8D54B1B0D78B8832B4519378BE2D32B3594E061
+-- @shoutech-migration 080_purchase_return_line_allocations.sql 8906333318EF7327D7B5541AF55B3F561E28C4F8A65DEE10FA7842DB0EED81B7 9F50578277D54B3D5B8E528CC8D54B1B0D78B8832B4519378BE2D32B3594E061 9F50578277D54B3D5B8E528CC8D54B1B0D78B8832B4519378BE2D32B3594E061 9F50578277D54B3D5B8E528CC8D54B1B0D78B8832B4519378BE2D32B3594E061
 -- Purchase return lineage: each posted return line consumes quantity from one original invoice line.
 -- Kept separate from document_links because quantity allocation is line-level and cumulative.
 CREATE TABLE IF NOT EXISTS purchase_return_line_allocations (
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS ix_purchase_return_source_line
 CREATE INDEX IF NOT EXISTS ix_purchase_return_document
     ON purchase_return_line_allocations
        (company_id, return_doc_id);
--- @shoutech-migration 081_purchase_receipt_return_line_allocations.sql 94E2AA624CAF10E259DAE52690DA44B5E828121780FDD37ABFD7C43E78169903 94E2AA624CAF10E259DAE52690DA44B5E828121780FDD37ABFD7C43E78169903
+-- @shoutech-migration 081_purchase_receipt_return_line_allocations.sql 6C8CD84FD77D092B56DE6FCF7AF336B81972C999FC8B11A12E7E15B082800D64 94E2AA624CAF10E259DAE52690DA44B5E828121780FDD37ABFD7C43E78169903 94E2AA624CAF10E259DAE52690DA44B5E828121780FDD37ABFD7C43E78169903 94E2AA624CAF10E259DAE52690DA44B5E828121780FDD37ABFD7C43E78169903
 -- Tracks quantities returned to suppliers before a supplier invoice exists.
 -- One allocation ties each posted return line to the exact original receipt line.
 CREATE TABLE IF NOT EXISTS purchase_receipt_return_line_allocations (
@@ -76,7 +76,7 @@ CREATE INDEX IF NOT EXISTS ix_purchase_receipt_return_allocations_receipt_line
     ON purchase_receipt_return_line_allocations(company_id, original_doc_id, original_line_id);
 CREATE INDEX IF NOT EXISTS ix_purchase_receipt_return_allocations_return_doc
     ON purchase_receipt_return_line_allocations(company_id, return_doc_id);
--- @shoutech-migration 082_purchase_three_way_match.sql EDB0C6D0E5082D50C8D3CD1AE5805C279C303E97A9C6ACE7F925D8B9DCD6D9C9 EDB0C6D0E5082D50C8D3CD1AE5805C279C303E97A9C6ACE7F925D8B9DCD6D9C9
+-- @shoutech-migration 082_purchase_three_way_match.sql 5262FEACA4C96AAAE651951C97F65DD33D24A24F9F5E339F4F115CAA9AD767B9 EDB0C6D0E5082D50C8D3CD1AE5805C279C303E97A9C6ACE7F925D8B9DCD6D9C9 EDB0C6D0E5082D50C8D3CD1AE5805C279C303E97A9C6ACE7F925D8B9DCD6D9C9 EDB0C6D0E5082D50C8D3CD1AE5805C279C303E97A9C6ACE7F925D8B9DCD6D9C9
 -- 082 - Company-scoped purchase three-way match policy and immutable decisions.
 -- Policies are opt-in. Absence of a row means enforcement is not configured.
 -- This migration only creates persistence; enforcement is integrated separately.
@@ -154,7 +154,7 @@ BEFORE DELETE ON purchase_match_overrides
 BEGIN
     SELECT RAISE(ABORT, 'Purchase match overrides are immutable.');
 END;
--- @shoutech-migration 083_purchase_match_permissions.sql 3C7A5FE8B0BB58A48B180D1A277F4859985FA4C445CFA72F5C5A39C287DB55F0 3C7A5FE8B0BB58A48B180D1A277F4859985FA4C445CFA72F5C5A39C287DB55F0
+-- @shoutech-migration 083_purchase_match_permissions.sql B238A11052F92878185DDA6647BAE7689036CE0C2BA0F543DB7D8177A9D0404F 3C7A5FE8B0BB58A48B180D1A277F4859985FA4C445CFA72F5C5A39C287DB55F0 3C7A5FE8B0BB58A48B180D1A277F4859985FA4C445CFA72F5C5A39C287DB55F0 3C7A5FE8B0BB58A48B180D1A277F4859985FA4C445CFA72F5C5A39C287DB55F0
 -- 083 - Dedicated permissions for purchase match policy and exception release.
 -- Only administrators receive these sensitive permissions by default.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_match_override_evaluation
@@ -196,7 +196,7 @@ SELECT r.role_id, p.permission_id
 FROM roles r CROSS JOIN permissions p
 WHERE r.role_code='ROLE_ADMINISTRATOR' AND r.is_active=1 AND p.is_active=1
   AND p.permission_code IN ('PURCH.MATCH.POLICY.MANAGE','PURCH.MATCH.OVERRIDE');
--- @shoutech-migration 084_supplier_invoice_reference_unique.sql A0E687132C06D19641129675FFC4DA85596396ABCAC6A8026862459DC3A0EDA9 A0E687132C06D19641129675FFC4DA85596396ABCAC6A8026862459DC3A0EDA9
+-- @shoutech-migration 084_supplier_invoice_reference_unique.sql AD2A5456956D7E869B65A2D82471FBCD05A561053FAE5584F6FBFC94E9790B5A A0E687132C06D19641129675FFC4DA85596396ABCAC6A8026862459DC3A0EDA9 A0E687132C06D19641129675FFC4DA85596396ABCAC6A8026862459DC3A0EDA9 A0E687132C06D19641129675FFC4DA85596396ABCAC6A8026862459DC3A0EDA9
 -- Enforce one external supplier invoice reference per supplier and company.
 -- Blank references remain optional; matching is case-insensitive and whitespace-trimmed.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_supplier_invoice_reference
@@ -206,7 +206,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_supplier_invoice_reference
       AND reference_no IS NOT NULL
       AND trim(reference_no) <> ''
       AND is_deleted = 0;
--- @shoutech-migration 085_purchase_requisition_approvals.sql 03371C40C1F3564F04802CC921BACFB33EEA308533FB49C02F349464C2DD52CC 03371C40C1F3564F04802CC921BACFB33EEA308533FB49C02F349464C2DD52CC
+-- @shoutech-migration 085_purchase_requisition_approvals.sql 70CA88BC00D14D3A93A7C890D6EDEC055EACD340B9A1F68A6CAA613D4313C04B 03371C40C1F3564F04802CC921BACFB33EEA308533FB49C02F349464C2DD52CC 03371C40C1F3564F04802CC921BACFB33EEA308533FB49C02F349464C2DD52CC 03371C40C1F3564F04802CC921BACFB33EEA308533FB49C02F349464C2DD52CC
 -- 085 - Sequential approvals for internal purchase requisitions (SQLite).
 CREATE TABLE IF NOT EXISTS purchase_requisition_workflow (
  company_id TEXT NOT NULL, requisition_doc_id INTEGER NOT NULL,
@@ -249,7 +249,7 @@ INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p
 
 -- A requisition can create at most one PO, even under concurrent conversion attempts.
 CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_requisition_single_po_link ON document_links(company_id,source_doc_kind,source_doc_id,target_doc_kind) WHERE source_doc_kind='PRQ' AND target_doc_kind='PO';
--- @shoutech-migration 086_purchase_document_attachments.sql 5D59E88DC3DA7E2358F27520435D8B7C75BE9FBF3DAAE4B1BC2057A5036AE2B7 5D59E88DC3DA7E2358F27520435D8B7C75BE9FBF3DAAE4B1BC2057A5036AE2B7
+-- @shoutech-migration 086_purchase_document_attachments.sql 90CB4826D8C358C0E9D728D138D1EFB1DAEA4EA4AED858A3BDA00BE4217CC0BD 5D59E88DC3DA7E2358F27520435D8B7C75BE9FBF3DAAE4B1BC2057A5036AE2B7 5D59E88DC3DA7E2358F27520435D8B7C75BE9FBF3DAAE4B1BC2057A5036AE2B7 5D59E88DC3DA7E2358F27520435D8B7C75BE9FBF3DAAE4B1BC2057A5036AE2B7
 -- 086 - Secure metadata for purchase-document attachments (SQLite). Bytes remain outside the database.
 CREATE TABLE IF NOT EXISTS purchase_document_attachments (
  attachment_id TEXT PRIMARY KEY, company_id TEXT NOT NULL, document_id INTEGER NOT NULL,
@@ -268,7 +268,7 @@ VALUES('PUR.ATTACH.DELETE','Purchase Attachment - Delete','PURCHASING','ATTACHME
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_ADMINISTRATOR' AND p.permission_code IN ('PUR.ATTACH.VIEW','PUR.ATTACH.UPLOAD','PUR.ATTACH.DELETE');
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_USER' AND p.permission_code IN ('PUR.ATTACH.VIEW','PUR.ATTACH.UPLOAD');
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_VIEWER' AND p.permission_code='PUR.ATTACH.VIEW';
--- @shoutech-migration 087_purchase_landed_costs.sql 02590BC41ACD32A6A89A8424F3F17DE07FE8E13254BBCC20B65F9689D6ED1D11 02590BC41ACD32A6A89A8424F3F17DE07FE8E13254BBCC20B65F9689D6ED1D11
+-- @shoutech-migration 087_purchase_landed_costs.sql 31838840ECAF144AF2183927725FE63B0DCD2AB3ABFB486037FDDBD6F7870B40 02590BC41ACD32A6A89A8424F3F17DE07FE8E13254BBCC20B65F9689D6ED1D11 02590BC41ACD32A6A89A8424F3F17DE07FE8E13254BBCC20B65F9689D6ED1D11 02590BC41ACD32A6A89A8424F3F17DE07FE8E13254BBCC20B65F9689D6ED1D11
 -- 087 - Landed cost voucher and line allocation ledger (SQLite).
 -- Posting is append-only: posted vouchers are corrected by reversal vouchers.
 CREATE TABLE IF NOT EXISTS purchase_landed_costs (
@@ -358,7 +358,7 @@ WHERE r.role_code='ROLE_USER' AND p.permission_code IN ('PUR.LANDEDCOST.VIEW','P
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id)
 SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p
 WHERE r.role_code='ROLE_VIEWER' AND p.permission_code='PUR.LANDEDCOST.VIEW';
--- @shoutech-migration 088_lcsa.sql E925161E225055DBD4DB9F9EACEC4B05DC49C7FE8E289710681A34FEAC8DA6C8 E925161E225055DBD4DB9F9EACEC4B05DC49C7FE8E289710681A34FEAC8DA6C8
+-- @shoutech-migration 088_lcsa.sql BEBEECD1E99ED1D4EA8AA55AD5336CC0AE2E5FD36D1CDAEF8CFD624E441D6A33 E925161E225055DBD4DB9F9EACEC4B05DC49C7FE8E289710681A34FEAC8DA6C8 E925161E225055DBD4DB9F9EACEC4B05DC49C7FE8E289710681A34FEAC8DA6C8 E925161E225055DBD4DB9F9EACEC4B05DC49C7FE8E289710681A34FEAC8DA6C8
 -- 088 - Persist the inventory / consumed-cost split for landed-cost postings (SQLite).
 -- This ledger is written in the same transaction as the stock revaluation and GL entry.
 CREATE TABLE IF NOT EXISTS purchase_landed_cost_stock_adjustments (
@@ -384,7 +384,7 @@ CREATE TABLE IF NOT EXISTS purchase_landed_cost_stock_adjustments (
 );
 CREATE INDEX IF NOT EXISTS ix_lc_stock_adj_material
     ON purchase_landed_cost_stock_adjustments(company_id, material_id, warehouse_id, created_at);
--- @shoutech-migration 090_lcbf.sql E7AD60375F35F2EEB25E029811DBED90864E5683A6D8EBBECBF9BE0069F2DDC5 E7AD60375F35F2EEB25E029811DBED90864E5683A6D8EBBECBF9BE0069F2DDC5
+-- @shoutech-migration 090_lcbf.sql 1E8DDDEA6D25F3FF389474248667FAE5322D2B3B9B59BC848EA11DAFADD8C057 E7AD60375F35F2EEB25E029811DBED90864E5683A6D8EBBECBF9BE0069F2DDC5 E7AD60375F35F2EEB25E029811DBED90864E5683A6D8EBBECBF9BE0069F2DDC5 E7AD60375F35F2EEB25E029811DBED90864E5683A6D8EBBECBF9BE0069F2DDC5
 -- 090 - Backfill exact source receipt lines for legacy stock movements (SQLite).
 -- Only unambiguous receipt-line matches are populated; duplicate material/warehouse lines remain untouched.
 WITH candidates AS (
@@ -408,13 +408,13 @@ SET source_document_line_id = (
     WHERE candidates.stock_movement_id = material_stock_movements.stock_movement_id
 )
 WHERE stock_movement_id IN (SELECT stock_movement_id FROM candidates WHERE match_count = 1);
--- @shoutech-migration 091_prqc.sql 85F1BC1836D83AADF2D45585B667474CFE61D4217FE0D643B498A56A1E85ACED 85F1BC1836D83AADF2D45585B667474CFE61D4217FE0D643B498A56A1E85ACED
+-- @shoutech-migration 091_prqc.sql A29C5F0A63A33B5D117CB5B776DFC060D3816950650FFD815E026CE735A87EBE 85F1BC1836D83AADF2D45585B667474CFE61D4217FE0D643B498A56A1E85ACED 85F1BC1836D83AADF2D45585B667474CFE61D4217FE0D643B498A56A1E85ACED 85F1BC1836D83AADF2D45585B667474CFE61D4217FE0D643B498A56A1E85ACED
 -- 091 - Persist requisition conversion reservations without expanding the status CHECK constraint (SQLite).
 -- The UI projects Approved + conversion_started_at as the transient Converting state.
 -- @if-column-missing purchase_requisition_workflow.conversion_started_at
 ALTER TABLE purchase_requisition_workflow ADD COLUMN conversion_started_at TEXT;
 -- @endif
--- @shoutech-migration 107_prq_completion.sql E15E0E1ECB71CB6539FBFE07E203254D48E5BCEA28B15623B1D5DBA29764307B E15E0E1ECB71CB6539FBFE07E203254D48E5BCEA28B15623B1D5DBA29764307B
+-- @shoutech-migration 107_prq_completion.sql 072F1564B27FDFC0FFE3D50CB5B594914F21520947E9BBB1FA9B2F6F313570B5 E15E0E1ECB71CB6539FBFE07E203254D48E5BCEA28B15623B1D5DBA29764307B E15E0E1ECB71CB6539FBFE07E203254D48E5BCEA28B15623B1D5DBA29764307B E15E0E1ECB71CB6539FBFE07E203254D48E5BCEA28B15623B1D5DBA29764307B
 -- 107 - Purchase requisition completion (SQLite): R2 cancel/close states,
 -- R3 approval rounds, R4 RFQ conversion target, R5 required-by date +
 -- request type, R6 real department column (stops the Notes smuggling).
@@ -511,7 +511,7 @@ INSERT OR IGNORE INTO permissions(permission_code,permission_name,group_code,fea
 VALUES('PUR.REQ.CLOSE','Purchase Requisition - Close','PURCHASING','REQUISITION','CLOSE','Purchase Requisition - Close','Purchase Requisition - Close','Close a fully converted purchase requisition',525,1);
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_ADMINISTRATOR' AND p.permission_code LIKE 'PUR.REQ.%';
 INSERT OR IGNORE INTO role_permissions(role_id,permission_id) SELECT r.role_id,p.permission_id FROM roles r CROSS JOIN permissions p WHERE r.role_code='ROLE_USER' AND p.permission_code='PUR.REQ.CANCEL';
--- @shoutech-migration 108_purchase_landed_cost_completion.sql 041C689D68787FB7DF3A91CD1D057A6DB4C0F62EAE7461519113416FAD2CB2BA 041C689D68787FB7DF3A91CD1D057A6DB4C0F62EAE7461519113416FAD2CB2BA
+-- @shoutech-migration 108_purchase_landed_cost_completion.sql 46B475ADD6444F3F6073EA734A1A85B8F8664E3596D010A2007B57193395E0DF 041C689D68787FB7DF3A91CD1D057A6DB4C0F62EAE7461519113416FAD2CB2BA 041C689D68787FB7DF3A91CD1D057A6DB4C0F62EAE7461519113416FAD2CB2BA 041C689D68787FB7DF3A91CD1D057A6DB4C0F62EAE7461519113416FAD2CB2BA
 -- 108 - Landed-cost completion (SQLite): per-charge payee + credit mode,
 -- stored inventory/consumed split per allocation, multi-receipt vouchers,
 -- and the dedicated Purchase Price Variance account (415).
@@ -582,7 +582,7 @@ WHERE EXISTS (SELECT 1 FROM chart_of_accounts a
               WHERE a.company_id = c.company_id AND a.account_code = '402')
   AND NOT EXISTS (SELECT 1 FROM chart_of_accounts a
                   WHERE a.company_id = c.company_id AND a.account_code = '415');
--- @shoutech-migration 109_purchase_invoice_due_date.sql B4DC53E341CD626C7CA983F14F32319926E5A47FE1CAD8B5A013C71F41238E63 B4DC53E341CD626C7CA983F14F32319926E5A47FE1CAD8B5A013C71F41238E63
+-- @shoutech-migration 109_purchase_invoice_due_date.sql C4E9B8E8FCF93F156C6F9CA33BBD2D6B9E52C5272B0AC271542ACD7183522A39 B4DC53E341CD626C7CA983F14F32319926E5A47FE1CAD8B5A013C71F41238E63 B4DC53E341CD626C7CA983F14F32319926E5A47FE1CAD8B5A013C71F41238E63 B4DC53E341CD626C7CA983F14F32319926E5A47FE1CAD8B5A013C71F41238E63
 -- 109 - Purchase invoice due date (SQLite).
 -- Y3 (payable aging by due date): purchase_documents gains the due date the
 -- Accounts Payable aging report buckets open invoices by. NULL on rows that
@@ -595,7 +595,7 @@ ALTER TABLE purchase_documents ADD COLUMN due_date TEXT;
 
 CREATE INDEX IF NOT EXISTS ix_purchase_documents_due_date
     ON purchase_documents (company_id, doc_kind, status, due_date);
--- @shoutech-migration 111_p2p_b1_core.sql AE02915975D9431CA549011FD29D15C7B00085254ED82F46CEE46DACACDEF64E AE02915975D9431CA549011FD29D15C7B00085254ED82F46CEE46DACACDEF64E
+-- @shoutech-migration 111_p2p_b1_core.sql 0FFE3DD82756B887CBCEB11371A5CE4E0F1D213712917B69837E3AD4FC585CD5 AE02915975D9431CA549011FD29D15C7B00085254ED82F46CEE46DACACDEF64E AE02915975D9431CA549011FD29D15C7B00085254ED82F46CEE46DACACDEF64E AE02915975D9431CA549011FD29D15C7B00085254ED82F46CEE46DACACDEF64E
 -- 111 - Purchase-cycle completion B1 core (SQLite): P3 PO header facts,
 -- P4 stored line UOM factor + per-line required-by, P5 stored
 -- per_received / per_billed, Q2 rejected qty at receipt, Q3 receipt
@@ -716,7 +716,7 @@ ALTER TABLE sales_document_lines ADD COLUMN tax_code TEXT;
 -- @if-column-missing purchase_match_policies.receipt_over_tolerance_pct
 ALTER TABLE purchase_match_policies ADD COLUMN receipt_over_tolerance_pct NUMERIC NOT NULL DEFAULT 0;
 -- @endif
--- @shoutech-migration 112_rfq_invitations_backfill.sql 26A2DADFD74CFFCE55D0CA2E5C2572FDE97A09CC26D7EEFD474AB2E1DF35251C 26A2DADFD74CFFCE55D0CA2E5C2572FDE97A09CC26D7EEFD474AB2E1DF35251C
+-- @shoutech-migration 112_rfq_invitations_backfill.sql B0760DAE8924329BE577E8BAB7B0F6B461ADFFD22170AF835BEBFD2682861E08 26A2DADFD74CFFCE55D0CA2E5C2572FDE97A09CC26D7EEFD474AB2E1DF35251C 26A2DADFD74CFFCE55D0CA2E5C2572FDE97A09CC26D7EEFD474AB2E1DF35251C 26A2DADFD74CFFCE55D0CA2E5C2572FDE97A09CC26D7EEFD474AB2E1DF35251C
 -- 112 - RFQ supplier invitations (P1) + P5 backfill (SQLite).
 -- Invitations record which suppliers were invited to quote against an
 -- RFQ and how each responded; SQ creation flips the invitation to
@@ -786,7 +786,7 @@ SET per_received = CASE
             ) / (SELECT SUM(qty) FROM purchase_document_lines WHERE doc_id = purchase_documents.doc_id), 2))
     END
 WHERE doc_kind = 'PO' AND is_deleted = 0;
--- @shoutech-migration 113_prt_match_unwind.sql 0CD5612BF5077B8919F867C515F51D9BBD5949E4430045A02DFB23FD2837A0DD 0CD5612BF5077B8919F867C515F51D9BBD5949E4430045A02DFB23FD2837A0DD
+-- @shoutech-migration 113_prt_match_unwind.sql F7CBD13DD2215C5698018828C13298D09BA3C0071EA442A0F48AC6A81899C8A3 0CD5612BF5077B8919F867C515F51D9BBD5949E4430045A02DFB23FD2837A0DD 0CD5612BF5077B8919F867C515F51D9BBD5949E4430045A02DFB23FD2837A0DD 0CD5612BF5077B8919F867C515F51D9BBD5949E4430045A02DFB23FD2837A0DD
 -- 113 - PRT match unwind audit (SQLite, I4).
 -- Posting a purchase return (debit note, PRT) decrements the mig-078
 -- receipt<->invoice matched quantities so returned goods can be
