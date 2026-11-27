@@ -80,7 +80,7 @@ internal sealed class MaintenanceHistoryWin : BaseWin
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     Margin = new Thickness(2),
                     Padding = new Thickness(8),
-                    Content = $"{T("Maintenance.ReportNumber")} {report.ReportNo:D6}\n{report.RunAt}\n{report.Status} · {report.FailedCount} {T("Maintenance.ReportFailed")}"
+                    Content = $"{T("Maintenance.ReportNumber")} {report.ReportNo:D6}\n{report.RunAt}\n{StatusText(report.Status)} · {report.FailedCount} {T("Maintenance.ReportFailed")}"
                 };
                 button.Click += async (_, _) => await ShowReportAsync(report.ReportNo);
                 _items.Children.Add(button);
@@ -93,6 +93,11 @@ internal sealed class MaintenanceHistoryWin : BaseWin
             _items.Children.Add(_empty);
         }
     }
+
+    private string StatusText(string status)
+        => string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+            ? T("Maintenance.ReportCancelled")
+            : T("Maintenance.ReportCompleted");
 
     private async Task ShowReportAsync(long reportNo)
     {
@@ -118,7 +123,7 @@ internal sealed class MaintenanceHistoryWin : BaseWin
             $"{T("Maintenance.ReportDate")}: {report.RunAt}\n" +
             $"{T("Maintenance.ReportUser")}: {report.CreatedBy}\n" +
             $"{T("Maintenance.ReportProvider")}: {report.Provider}\n" +
-            $"{T("Maintenance.ReportStatus")}: {report.Status}\n" +
+            $"{T("Maintenance.ReportStatus")}: {StatusText(report.Status)}\n" +
             $"{T("Maintenance.ReportChecks")}: {report.CheckCount} · {T("Maintenance.ReportPassed")}: {report.PassedCount} · " +
             $"{T("Maintenance.ReportWarnings")}: {report.WarningCount} · {T("Maintenance.ReportFailed")}: {report.FailedCount}\n\n{pretty}";
     }

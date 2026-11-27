@@ -3421,6 +3421,8 @@
     "ReportFailed": "أخطاء",
     "ReportEmpty": "لا توجد تقارير صيانة محفوظة حتى الآن.",
     "ReportClose": "إغلاق",
+    "ReportCompleted": "مكتملة",
+    "ReportCancelled": "متوقفة بأمان",
     "ReportProvider": "مزود قاعدة البيانات",
     "RunChecks": "تشغيل الفحوصات",
     "HealthUnavailable": "خدمة فحص قاعدة البيانات غير متاحة.",

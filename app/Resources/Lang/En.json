@@ -3290,6 +3290,8 @@
     "ReportFailed": "Failed",
     "ReportEmpty": "No maintenance reports have been saved yet.",
     "ReportClose": "Close",
+    "ReportCompleted": "Completed",
+    "ReportCancelled": "Stopped safely",
     "ReportProvider": "Database provider",
     "RunChecks": "Run checks",
     "HealthUnavailable": "Database health service is unavailable.",
