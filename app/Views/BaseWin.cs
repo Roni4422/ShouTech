@@ -259,7 +259,9 @@ public abstract class BaseWin : Window
             Tag = key,
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            Margin = FormLabelMargin
+            Margin = grid.FlowDirection == FlowDirection.RightToLeft
+                ? new Thickness(8, 0, 0, 8)
+                : FormLabelMargin
         };
         label.SetResourceReference(StyleProperty, "VisuTextBlockLabelStyle");
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
@@ -287,7 +289,9 @@ public abstract class BaseWin : Window
             Text = T(key),
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            Margin = FormLabelMargin
+            Margin = grid.FlowDirection == FlowDirection.RightToLeft
+                ? new Thickness(8, 0, 0, 8)
+                : FormLabelMargin
         };
         label.SetResourceReference(StyleProperty, "VisuTextBlockLabelStyle");
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
@@ -320,7 +324,9 @@ public abstract class BaseWin : Window
         ApplyFieldStyle(control);
         if (control is FrameworkElement fe)
         {
-            fe.Margin = FormFieldMargin;
+            fe.Margin = grid.FlowDirection == FlowDirection.RightToLeft
+                ? new Thickness(12, 0, 0, 8)
+                : FormFieldMargin;
             if (control is CheckBox or RadioButton)
                 fe.VerticalAlignment = VerticalAlignment.Center;
         }
