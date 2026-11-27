@@ -38,7 +38,7 @@ internal static class Program
 
         var migrations = MigrationBundleReader.Load(migrationDirectory);
 
-        // Migration IDs are relative paths. Reject case-insensitive collisions
+        // Migration IDs are original filenames embedded in bundles. Reject case-insensitive collisions
         // before opening the database so Windows and Linux discover the same set.
         var duplicateMigrationIds = migrations
             .GroupBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
@@ -287,7 +287,7 @@ internal static class Program
         return result;
     }
 
-    private static async Task RecordMigrationAsync(DbConnection connection, Migration migration, string provider, DbTransaction? transaction)
+    private static async Task RecordMigrationAsync(DbConnection connection, MigrationBundleReader.Migration migration, string provider, DbTransaction? transaction)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
