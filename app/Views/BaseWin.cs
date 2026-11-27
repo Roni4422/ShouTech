@@ -360,7 +360,7 @@ public abstract class BaseWin : Window
     /// Order is fixed physically: next 10, next 1, number, previous 1, previous 10.
     /// Navigation is delegated to the owning window; this class owns the UI contract.
     /// </summary>
-    protected static StackPanel CreateRecordNumberBar(TextBox numberBox, Action<int> navigate)
+    protected StackPanel CreateRecordNumberBar(TextBox numberBox, Action<int> navigate)
     {
         ArgumentNullException.ThrowIfNull(numberBox);
         ArgumentNullException.ThrowIfNull(navigate);
@@ -377,8 +377,8 @@ public abstract class BaseWin : Window
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            FlowDirection = FlowDirection.LeftToRight,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            FlowDirection = this.FlowDirection,
+            HorizontalAlignment = this.FlowDirection == FlowDirection.RightToLeft ? HorizontalAlignment.Right : HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 2, 2, 6),
             Tag = "RecordNavigationBar"
@@ -415,13 +415,13 @@ public abstract class BaseWin : Window
 
         // Each window owns its own numbering source and sequence.
         // Sentinels navigate to the first/last record; +/-1 and +/-10 are relative.
-        bar.Children.Add(MakeButton("⇤", "RecordNavigation.First", int.MinValue, navigate));
+        bar.Children.Add(MakeButton(this.FlowDirection == FlowDirection.RightToLeft ? "⇥" : "⇤", "Common.First", int.MinValue, navigate));
         bar.Children.Add(MakeButton("≪", "RecordNavigation.PreviousTen", -10, navigate));
         bar.Children.Add(MakeButton("‹", "RecordNavigation.PreviousOne", -1, navigate));
         bar.Children.Add(numberBox);
         bar.Children.Add(MakeButton("›", "RecordNavigation.NextOne", 1, navigate));
         bar.Children.Add(MakeButton("≫", "RecordNavigation.NextTen", 10, navigate));
-        bar.Children.Add(MakeButton("⇥", "RecordNavigation.Last", int.MaxValue, navigate));
+        bar.Children.Add(MakeButton(this.FlowDirection == FlowDirection.RightToLeft ? "⇤" : "⇥", "Common.Last", int.MaxValue, navigate));
         return bar;
     }
 
