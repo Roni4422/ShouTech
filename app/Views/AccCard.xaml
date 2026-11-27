@@ -85,17 +85,17 @@
             <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal"
                         HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,5,0,0"
                         Tag="RecordNavigationBar">
-                <Button x:Name="BtnFirst" Click="First_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.First" Margin="0,0,10,0">
+                <Button x:Name="BtnFirst" Tag="Common.First" Click="First_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.First" Margin="0,0,10,0">
                     <Path Width="30" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 18,3 L 10,14 L 18,25 M 11,3 L 3,14 L 11,25"/>
                 </Button>
 
-                <Button x:Name="BtnPreviousTen" Content="≪" Click="PreviousTen_Click"
+                <Button x:Name="BtnPreviousTen" Tag="RecordNavigation.PreviousTen" Content="≪" Click="PreviousTen_Click"
                         Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="RecordNavigation.PreviousTen"
                         Margin="0,0,6,0"/>
 
-                <Button x:Name="BtnPrevious" Click="Previous_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Prev" Margin="0,0,10,0">
+                <Button x:Name="BtnPrevious" Tag="RecordNavigation.PreviousOne" Click="Previous_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Prev" Margin="0,0,10,0">
                     <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 21,3 L 11,13 L 21,23"/>
@@ -106,17 +106,17 @@
                          VerticalContentAlignment="Center" IsReadOnly="True"
                          Background="{DynamicResource BackgroundBrush}" loc:LocProps.ToolTipKey="AccCard.SerialToolTip"/>
 
-                <Button x:Name="BtnNextTen" Content="≫" Click="NextTen_Click"
+                <Button x:Name="BtnNextTen" Tag="RecordNavigation.NextTen" Content="≫" Click="NextTen_Click"
                         Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="RecordNavigation.NextTen"
                         Margin="6,0,0,0"/>
 
-                <Button x:Name="BtnNext" Click="Next_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Next" Margin="10,0,0,0">
+                <Button x:Name="BtnNext" Tag="RecordNavigation.NextOne" Click="Next_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Next" Margin="10,0,0,0">
                     <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 11,3 L 21,13 L 11,23"/>
                 </Button>
 
-                <Button x:Name="BtnLast" Click="Last_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Last" Margin="10,0,0,0">
+                <Button x:Name="BtnLast" Tag="Common.Last" Click="Last_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Last" Margin="10,0,0,0">
                     <Path Width="30" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 12,3 L 20,14 L 12,25 M 19,3 L 27,14 L 19,25"/>
