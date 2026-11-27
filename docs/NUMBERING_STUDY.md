@@ -28,9 +28,7 @@ phase, per the owner's phase-gate rule.
 - **SAP**: number-range objects per document type with intervals and
   buffering — the same counter-table idea at enterprise scale.
 
-The common core: **one counter store, keyed per series (and per
-company/segment), advanced atomically inside the caller's transaction,
-formatted from prefix + segment + padded counter, configurable start.**
+The common core: **one counter store, keyed per series and company, advanced atomically inside the caller's transaction, formatted from prefix + an unpadded variable-length counter, configurable start.**
 That is exactly the pattern this codebase already uses for invoice
 documents (below) — the phase generalizes it instead of inventing a
 second mechanism.
