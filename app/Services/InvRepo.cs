@@ -2064,7 +2064,7 @@ public static class InvRepo
         var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
         var first = offset == int.MinValue;
         var last = offset == int.MaxValue;
-        var order = (offset < 0 || last) ? "DESC" : "ASC";
+        var order = (last || (offset < 0 && !first)) ? "DESC" : "ASC";
         var comparison = offset < 0 ? "<" : ">";
         var skip = first || last ? 0 : Math.Abs(offset) - 1;
         using var connection = Open(connectionString);
