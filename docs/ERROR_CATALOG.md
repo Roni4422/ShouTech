@@ -266,19 +266,29 @@ error line by forgetting to paste a code into message text.
 void LogError(string category, string code, string message, Exception? ex = null);
 ```
 
-Every error line has the fixed format:
+Every error line carries a unique incident ID and source metadata:
 
 ```
-[yyyy-MM-dd HH:mm:ss.fff] [SYS-ERROR] [Category] [Company=001] [User=admin] [Code=AUTH-2002] [Name=AccountLocked] <message> | Exception: <type>: <message> | StackTrace: <trace>
+[yyyy-MM-dd HH:mm:ss.fff] [SYS-ERROR] [Category] [Company=001] [User=admin]
+[ErrorId=GUID] [Code=AUTH-2002] [Name=AccountLocked]
+[Window=LogWin] [SourceFile=LogWin.xaml.cs] [Method=LoginAsync] [Line=142]
+<message> | Exception: <type>: <message> | StackTrace: <trace>
 ```
 
-- The bracketed prefix segments are positional and unchanged from before:
-  timestamp, level, category, company, user.
-- **`[Code=…]` and `[Name=…]` immediately follow the user segment, at a
-  fixed position at the start of the message body.** `Code` is always a
-  code that exists in the English catalog index above; `Name` is that
-  entry's catalog name. Any error line can therefore be matched back to
-  this index mechanically (parse the two segments, look the code up).
+- `ErrorId` is a new GUID for each occurrence. It identifies one incident,
+  not the error type. The same `Code` can therefore have many distinct IDs.
+- `Code` is the stable catalog key; `Name` is its language-independent
+  technical identifier. Both map directly to the English index.
+- `Window`, `SourceFile`, `Method`, and `Line` identify the reporting
+  call site. `ErrorCatalogSvc.Report` captures these using compiler caller
+  information; the logger also attempts to recover the first source frame
+  from an exception stack for direct/global logging calls.
+- Exact source line numbers require matching PDB symbols at runtime. If
+  symbols are unavailable, the line is recorded as 0 and the stack trace
+  remains available when supplied by the exception.
+- Inner exception type/message chains are written up to eight levels deep.
+- The standard prefix remains timestamp, level, category, company, and user.
+  Error metadata follows it in a fixed, machine-readable position.
 - When a caller reports a code that is not registered, the line is stamped
   with the resolved fallback (`SYS-0001`/`UnknownError`) and the originally
   requested code is appended to the message as `| ReportedCode=<code>`, so
