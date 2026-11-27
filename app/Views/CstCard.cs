@@ -550,6 +550,9 @@ public sealed class CstCard : BaseWin, IInfoContextProvider
                     : null
             };
             await service.SavePartyAsync(CurrentCompanyCode, party, CurrentUserId);
+            // The repository may advance a stale preview when another user
+            // saves first; always display the number actually committed.
+            _txtCode.Text = party.Code;
             _loadedId = party.Id;
             if (_chkBlacklisted.IsChecked == true)
             {
