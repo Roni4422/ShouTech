@@ -401,6 +401,7 @@ public abstract class BaseWin : Window
             var button = new Button
             {
                 Content = glyph,
+                Tag = key,
                 Width = 23,
                 MinWidth = 23,
                 Height = 26,
@@ -449,9 +450,7 @@ public abstract class BaseWin : Window
             if (current is StackPanel panel &&
                 string.Equals(panel.Tag as string, "RecordNavigationBar", StringComparison.Ordinal))
             {
-                panel.FlowDirection = FlowDirection;
-                panel.HorizontalAlignment = FlowDirection == FlowDirection.RightToLeft
-                    ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+                ApplyRecordNavigationBar(panel);
             }
             else if (current is Grid formGrid &&
                      string.Equals(formGrid.Tag as string, "SharedFormGrid", StringComparison.Ordinal))
@@ -462,6 +461,35 @@ public abstract class BaseWin : Window
             var count = VisualTreeHelper.GetChildrenCount(current);
             for (var index = count - 1; index >= 0; index--)
                 pending.Push(VisualTreeHelper.GetChild(current, index));
+        }
+    }
+
+    private void ApplyRecordNavigationBar(StackPanel panel)
+    {
+        var rtl = FlowDirection == FlowDirection.RightToLeft;
+        panel.FlowDirection = FlowDirection;
+        panel.HorizontalAlignment = rtl ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+
+        foreach (UIElement child in panel.Children)
+        {
+            if (child is Button button)
+            {
+                button.Content = button.Tag as string switch
+                {
+                    "Common.First" => rtl ? "▶|" : "|◀",
+                    "RecordNavigation.PreviousTen" => rtl ? "▶▶" : "◀◀",
+                    "RecordNavigation.PreviousOne" => rtl ? "▶" : "◀",
+                    "RecordNavigation.NextOne" => rtl ? "◀" : "▶",
+                    "RecordNavigation.NextTen" => rtl ? "◀◀" : "▶▶",
+                    "Common.Last" => rtl ? "|◀" : "▶|",
+                    _ => button.Content
+                };
+            }
+            else if (child is TextBlock label &&
+                     string.Equals(label.Tag as string, "RecordNavigation.Number", StringComparison.Ordinal))
+            {
+                label.Margin = rtl ? new Thickness(5, 0, 0, 0) : new Thickness(0, 0, 5, 0);
+            }
         }
     }
 
