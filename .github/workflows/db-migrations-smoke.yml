@@ -199,3 +199,25 @@ jobs:
         env:
           SHOUTECH_TEST_POSTGRES: Host=localhost;Port=5432;Database=shoutest;Username=shoutest;Password=shoutest
         run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release -p:DatabaseOnly=true --filter FullyQualifiedName~Maintenance_PostgreSql_ChecksAndVacuumAnalyze
+
+  commit-migration-bundles:
+    if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
+    needs: [sqlite-migrations, postgresql-migrations]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and verify compact migration bundles
+        run: |
+          python3 tools/bundle_migrations.py apply
+          python3 tools/bundle_migrations.py verify
+          python3 tools/gen_index.py
+      - name: Commit consolidated migrations
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dba/mig docs/FILE_INDEX.md
+          git diff --cached --quiet && exit 0
+          git commit -m "Consolidate SQL migrations into functional bundles"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
