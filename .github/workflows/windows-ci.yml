@@ -64,6 +64,16 @@ jobs:
       - name: Build full solution and tests
         run: dotnet build build/ShouTech.sln --configuration Release --no-restore -warnaserror
 
+      - name: Build SecEng and run native license rejection test
+        shell: pwsh
+        run: |
+          cmake -S sec -B build/sec -A x64 -DBUILD_TESTING=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/sec --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/sec -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run tests
         run: dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --logger "trx;LogFileName=tests.trx"
 
