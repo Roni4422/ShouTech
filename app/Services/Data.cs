@@ -462,7 +462,7 @@ internal static class DatabaseRuntime
 /// user operations, and security-related events.
 ///
 /// All events are forwarded to ILogServ.
-/// Operational events are written to log.log; errors are isolated in errors.log.
+/// Operational events are written to log.log; errors are isolated in error.log.
 /// </summary>
 public sealed class AuditService : IAuditService
 {
@@ -573,7 +573,7 @@ private readonly ILogServ _logger;
     /// log.log:
     ///     Operational events, lifecycle, authentication, and diagnostics.
     ///
-    /// errors.log:
+    /// error.log:
     ///     System and user error entries only; errors are not duplicated in log.log.
     ///
     /// Logging is synchronous and write-through.
@@ -582,7 +582,7 @@ private readonly ILogServ _logger;
     {
         private readonly string _logDir;
         private readonly string _logPath;
-        private readonly string _errorsLogPath;
+        private readonly string _errorLogPath;
         private readonly object _lock = new();
 
         private const long MaxLogFileBytes = 5L * 1024 * 1024;
@@ -598,7 +598,7 @@ private readonly ILogServ _logger;
             Directory.CreateDirectory(_logDir);
 
             _logPath = Path.Combine(_logDir, "log.log");
-            _errorsLogPath = Path.Combine(_logDir, "errors.log");
+            _errorsLogPath = Path.Combine(_logDir, "error.log");
 
             Debug.WriteLine($"LOG DIRECTORY = {_logDir}");
 
@@ -609,44 +609,31 @@ private readonly ILogServ _logger;
 
         private static string ResolveLogDirectory()
         {
+            // In development, always resolve logs to the repository/project
+            // root (the directory containing the solution or project file),
+            // never to bin/Debug or bin/Release. In a published deployment
+            // without project markers, use the application base directory.
             var current = new DirectoryInfo(
                 AppDomain.CurrentDomain.BaseDirectory);
 
             while (current != null)
             {
-                if (!string.Equals(
-                        current.Name,
-                        "bin",
-                        StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(
-                        current.Name,
-                        "obj",
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    var candidate = Path.Combine(
-                        current.FullName,
-                        "log");
+                var hasRepositoryMarker =
+                    Directory.Exists(Path.Combine(current.FullName, ".git"));
+                var hasSolution =
+                    Directory.EnumerateFiles(current.FullName, "*.sln").Any() ||
+                    Directory.EnumerateFiles(current.FullName, "*.slnx").Any();
+                var hasProject =
+                    Directory.EnumerateFiles(current.FullName, "*.csproj").Any();
 
-                    if (Directory.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
+                if (hasRepositoryMarker || hasSolution || hasProject)
+                    return Path.Combine(current.FullName, "log");
 
                 current = current.Parent;
             }
 
-            // Clean-install fallback.
-            // This is used only when no project/application
-            // log directory exists above the runtime directory.
-            var fallbackRoot =
-                Directory.GetParent(
-                    AppDomain.CurrentDomain.BaseDirectory)?
-                .FullName
-                ?? AppDomain.CurrentDomain.BaseDirectory;
-
             return Path.Combine(
-                fallbackRoot,
+                AppDomain.CurrentDomain.BaseDirectory,
                 "log");
         }
 
@@ -960,7 +947,7 @@ private readonly ILogServ _logger;
 
                 lock (_lock)
                 {
-                    // Error records go to errors.log and are mirrored to log.log so
+                    // Error records go to error.log and are mirrored to log.log so
                     // data-exchange failures remain visible in the main operational log.
                     if (level == "SYS-ERROR" || level == "USR-ERROR" || level == "ERROR")
                     {
