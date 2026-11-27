@@ -202,6 +202,28 @@ public static class SequenceAllocator
     }
 
     /// <summary>
+    /// Allocates a continuous, unpadded source-document sequence such as
+    /// JV, RCV or PAY. The caller owns the transaction; the resulting
+    /// source number remains distinct from the central JRN number.
+    /// </summary>
+    public static string AllocateSeriesNumber(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        string companyCode, string seriesKey)
+    {
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new ArgumentException("Company code is required.", nameof(companyCode));
+        var key = seriesKey.Trim().ToUpperInvariant();
+        if (key is not ("JV" or "RCV" or "PAY"))
+            throw new ArgumentOutOfRangeException(nameof(seriesKey), "Only source voucher series JV, RCV and PAY are allocated here.");
+        var defaults = new SeriesConfig(key, 1, false, 1);
+        var config = ReadConfig(connection, transaction, isPg, companyCode, key, defaults);
+        const int segment = 0;
+        var allocated = Allocate(connection, transaction, isPg, companyCode, key,
+            segment, 0, config.StartValue - 1);
+        return Format(config, segment, allocated);
+    }
+
+    /// <summary>
     /// Allocates the single company-wide journal sequence. The counter is
     /// updated inside the caller's posting transaction, so a failed posting
     /// cannot leave a journal number detached from its journal entry.
