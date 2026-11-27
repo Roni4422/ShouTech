@@ -39,6 +39,9 @@ public static class XptServ
         public required Func<string, string> Translate { get; init; }
         public string? DatasetIdentityHeader { get; init; }
 
+        /// <summary>Optional invariant English filename stem; independent of UI/report language.</summary>
+        public string? FileName { get; init; }
+
         /// <summary>Optional design styling (B2) — only designed
         /// (custom) reports carry one; built-ins keep the stock look.</summary>
         public RptStyle? Style { get; init; }
@@ -288,7 +291,7 @@ public static class XptServ
             DefaultExt = ext,
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = $"{Sanitize(model.Title)}_{DateTime.Now:yyyyMMdd_HHmm}.{ext}"
+            FileName = $"{Sanitize(string.IsNullOrWhiteSpace(model.FileName) ? model.Title : model.FileName)}_{DateTime.Now:yyyyMMdd_HHmm}.{ext}"
         };
         return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
     }
