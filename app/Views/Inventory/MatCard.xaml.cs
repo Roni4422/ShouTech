@@ -1800,7 +1800,7 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         ClearForm();
         try
         {
-            TxtCode.Text = ToWesternDigits(MatRepo.NextCode());
+            TxtCode.Text = ToWesternDigits(MatRepo.PreviewCode());
         }
         catch (Exception exL1320)
         {
