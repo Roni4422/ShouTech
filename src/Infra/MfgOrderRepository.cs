@@ -83,34 +83,20 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         return order;
     }
 
+    /// <summary>Returns a non-consuming preview for the next manufacturing order number.</summary>
     public async Task<int> GetNextDocNoAsync(string companyId, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);
-        var isPg = _provider == "PostgreSQL";
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            long seed;
-            await using (var maxCommand = CreateCommand(connection, transaction,
-                "SELECT COALESCE(MAX(doc_no), 0) FROM mfg_orders WHERE company_id = @company"))
-            {
-                Add(maxCommand, "@company", companyId.Trim());
-                seed = Convert.ToInt64(await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-            }
-            var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyId.Trim(), "MFG",
-                SequenceAllocator.DefaultConfig("MFG", yearlyByDefault: false), cancellationToken).ConfigureAwait(false);
-            var allocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyId.Trim(), "MFG",
-                0, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return (int)allocated;
-        }
-        catch
-        {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            throw;
-        }
+        // Preview only: never touch the sequence allocator while a user is
+        // merely opening or resetting the entry form. SaveDraftAsync assigns
+        // the definitive number under its write transaction.
+        await using var command = CreateCommand(connection, null,
+            "SELECT COALESCE(MAX(doc_no), 0) + 1 FROM mfg_orders WHERE company_id = @company");
+        Add(command, "@company", companyId.Trim());
+        var value = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return checked(Convert.ToInt32(value, CultureInfo.InvariantCulture));
     }
 
     // ------------------------------------------------------------------
