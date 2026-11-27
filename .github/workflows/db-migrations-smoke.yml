@@ -17,6 +17,9 @@ on:
       - 'dba/mig/**'
       - 'tools/SqlMigrator/**'
       - 'app/Services/SchMig.cs'
+      - 'src/Infra/OperationsRepository.cs'
+      - 'src/Dom/Interfaces/IOperationsRepository.cs'
+      - 'tests/Kern.Tests/OperationsServiceTests.cs'
       - '.github/workflows/db-migrations-smoke.yml'
   workflow_dispatch:
 
