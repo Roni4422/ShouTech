@@ -290,8 +290,8 @@ public sealed class CshWin : BaseWin, IWindowMode
             _lines[i].LineNo = i + 1;
     }
 
-    /// <summary>The next sequential company-wide journal number from the central
-    /// allocator (NUMBERING_STUDY). A failure is reported through the
+    /// <summary>The next sequential receipt or payment voucher number from its
+    /// independent company-scoped series. A failure is reported through the
     /// error catalog and leaves the field empty rather than falling
     /// back to a fabricated timestamp number.</summary>
     private string AllocateVoucherNumber()
