@@ -94,6 +94,37 @@ public sealed class SchemaMigratorTests
     }
 
     [Fact]
+    public void MigrationBundleReader_PreservesLegacyIdsAndRejectsChangedSegments()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"shoutech-migration-bundle-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "sys.sql");
+        const string sql = "CREATE TABLE bundle_probe (id INTEGER PRIMARY KEY);\n";
+        const string legacyHash = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        var segmentHash = MigrationBundleReader.ComputeHash(sql);
+
+        try
+        {
+            File.WriteAllText(path,
+                $"-- @shoutech-migration 001_probe.sql {legacyHash} {segmentHash}\n{sql}");
+
+            var migration = Assert.Single(MigrationBundleReader.Load(directory));
+            Assert.Equal("001_probe.sql", migration.Id);
+            Assert.Equal(legacyHash, migration.Hash);
+            Assert.Equal(sql, migration.Sql);
+
+            File.WriteAllText(path,
+                $"-- @shoutech-migration 001_probe.sql {legacyHash} {segmentHash}\n{sql}-- tampered");
+            Assert.Throws<InvalidDataException>(() => MigrationBundleReader.Load(directory));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ProductCategorySchema_UsesOneLanguageNeutralName()
     {
         var databaseDirectory = Path.Combine(
