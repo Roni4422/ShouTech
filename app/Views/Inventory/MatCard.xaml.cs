@@ -327,17 +327,10 @@ public partial class MatCard : BaseWin, IInfoContextProvider
             EnsureUnitRows(UnitWorkspaceRows);
             ReloadCache();
 
-            if (_cache.Count > 0)
-            {
-                _index = 0;
-                LoadCurrent();
-            }
-            else
-            {
-                ClearForm();
-                SetEditMode(false);
-            }
-
+            // Data-entry windows open ready for a new record. Existing
+            // records remain available through the navigator/directory;
+            // merely opening this card must not consume its preview number.
+            New_Click(this, new RoutedEventArgs());
             ShowSection(0);
             UpdateStatusBar();
         }
@@ -1833,8 +1826,13 @@ public partial class MatCard : BaseWin, IInfoContextProvider
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
-        if (_isNew) { ClearForm(); SetEditMode(false); }
-        else LoadCurrent();
+        if (_isNew)
+        {
+            // Discard the unsaved draft and refresh the non-consuming preview.
+            New_Click(this, new RoutedEventArgs());
+            return;
+        }
+        LoadCurrent();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -1861,8 +1859,11 @@ public partial class MatCard : BaseWin, IInfoContextProvider
             _currentId = saved.Id;
             ReloadCache();
             InitUnitSuggestions();
-            _index = Math.Max(0, _cache.FindIndex(x => x.Id == saved.Id));
-            LoadCurrent();
+
+            // After a successful save, immediately prepare the next new card.
+            // The committed code is permanent; the next displayed code is only
+            // a preview and is not consumed unless another save succeeds.
+            New_Click(this, new RoutedEventArgs());
 
             MessageBox.Show(this,
                 L("MatCard.Saved", "Saved successfully."),
