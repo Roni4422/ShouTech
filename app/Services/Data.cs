@@ -684,6 +684,45 @@ private readonly ILogServ _logger;
                 Environment.NewLine;
         }
 
+        private static (string Window, string File, string Method, int Line) ResolveErrorSource(Exception? exception)
+        {
+            try
+            {
+                var trace = exception == null
+                    ? new StackTrace(2, true)
+                    : new StackTrace(exception, true);
+                var frames = trace.GetFrames() ?? Array.Empty<StackFrame>();
+
+                foreach (var frame in frames)
+                {
+                    var method = frame.GetMethod();
+                    var type = method?.DeclaringType;
+                    var file = frame.GetFileName();
+                    if (method == null)
+                        continue;
+
+                    var normalized = (file ?? string.Empty).Replace('\\\\', '/');
+                    var fileName = string.IsNullOrWhiteSpace(normalized)
+                        ? "Unknown"
+                        : Path.GetFileName(normalized);
+                    var window = normalized.Contains("/Views/", StringComparison.OrdinalIgnoreCase)
+                        ? Path.GetFileNameWithoutExtension(fileName)
+                        : (type?.Name ?? "Unknown");
+                    return (
+                        string.IsNullOrWhiteSpace(window) ? "Unknown" : window,
+                        fileName,
+                        method.Name,
+                        frame.GetFileLineNumber());
+                }
+            }
+            catch
+            {
+                // Source resolution is best-effort and must never block logging.
+            }
+
+            return ("Unknown", "Unknown", "Unknown", 0);
+        }
+
         // ================================================================
         // General logging
         // ================================================================
@@ -740,12 +779,26 @@ private readonly ILogServ _logger;
             }
 
             var name = ErrorCatalogSvc.GetCatalogName(stampedCode);
-            var detail = $"[Code={stampedCode}] [Name={name}] {message}{reportedSuffix}";
+            var errorId = Guid.NewGuid().ToString("N").ToUpperInvariant();
+            var source = ResolveErrorSource(ex);
+            var detail =
+                $"[ErrorId={errorId}] [Code={stampedCode}] [Name={name}] " +
+                $"[Window={source.Window}] [SourceFile={source.File}] " +
+                $"[Method={source.Method}] [Line={source.Line}] {message}{reportedSuffix}";
 
             if (ex != null)
             {
                 detail += $" | Exception={ex.GetType().FullName}: {ex.Message}" +
                           $"{Environment.NewLine}StackTrace: {ex.StackTrace}";
+
+                var inner = ex.InnerException;
+                var depth = 1;
+                while (inner != null && depth <= 8)
+                {
+                    detail += $"{Environment.NewLine}InnerException[{depth}]={inner.GetType().FullName}: {inner.Message}";
+                    inner = inner.InnerException;
+                    depth++;
+                }
             }
 
             Write(
