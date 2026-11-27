@@ -2,10 +2,6 @@
 // ShouTech ERP — SecEng Runtime Guard
 // Session + License + Integrity + Hardware + Policy revalidation without restart
 // ============================================================================
-#define ST_SEC_BUILDING_DLL
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/sec_internal.h"
 

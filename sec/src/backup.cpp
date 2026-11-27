@@ -2,10 +2,6 @@
 // ShouTech ERP — SecEng STBK2 Backup Security Envelope
 // Random DEK → AES-256-GCM payload → DEK wrapped by KEK (KEK never stored)
 // ============================================================================
-#define ST_SEC_BUILDING_DLL
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/backup_internal.h"
 #include "../internal/keyvault_internal.h"

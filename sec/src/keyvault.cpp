@@ -2,10 +2,6 @@
 // ShouTech ERP — SecEng Enterprise Key Vault (in-process lifecycle)
 // Generate → Active → Rotate → Retired / Revoked
 // ============================================================================
-#define ST_SEC_BUILDING_DLL
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/keyvault_internal.h"
 #include "../internal/crypto_internal.h"
@@ -33,10 +29,16 @@ std::uint64_t now_unix() noexcept
         duration_cast<seconds>(system_clock::now().time_since_epoch()).count());
 }
 
-void make_key_id(sm::key_purpose purpose, char out[48]) noexcept
+status make_key_id(sm::key_purpose purpose, char out[48]) noexcept
 {
     std::uint8_t rnd[8]{};
-    ic::random_bytes(rnd);
+    const status random_status = ic::random_bytes(std::span<std::uint8_t>(rnd, sizeof(rnd)));
+    if (random_status != status::ok)
+    {
+        sm::secure_zero(rnd, sizeof(rnd));
+        out[0] = '\0';
+        return random_status;
+    }
     const char* p = "APP";
     switch (purpose)
     {
@@ -55,6 +57,7 @@ void make_key_id(sm::key_purpose purpose, char out[48]) noexcept
         rnd[0], rnd[1], rnd[2], rnd[3],
         rnd[4], rnd[5], rnd[6], rnd[7]);
     sm::secure_zero(rnd, sizeof(rnd));
+    return status::ok;
 }
 
 } // anon
@@ -71,7 +74,9 @@ status generate_key(key_purpose purpose, std::string_view scope, key_record& out
     rec.key_len = 32;
     std::snprintf(rec.algorithm, sizeof(rec.algorithm), "AES-256-GCM");
     std::snprintf(rec.scope, sizeof(rec.scope), "%.31s", scope.empty() ? "local" : scope.data());
-    make_key_id(purpose, rec.key_id);
+    const status key_id_status = make_key_id(purpose, rec.key_id);
+    if (key_id_status != status::ok)
+        return key_id_status;
 
     const status st = ic::random_bytes(std::span<std::uint8_t>(rec.key_material, rec.key_len));
     if (st != status::ok)

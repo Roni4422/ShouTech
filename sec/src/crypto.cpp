@@ -3,10 +3,6 @@
 // AES-256-GCM · key validation · public encrypt/decrypt API
 // Windows CNG (BCrypt) — no hand-rolled block ciphers
 // ============================================================================
-#define ST_SEC_BUILDING_DLL
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/crypto_internal.h"
 #include "../internal/sec_internal.h"

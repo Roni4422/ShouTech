@@ -3,10 +3,6 @@
 // Detection → Risk Assessment → Policy → Action
 // NEVER: "debugger process exists" == immediate shutdown for ERP desktops.
 // ============================================================================
-#define ST_SEC_BUILDING_DLL
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/sec_internal.h"
 

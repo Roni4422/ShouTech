@@ -1,10 +1,6 @@
 // ============================================================================
 // ShouTech ERP — SecEng Hashing (SHA-256/512 · HMAC-SHA256 via CNG)
 // ============================================================================
-#define ST_SEC_BUILDING_DLL
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/crypto_internal.h"
 #include "../internal/sec_internal.h"

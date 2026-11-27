@@ -1,10 +1,6 @@
 // ============================================================================
 // ShouTech ERP — SecEng Diagnostics (safe messages, no secret leakage)
 // ============================================================================
-#define ST_SEC_BUILDING_DLL
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/sec_internal.h"
 
@@ -31,8 +27,7 @@ void set_diagnostic(status s, const char* diagnostic_id, const wchar_t* safe_mes
     std::lock_guard lock(e.mutex);
     if (diagnostic_id)
     {
-        std::strncpy(e.last_diagnostic_id, diagnostic_id, sizeof(e.last_diagnostic_id) - 1);
-        e.last_diagnostic_id[sizeof(e.last_diagnostic_id) - 1] = '\0';
+        strncpy_s(e.last_diagnostic_id, sizeof(e.last_diagnostic_id), diagnostic_id, _TRUNCATE);
     }
     if (safe_message)
         e.last_diagnostic = safe_message;

@@ -19,11 +19,6 @@
 // REVIEW: CVSS 3.1, ISO 27001:2022 Compliant
 // LAST AUDIT: 2024-01-15
 // ═══════════════════════════════════════════════════════════════════════════
-
-#define ST_SEC_EXPORTS
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #include "sec.h"
 #include "../internal/keyvault_internal.h"
 #include <Windows.h>
@@ -1203,10 +1198,26 @@ bool performSecurityChecks() noexcept {
                              exeName.begin(), ::towlower);
                 
                 for (const auto& tool : ANALYSIS_TOOLS) {
-                    if (exeName.find(tool) != std::string::npos) {
-                        setLastErrorDetail(status::analysis_tool_detected,
-                                          "Analysis tool detected: " + 
-                                          std::string(exeName.begin(), exeName.end()));
+                    if (exeName.find(tool) != std::wstring::npos) {
+                        std::string utf8Name;
+                        const int utf8Size = WideCharToMultiByte(
+                            CP_UTF8, WC_ERR_INVALID_CHARS, exeName.c_str(), -1,
+                            nullptr, 0, nullptr, nullptr);
+                        if (utf8Size > 1) {
+                            utf8Name.resize(static_cast<std::size_t>(utf8Size));
+                            if (WideCharToMultiByte(
+                                    CP_UTF8, WC_ERR_INVALID_CHARS, exeName.c_str(), -1,
+                                    utf8Name.data(), utf8Size, nullptr, nullptr) == 0) {
+                                utf8Name.clear();
+                            } else {
+                                utf8Name.resize(static_cast<std::size_t>(utf8Size - 1));
+                            }
+                        }
+                        setLastErrorDetail(
+                            status::analysis_tool_detected,
+                            utf8Name.empty()
+                                ? "Analysis tool detected."
+                                : "Analysis tool detected: " + utf8Name);
                         g_state.emergencyMode.store(true);
                         clean = false;
                         break;
