@@ -333,8 +333,9 @@ public static class SequenceAllocator
                 "The journal company could not be resolved for number allocation.");
 
         const string seriesKey = "JRN";
-        var config = ReadConfig(connection, transaction, isPg, companyCode, seriesKey,
-            new SeriesConfig("JRN", 1, false, 1));
+        // JRN is a system-owned series: prefix and start value are fixed.
+        // User numbering preferences must never alter its sequence.
+        var config = new SeriesConfig("JRN", 1, false, 1);
         var prefix = $"{config.Prefix}-";
         var start = prefix.Length + 1;
         var suffix = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
@@ -358,7 +359,7 @@ public static class SequenceAllocator
             WHERE company_id = @company AND fiscal_period_id = @period
               AND document_number LIKE @pattern AND {numeric}
             """;
-        Add(max, "@company", companyId.ToString("D", CultureInfo.InvariantCulture));
+        Add(max, "@company", isPg ? (object)companyId : companyId.ToString("D", CultureInfo.InvariantCulture));
         Add(max, "@period", isPg ? (object)Guid.Parse(fiscalPeriodId) : fiscalPeriodId);
         Add(max, "@pattern", $"{prefix}%");
         Add(max, "@start", start);
@@ -381,7 +382,7 @@ public static class SequenceAllocator
             """;
         Add(allocate, "@company", companyCode.Trim());
         Add(allocate, "@series", seriesKey);
-        Add(allocate, "@period", fiscalPeriodId.Trim());
+        Add(allocate, "@period", isPg ? (object)Guid.Parse(fiscalPeriodId) : fiscalPeriodId.Trim());
         Add(allocate, "@next", seed + 1);
         var value = Convert.ToInt64(allocate.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
         if (value <= 0 || value > MaxValue)
