@@ -89,7 +89,7 @@ public sealed class JournalRepository : IJournalRepository
     public async Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(
         Guid companyId,
         string documentNumber,
-        DateOnly? entryDate,
+        DateOnly? lookupEntryDate,
         CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
@@ -101,11 +101,11 @@ public sealed class JournalRepository : IJournalRepository
         string? lookupPeriodId = null;
         if (documentNumber.Trim().StartsWith("JRN-", StringComparison.OrdinalIgnoreCase))
         {
-            if (!entryDate.HasValue)
+            if (!lookupEntryDate.HasValue)
                 throw new InvalidOperationException("A fiscal-period date is required when looking up a central JRN number.");
             object lookupDate = _provider == "PostgreSQL"
-                ? entryDate.Value
-                : entryDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                ? lookupEntryDate.Value
+                : lookupEntryDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             await using var periodLookup = connection.CreateCommand();
             periodLookup.CommandText = "SELECT fiscal_period_id FROM fiscal_periods WHERE company_id = @company AND @date BETWEEN start_date AND end_date";
             Add(periodLookup, "@company", FormatGuid(companyId));
