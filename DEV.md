@@ -15,7 +15,8 @@ The roadmap is a living plan, not a claim that every feature is complete. Update
 
 ShouTech supports SQLite and PostgreSQL only. SQL Server-specific scripts and implementations are not part of the active runtime.
 
-- Install the .NET 8 SDK.
+- Install the .NET 10 SDK. CI currently uses this SDK.
+- The application, supporting libraries, service and test project still target .NET 8. The .NET 10 target-framework migration is pending and must not be considered complete until the projects, dependencies, native components and Windows 10/11 test matrix pass.
 - SQLite is suitable for local development and single-user deployments.
 - PostgreSQL is suitable for server deployments and concurrent multi-user workloads.
 
@@ -31,7 +32,6 @@ dotnet run
 dotnet build build/ShouTech.sln
 dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release
 ```
-
 
 Use `cfg/appset.json` for non-secret provider defaults. Keep credentials out of source control and provide connection strings through `SHOUTECH_CONNECTION_STRING` or `SHOUTECH_DB_CONNECTION`. Select the provider with `SHOUTECH_DB_PROVIDER=sqlite` or `SHOUTECH_DB_PROVIDER=postgresql`.
 
