@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Document numbers are company-scoped, document-kind-scoped, year-scoped business identifiers. They are not database row IDs and must never be generated from a row count.
+Document numbers are company-scoped and document-kind-scoped business identifiers. Document series are continuous across calendar years; the numeric suffix has no leading zeroes and no fixed display width. They are not database row IDs and must never be generated from a row count.
 
 ## Runtime contract
 
@@ -78,7 +78,7 @@ This standard applies to every ShouTech desktop data-entry window: sales and pur
 
 1. Opening a blank form must not reserve or consume a number.
 2. The form may display a non-reserving next-number preview, clearly distinguished internally from a persisted number. The definitive number is assigned atomically when the new document is first saved.
-3. Number allocation is database-backed, company-scoped, document-type-scoped, and fiscal-year/period-aware where the numbering policy requires it.
+3. Number allocation is database-backed, company-scoped, document-type-scoped, and continuous across years.
 4. Allocation and first document insert occur in the same transaction. Concurrent users must never receive the same number.
 5. Saving or editing an existing draft never changes its number.
 6. Posting, reversal, return, cancellation, and amendment operations preserve their own document identities and links. A posted number is never silently recycled.
