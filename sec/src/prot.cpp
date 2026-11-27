@@ -207,7 +207,7 @@ namespace {
     };
     #pragma pack(pop)
     
-    static_assert(sizeof(FileHeaderV3) == 80, "FileHeaderV3 size mismatch");
+    static_assert(sizeof(FileHeaderV3) == 88, "FileHeaderV3 size mismatch");
     
     // ──────────────────────────────────────────────────────────────────────
     // Chunk Format Metadata (Authenticated Encryption)
@@ -222,7 +222,7 @@ namespace {
     };
     #pragma pack(pop)
     
-    static_assert(sizeof(ChunkMetadataV3) == 24, "ChunkMetadataV3 size mismatch");
+    static_assert(sizeof(ChunkMetadataV3) == 28, "ChunkMetadataV3 size mismatch");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -430,7 +430,7 @@ bool constantTimeCompare(const uint8_t* a, const uint8_t* b, size_t len) noexcep
 status randomBytes(uint8_t* buf, size_t len) noexcept {
     if (!buf || len == 0) return status::invalid_parameter;
     
-    if (!NT_SUCCESS(BCryptGenRandom(nullptr, buf, (ULONG)len, 
+    if (!BCRYPT_SUCCESS(BCryptGenRandom(nullptr, buf, (ULONG)len, 
                                     BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
         return status::crypto_random;
     }
@@ -454,21 +454,21 @@ status sha256(const uint8_t* data, size_t len, uint8_t hash[32]) noexcept {
     AlgHandle hAlg;
     HashHandle hHash;
     
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(
+    if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
             hAlg.operator&(), BCRYPT_SHA256_ALGORITHM, nullptr, 0))) {
         return status::crypto_hash;
     }
     
-    if (!NT_SUCCESS(BCryptCreateHash(
+    if (!BCRYPT_SUCCESS(BCryptCreateHash(
             hAlg.get(), hHash.operator&(), nullptr, 0, nullptr, 0, 0))) {
         return status::crypto_hash;
     }
     
-    if (!NT_SUCCESS(BCryptHashData(hHash.get(), (PUCHAR)data, (ULONG)len, 0))) {
+    if (!BCRYPT_SUCCESS(BCryptHashData(hHash.get(), (PUCHAR)data, (ULONG)len, 0))) {
         return status::crypto_hash;
     }
     
-    if (!NT_SUCCESS(BCryptFinishHash(hHash.get(), hash, 32, 0))) {
+    if (!BCRYPT_SUCCESS(BCryptFinishHash(hHash.get(), hash, 32, 0))) {
         return status::crypto_hash;
     }
     
@@ -494,12 +494,12 @@ status sha256File(const wchar_t* path, uint8_t hash[32]) noexcept {
     AlgHandle hAlg;
     HashHandle hHash;
     
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(
+    if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
             hAlg.operator&(), BCRYPT_SHA256_ALGORITHM, nullptr, 0))) {
         return status::crypto_hash;
     }
     
-    if (!NT_SUCCESS(BCryptCreateHash(
+    if (!BCRYPT_SUCCESS(BCryptCreateHash(
             hAlg.get(), hHash.operator&(), nullptr, 0, nullptr, 0, 0))) {
         return status::crypto_hash;
     }
@@ -510,14 +510,14 @@ status sha256File(const wchar_t* path, uint8_t hash[32]) noexcept {
         size_t bytesRead = static_cast<size_t>(file.gcount());
         
         if (bytesRead > 0) {
-            if (!NT_SUCCESS(BCryptHashData(hHash.get(), buffer.data(), 
+            if (!BCRYPT_SUCCESS(BCryptHashData(hHash.get(), buffer.data(), 
                                           (ULONG)bytesRead, 0))) {
                 return status::crypto_hash;
             }
         }
     }
     
-    if (!NT_SUCCESS(BCryptFinishHash(hHash.get(), hash, 32, 0))) {
+    if (!BCRYPT_SUCCESS(BCryptFinishHash(hHash.get(), hash, 32, 0))) {
         return status::crypto_hash;
     }
     
@@ -546,7 +546,7 @@ status hmacSha256(const uint8_t* key, size_t keyLen,
     AlgHandle hAlg;
     KeyHandle hKey;
     
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(
+    if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
             hAlg.operator&(), BCRYPT_SHA256_ALGORITHM, nullptr, 
             BCRYPT_ALG_HANDLE_HMAC_FLAG))) {
         return status::crypto_hash;
@@ -554,24 +554,24 @@ status hmacSha256(const uint8_t* key, size_t keyLen,
     
     // Query key object size
     DWORD keyObjSize = 0;
-    if (!NT_SUCCESS(BCryptGetProperty(
+    if (!BCRYPT_SUCCESS(BCryptGetProperty(
             hAlg.get(), BCRYPT_OBJECT_LENGTH, (PUCHAR)&keyObjSize, 
             sizeof(keyObjSize), nullptr, 0))) {
         return status::crypto_hash;
     }
     
     std::vector<uint8_t> keyObj(keyObjSize);
-    if (!NT_SUCCESS(BCryptGenerateSymmetricKey(
+    if (!BCRYPT_SUCCESS(BCryptGenerateSymmetricKey(
             hAlg.get(), hKey.operator&(), keyObj.data(), (ULONG)keyObj.size(),
             (PUCHAR)key, (ULONG)keyLen, 0))) {
         return status::crypto_hash;
     }
     
-    if (!NT_SUCCESS(BCryptHashData(hKey.get(), (PUCHAR)data, (ULONG)dataLen, 0))) {
+    if (!BCRYPT_SUCCESS(BCryptHashData(hKey.get(), (PUCHAR)data, (ULONG)dataLen, 0))) {
         return status::crypto_hash;
     }
     
-    if (!NT_SUCCESS(BCryptFinishHash(hKey.get(), mac, HMAC_SIZE, 0))) {
+    if (!BCRYPT_SUCCESS(BCryptFinishHash(hKey.get(), mac, HMAC_SIZE, 0))) {
         return status::crypto_hash;
     }
     
@@ -612,33 +612,21 @@ status pbkdf2(const uint8_t* password, size_t passwordLen,
     }
     
     AlgHandle hAlg;
-    KeyHandle hKey;
     
-    if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(
-            hAlg.operator&(), BCRYPT_SHA256_ALGORITHM, nullptr, 
+    if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
+            hAlg.operator&(), BCRYPT_SHA256_ALGORITHM, nullptr,
             BCRYPT_ALG_HANDLE_HMAC_FLAG))) {
         return status::crypto_key_derivation;
     }
-    
-    // Query key object size
-    DWORD keyObjSize = 0;
-    if (!NT_SUCCESS(BCryptGetProperty(
-            hAlg.get(), BCRYPT_OBJECT_LENGTH, (PUCHAR)&keyObjSize, 
-            sizeof(keyObjSize), nullptr, 0))) {
-        return status::crypto_key_derivation;
-    }
-    
-    std::vector<uint8_t> keyObj(keyObjSize);
-    if (!NT_SUCCESS(BCryptGenerateSymmetricKey(
-            hAlg.get(), hKey.operator&(), keyObj.data(), (ULONG)keyObj.size(),
-            (PUCHAR)password, (ULONG)passwordLen, 0))) {
-        return status::crypto_key_derivation;
-    }
-    
-    // Use BCryptDeriveKeyPBKDF2
-    if (!NT_SUCCESS(BCryptDeriveKeyPBKDF2(
-            hKey.get(), (PUCHAR)salt, (ULONG)saltLen, iterations,
-            derivedKey, (ULONG)derivedKeyLen, 0))) {
+
+    // BCryptDeriveKeyPBKDF2 takes the HMAC algorithm provider and password
+    // directly; it does not take a generated symmetric-key handle.
+    if (!BCRYPT_SUCCESS(BCryptDeriveKeyPBKDF2(
+            hAlg.get(),
+            const_cast<PUCHAR>(password), static_cast<ULONG>(passwordLen),
+            const_cast<PUCHAR>(salt), static_cast<ULONG>(saltLen),
+            static_cast<ULONGLONG>(iterations),
+            derivedKey, static_cast<ULONG>(derivedKeyLen), 0))) {
         return status::crypto_key_derivation;
     }
     
@@ -668,6 +656,7 @@ private:
     AlgHandle hAlg;
     KeyHandle hKey;
     std::vector<uint8_t> ivNonce;  // GCM nonce (96-bit)
+    std::vector<uint8_t> keyObject;
     uint32_t chunkSequence{0};
     std::vector<uint8_t> buffer;
     size_t maxChunkSize;
@@ -703,12 +692,12 @@ public:
         
         ivNonce.assign(iv, iv + ivLen);
         
-        if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(
+        if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
                 hAlg.operator&(), BCRYPT_AES_ALGORITHM, nullptr, 0))) {
             return status::crypto_encrypt;
         }
         
-        if (!NT_SUCCESS(BCryptSetProperty(
+        if (!BCRYPT_SUCCESS(BCryptSetProperty(
                 hAlg.get(), BCRYPT_CHAINING_MODE, 
                 (PUCHAR)BCRYPT_CHAIN_MODE_GCM, 
                 sizeof(BCRYPT_CHAIN_MODE_GCM), 0))) {
@@ -716,16 +705,16 @@ public:
         }
         
         DWORD keyObjSize = 0;
-        if (!NT_SUCCESS(BCryptGetProperty(
+        if (!BCRYPT_SUCCESS(BCryptGetProperty(
                 hAlg.get(), BCRYPT_OBJECT_LENGTH, (PUCHAR)&keyObjSize, 
                 sizeof(keyObjSize), nullptr, 0))) {
             return status::crypto_encrypt;
         }
         
-        std::vector<uint8_t> keyObj(keyObjSize);
-        if (!NT_SUCCESS(BCryptGenerateSymmetricKey(
-                hAlg.get(), hKey.operator&(), keyObj.data(), 
-                (ULONG)keyObj.size(), (PUCHAR)key, (ULONG)keyLen, 0))) {
+        keyObject.resize(keyObjSize);
+        if (!BCRYPT_SUCCESS(BCryptGenerateSymmetricKey(
+                hAlg.get(), hKey.operator&(), keyObject.data(),
+                (ULONG)keyObject.size(), (PUCHAR)key, (ULONG)keyLen, 0))) {
             return status::crypto_encrypt;
         }
         
@@ -753,7 +742,8 @@ public:
         std::vector<uint8_t> aad;
         deriveChunkAAD(chunkSequence, aad);
         
-        BCRYPT_GCM_PARMS_EX gcmParams = {};
+        BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO gcmParams;
+        BCRYPT_INIT_AUTH_MODE_INFO(gcmParams);
         gcmParams.cbSize = sizeof(gcmParams);
         gcmParams.pbNonce = ivNonce.data();
         gcmParams.cbNonce = (ULONG)ivNonce.size();
@@ -764,14 +754,14 @@ public:
         gcmParams.dwFlags = 0;
         
         ULONG cipherLen = 0;
-        NTSTATUS status = BCryptEncrypt(hKey.get(), 
+        NTSTATUS ntStatus = BCryptEncrypt(hKey.get(), 
                                        (PUCHAR)plaintext, plaintextLen, 
                                        &gcmParams,
                                        nullptr, 0,
                                        ciphertext, ciphertextBuf, 
                                        &cipherLen, 0);
         
-        if (!NT_SUCCESS(status)) return status::crypto_encrypt;
+        if (!BCRYPT_SUCCESS(ntStatus)) return status::crypto_encrypt;
         
         if (outLen) *outLen = cipherLen;
         chunkSequence++;
@@ -789,6 +779,7 @@ private:
     AlgHandle hAlg;
     KeyHandle hKey;
     std::vector<uint8_t> ivNonce;
+    std::vector<uint8_t> keyObject;
     uint32_t chunkSequence{0};
     
     void deriveChunkAAD(uint32_t sequence, std::vector<uint8_t>& aad) {
@@ -811,12 +802,12 @@ public:
         
         ivNonce.assign(iv, iv + ivLen);
         
-        if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(
+        if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(
                 hAlg.operator&(), BCRYPT_AES_ALGORITHM, nullptr, 0))) {
             return status::crypto_decrypt;
         }
         
-        if (!NT_SUCCESS(BCryptSetProperty(
+        if (!BCRYPT_SUCCESS(BCryptSetProperty(
                 hAlg.get(), BCRYPT_CHAINING_MODE, 
                 (PUCHAR)BCRYPT_CHAIN_MODE_GCM, 
                 sizeof(BCRYPT_CHAIN_MODE_GCM), 0))) {
@@ -824,16 +815,16 @@ public:
         }
         
         DWORD keyObjSize = 0;
-        if (!NT_SUCCESS(BCryptGetProperty(
+        if (!BCRYPT_SUCCESS(BCryptGetProperty(
                 hAlg.get(), BCRYPT_OBJECT_LENGTH, (PUCHAR)&keyObjSize, 
                 sizeof(keyObjSize), nullptr, 0))) {
             return status::crypto_decrypt;
         }
         
-        std::vector<uint8_t> keyObj(keyObjSize);
-        if (!NT_SUCCESS(BCryptGenerateSymmetricKey(
-                hAlg.get(), hKey.operator&(), keyObj.data(), 
-                (ULONG)keyObj.size(), (PUCHAR)key, (ULONG)keyLen, 0))) {
+        keyObject.resize(keyObjSize);
+        if (!BCRYPT_SUCCESS(BCryptGenerateSymmetricKey(
+                hAlg.get(), hKey.operator&(), keyObject.data(),
+                (ULONG)keyObject.size(), (PUCHAR)key, (ULONG)keyLen, 0))) {
             return status::crypto_decrypt;
         }
         
@@ -843,7 +834,7 @@ public:
     /**
      * @brief Decrypts and verifies a chunk.
      * 
-     * Returns status::integrity_fail if MAC verification fails.
+     * Returns status::integrity_check_failed if MAC verification fails.
      * Prevents tampering detection and chunk reordering.
      */
     status decryptChunk(const uint8_t* ciphertext, uint32_t ciphertextLen,
@@ -860,7 +851,8 @@ public:
         uint8_t tagCopy[GCM_TAG_SIZE];
         memcpy(tagCopy, tag, GCM_TAG_SIZE);
         
-        BCRYPT_GCM_PARMS_EX gcmParams = {};
+        BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO gcmParams;
+        BCRYPT_INIT_AUTH_MODE_INFO(gcmParams);
         gcmParams.cbSize = sizeof(gcmParams);
         gcmParams.pbNonce = ivNonce.data();
         gcmParams.cbNonce = (ULONG)ivNonce.size();
@@ -871,16 +863,16 @@ public:
         gcmParams.dwFlags = 0;
         
         ULONG plainLen = 0;
-        NTSTATUS status = BCryptDecrypt(hKey.get(), 
+        NTSTATUS ntStatus = BCryptDecrypt(hKey.get(), 
                                        (PUCHAR)ciphertext, ciphertextLen, 
                                        &gcmParams,
                                        nullptr, 0,
                                        plaintext, plaintextBuf, 
                                        &plainLen, 0);
         
-        if (!NT_SUCCESS(status)) {
+        if (!BCRYPT_SUCCESS(ntStatus)) {
             // GCM authentication failed
-            return status::integrity_fail;
+            return status::integrity_check_failed;
         }
         
         if (outLen) *outLen = plainLen;
@@ -1020,7 +1012,7 @@ status encryptFileStreaming(const wchar_t* inPath, const wchar_t* outPath,
  * @param outPath Output decrypted file path
  * @param key 256-bit decryption key
  * @param keyLen Key length (must be 32)
- * @return status::ok on success, status::integrity_fail if tampering detected
+ * @return status::ok on success, status::integrity_check_failed if tampering detected
  */
 status decryptFileStreaming(const wchar_t* inPath, const wchar_t* outPath,
                             const uint8_t* key, size_t keyLen) noexcept {
@@ -1072,7 +1064,7 @@ status decryptFileStreaming(const wchar_t* inPath, const wchar_t* outPath,
         
         // Verify sequence number (detect reordering)
         if (chunkMeta.chunkSequence != expectedChunkSeq) {
-            return status::integrity_fail;  // Chunk reordered or missing
+            return status::integrity_check_failed;  // Chunk reordered or missing
         }
         
         // Read ciphertext
@@ -1099,7 +1091,7 @@ status decryptFileStreaming(const wchar_t* inPath, const wchar_t* outPath,
         
         // Verify chunk size
         if (plainLen != chunkMeta.chunkSize) {
-            return status::integrity_fail;
+            return status::integrity_check_failed;
         }
         
         // Write decrypted data
@@ -1271,8 +1263,9 @@ void startRuntimeGuard() noexcept {
 }
 
 void stopRuntimeGuard() noexcept {
-    g_state.stopGuard.store(true);
-    // jthread destructor auto-joins
+    g_state.stopGuard.store(true, std::memory_order_release);
+    if (g_state.guardThread.joinable())
+        g_state.guardThread.request_stop();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1386,18 +1379,41 @@ ST_API status ST_CALL ST_InitializeSimple(const uint8_t* licenseData,
  * Securely zeros sensitive data.
  * Stops monitoring threads.
  */
-ST_API status ST_CALL ST_Shutdown() noexcept {
+ST_API status ST_CALL ST_Shutdown() {
     std::unique_lock lock(g_state.stateMutex);
     
     if (!g_state.initialized.load()) return status::not_initialized;
     
     stopRuntimeGuard();
-    
+    if (g_state.guardThread.joinable())
+        g_state.guardThread.join();
+
     // Secure cleanup
     secureZero(g_state.hwid, sizeof(g_state.hwid));
     secureZero(g_state.vaultKey.data(), g_state.vaultKey.size());
     
-    g_state = EngineState{};  // Reset to initial state
+    {
+        std::unique_lock stateLock(g_state.stateMutex);
+        secureZero(g_state.hwid, sizeof(g_state.hwid));
+        secureZero(g_state.editionName, sizeof(g_state.editionName));
+        secureZero(g_state.accountId, sizeof(g_state.accountId));
+        secureZero(g_state.expiresAt, sizeof(g_state.expiresAt));
+        secureZero(g_state.dongleSerial, sizeof(g_state.dongleSerial));
+        if (!g_state.vaultKey.empty())
+            secureZero(g_state.vaultKey.data(), g_state.vaultKey.size());
+        g_state.vaultKey.clear();
+        g_state.lastErrorDetail.clear();
+        g_state.editionType = edition::unknown;
+        g_state.licenseFlags = 0;
+        g_state.maxDevices = g_state.maxCompanies = g_state.maxUsers = g_state.daysRemaining = 0;
+        g_state.sessionValid.store(false, std::memory_order_release);
+        g_state.emergencyMode.store(false, std::memory_order_release);
+        g_state.runtimeClean.store(true, std::memory_order_release);
+        g_state.validationCheckCount.store(0, std::memory_order_relaxed);
+        g_state.lastStatus.store(status::not_initialized, std::memory_order_release);
+        g_state.lastValidationTime = {};
+        g_state.stopGuard.store(false, std::memory_order_release);
+    }
     
     return status::ok;
 }
@@ -1405,7 +1421,7 @@ ST_API status ST_CALL ST_Shutdown() noexcept {
 /**
  * @brief Checks if the engine is initialized.
  */
-ST_API bool ST_CALL ST_IsInitialized() noexcept {
+ST_API bool ST_CALL ST_IsInitialized() {
     return g_state.initialized.load(std::memory_order_acquire);
 }
 
@@ -1714,7 +1730,7 @@ ST_API status ST_CALL ST_EncryptFile(const wchar_t* in, const wchar_t* out,
  * @param out Destination decrypted file path
  * @param key 256-bit decryption key
  * @param keyLen Key length (must be 32)
- * @return status::ok on success, status::integrity_fail if tampering detected
+ * @return status::ok on success, status::integrity_check_failed if tampering detected
  */
 ST_API status ST_CALL ST_DecryptFile(const wchar_t* in, const wchar_t* out, 
                                      const uint8_t* key, uint32_t keyLen) {
@@ -1748,7 +1764,7 @@ ST_API status ST_CALL ST_GetStatusMessage(status s, wchar_t* buf,
         case status::out_of_memory: msg = L"Out of memory"; break;
         case status::internal_error: msg = L"Internal error"; break;
         case status::unsupported_version: msg = L"Unsupported file/protocol version"; break;
-        case status::integrity_fail: msg = L"Integrity verification failed"; break;
+        case status::integrity_check_failed: msg = L"Integrity verification failed"; break;
         case status::dongle_not_found: msg = L"Security dongle not found"; break;
         case status::dongle_communication: msg = L"Dongle communication error"; break;
         case status::dongle_invalid_response: msg = L"Invalid dongle response"; break;
