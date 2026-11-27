@@ -66,6 +66,33 @@ public class DataExchangeStep10Tests
         finally { AppHost.Permissions.Clear(); }
     }
 
+    [Fact]
+    public async Task ProductClassExport_UsesOneLanguageNeutralNameColumn()
+    {
+        using var db = await MigratedDbAsync();
+        PointAppAt(db.Path);
+        SeedCompanyAndMaterial(db);
+        var columns = db.Columns("product_categories");
+        Assert.Contains("name", columns);
+        Assert.DoesNotContain("category_name_ar", columns);
+        Assert.DoesNotContain("category_name_en", columns);
+
+        db.Exec($"INSERT INTO product_categories (category_id, company_id, category_code, name, category_level, is_active, is_deleted, created_at) VALUES ('CAT-1', '{CompanyGuid}', 'CAT-01', 'Fasteners', 1, 1, 0, '2026-01-01T00:00:00')");
+        AppState.CurrentUser = new UserInfo { Id = "u1", Username = "admin", CompanyId = CompanyCode };
+        AppState.SetCompany(CompanyCode, "Step10 Co", "Step10 Co");
+
+        var option = new DataExportOption("ProductClasses", "Product classes", "product_categories");
+        var model = await DataExportSvc.BuildExportModelAsync(
+            option, CompanyCode, "Step10 Co", "admin");
+
+        var nameColumn = Assert.Single(model.Columns, column =>
+            column.HeaderTextKey.Equals("name", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(model.Columns, column =>
+            column.HeaderTextKey.Equals("category_name_ar", StringComparison.OrdinalIgnoreCase) ||
+            column.HeaderTextKey.Equals("category_name_en", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("Fasteners", model.Rows.Single()[nameColumn.Key]?.ToString());
+    }
+
     // ------------------------------------------------------------ gating
 
     [Fact]
