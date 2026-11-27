@@ -670,7 +670,6 @@
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.ViewInformation" Header="Information">
                         <ribbon:RibbonButton loc:LocProps.Key="View.InfoWindow" Label="Info window" Click="OnRibbonButtonClick"/>
-                        <ribbon:RibbonButton loc:LocProps.Key="View.CompanyInfo" Label="Company info" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="View.ExportData" Label="Export data" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                 </ribbon:RibbonTab>
