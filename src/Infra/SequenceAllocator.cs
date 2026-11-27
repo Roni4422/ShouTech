@@ -209,12 +209,12 @@ public static class SequenceAllocator
     /// </summary>
     public static string AllocateJournalNumber(
         DbConnection connection, DbTransaction transaction, bool isPg,
-        string companyId, DateOnly entryDate)
+        Guid companyId, DateOnly entryDate)
     {
         using var company = connection.CreateCommand();
         company.Transaction = transaction;
         company.CommandText = "SELECT company_code FROM companies WHERE CAST(company_id AS TEXT) = @id";
-        Add(company, "@id", companyId.Trim());
+        Add(company, "@id", companyId.ToString("D", CultureInfo.InvariantCulture));
         var companyCode = Convert.ToString(company.ExecuteScalar(), CultureInfo.InvariantCulture);
         if (string.IsNullOrWhiteSpace(companyCode))
             throw new AppError(ErrorCodes.NumberingAllocationFailed,
@@ -240,7 +240,7 @@ public static class SequenceAllocator
             FROM journal_entries
             WHERE company_id = @company AND document_number LIKE @pattern AND {numeric}
             """;
-        Add(max, "@company", companyId.Trim());
+        Add(max, "@company", companyId.ToString("D", CultureInfo.InvariantCulture));
         Add(max, "@pattern", $"{prefix}%");
         Add(max, "@start", start);
         var seed = Convert.ToInt64(max.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
