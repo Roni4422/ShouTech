@@ -850,6 +850,10 @@ ST_API void ST_CALL ST_SecureZeroMemory(
 
 // ───────────────────────────────────────────────────────────────────────────
 // STBK2 Company Backup Envelope (native)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Layout: [256-byte header][metadata][ciphertext]
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -875,5 +879,9 @@ ST_NODISCARD ST_API ST_STATUS ST_CALL ST_ValidateStbk2Header(
 // ═══════════════════════════════════════════════════════════════════════════
 // END OF FILE
 // ═══════════════════════════════════════════════════════════════════════════
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // SHOUTECH_SEC_H_9DA8F3E1_4B72_4C9A_B8E5_2F7A3D1C0E96_
