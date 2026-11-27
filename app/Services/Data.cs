@@ -598,7 +598,7 @@ private readonly ILogServ _logger;
             Directory.CreateDirectory(_logDir);
 
             _logPath = Path.Combine(_logDir, "log.log");
-            _errorsLogPath = Path.Combine(_logDir, "error.log");
+            _errorLogPath = Path.Combine(_logDir, "error.log");
 
             Debug.WriteLine($"LOG DIRECTORY = {_logDir}");
 
@@ -651,10 +651,10 @@ private readonly ILogServ _logger;
                                 "Application Operational Log"));
                     }
 
-                    if (!File.Exists(_errorsLogPath))
+                    if (!File.Exists(_errorLogPath))
                     {
                         WritePhysical(
-                            _errorsLogPath,
+                            _errorLogPath,
                             BuildHeader(
                                 "Error Log (SYS-ERROR / USR-ERROR only)"));
                     }
@@ -955,7 +955,7 @@ private readonly ILogServ _logger;
                         var errorLine = level == "ERROR"
                             ? line.Replace("[ERROR]", $"[{errorLevel}]", StringComparison.Ordinal)
                             : line;
-                        WritePhysical(_errorsLogPath, errorLine);
+                        WritePhysical(_errorLogPath, errorLine);
                         WritePhysical(_logPath, errorLine);
                     }
                     else
