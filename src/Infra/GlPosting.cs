@@ -177,7 +177,7 @@ public static class GlPosting
 
         var entryId = Guid.NewGuid();
         var documentNumber = SequenceAllocator.AllocateJournalNumber(
-            connection, transaction, prov == "PostgreSQL", request.CompanyId, request.EntryDate);
+            connection, transaction, prov == "PostgreSQL", request.CompanyId);
 
         object entryDateValue = prov == "PostgreSQL"
             ? request.EntryDate
