@@ -316,7 +316,7 @@ public sealed class CshWin : BaseWin, IWindowMode
         _currentJournalId = null;
         _isPosted = false;
         _txtDocNo.Text = AllocateVoucherNumber();
-        _txtDocNo.IsReadOnly = false;
+        _txtDocNo.IsReadOnly = true;
         _dtDate.SelectedDate = DateTime.Today;
         _txtParty.Text = string.Empty;
         _txtPartyCode.Text = string.Empty;
