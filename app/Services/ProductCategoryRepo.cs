@@ -15,8 +15,7 @@ public sealed class ProductCategoryRecord
 {
     public string Id { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
-    public string NameAr { get; set; } = string.Empty;
-    public string NameEn { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public string? ParentId { get; set; }
     public string? ParentCode { get; set; }
     public int Level { get; set; } = 1;
@@ -36,8 +35,7 @@ public static class ProductCategoryRepo
             SELECT
                 category.category_id,
                 category.category_code,
-                category.category_name_ar,
-                category.category_name_en,
+                category.name,
                 category.parent_category_id,
                 parent.category_code AS parent_code,
                 category.category_level,
@@ -61,12 +59,11 @@ public static class ProductCategoryRepo
             {
                 Id = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty,
                 Code = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? string.Empty,
-                NameAr = reader.IsDBNull(2) ? string.Empty : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
-                NameEn = reader.IsDBNull(3) ? string.Empty : Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? string.Empty,
-                ParentId = reader.IsDBNull(4) ? null : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture),
-                ParentCode = reader.IsDBNull(5) ? null : Convert.ToString(reader.GetValue(5), CultureInfo.InvariantCulture),
-                Level = reader.IsDBNull(6) ? 1 : Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture),
-                IsActive = !reader.IsDBNull(7) && Convert.ToInt32(reader.GetValue(7), CultureInfo.InvariantCulture) != 0
+                Name = reader.IsDBNull(2) ? string.Empty : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+                ParentId = reader.IsDBNull(3) ? null : Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture),
+                ParentCode = reader.IsDBNull(4) ? null : Convert.ToString(reader.GetValue(4), CultureInfo.InvariantCulture),
+                Level = reader.IsDBNull(5) ? 1 : Convert.ToInt32(reader.GetValue(5), CultureInfo.InvariantCulture),
+                IsActive = !reader.IsDBNull(6) && Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture) != 0
             });
         }
 
@@ -78,8 +75,7 @@ public static class ProductCategoryRepo
         ArgumentNullException.ThrowIfNull(record);
 
         var code = record.Code.Trim();
-        var nameAr = record.NameAr.Trim();
-        var nameEn = record.NameEn.Trim();
+        var name = record.Name.Trim();
         var parentId = string.IsNullOrWhiteSpace(record.ParentId) ? null : record.ParentId.Trim();
         var existingId = string.IsNullOrWhiteSpace(record.Id) ? null : record.Id.Trim();
 
@@ -87,8 +83,8 @@ public static class ProductCategoryRepo
             throw new ArgumentException("A category code is required.", nameof(record));
         if (code.Length > 64)
             throw new ArgumentException("The category code cannot exceed 64 characters.", nameof(record));
-        if (nameAr.Length == 0 && nameEn.Length == 0)
-            throw new ArgumentException("Enter an Arabic or English category name.", nameof(record));
+        if (name.Length == 0)
+            throw new ArgumentException("A category name is required.", nameof(record));
 
         var companyCode = RequireCompanyCode();
         using var connection = OpenConnection();
@@ -133,19 +129,18 @@ public static class ProductCategoryRepo
                 insert.CommandText = """
                     INSERT INTO product_categories
                         (category_id, company_id, parent_category_id, category_code,
-                         category_name_ar, category_name_en, category_level, is_active,
+                         name, category_level, is_active,
                          is_deleted, created_at, created_by)
                     VALUES
                         (@categoryId, @companyId, @parentId, @code,
-                         @nameAr, @nameEn, @level, @isActive,
+                         @name, @level, @isActive,
                          0, CURRENT_TIMESTAMP, @userId);
                     """;
                 Add(insert, "@categoryId", id);
                 Add(insert, "@companyId", companyId);
                 Add(insert, "@parentId", parentId);
                 Add(insert, "@code", code);
-                Add(insert, "@nameAr", nameAr);
-                Add(insert, "@nameEn", nameEn);
+                Add(insert, "@name", name);
                 Add(insert, "@level", level);
                 Add(insert, "@isActive", record.IsActive ? 1 : 0);
                 Add(insert, "@userId", AppState.CurrentUser?.Username ?? string.Empty);
@@ -159,8 +154,7 @@ public static class ProductCategoryRepo
                     UPDATE product_categories
                     SET parent_category_id = @parentId,
                         category_code = @code,
-                        category_name_ar = @nameAr,
-                        category_name_en = @nameEn,
+                        name = @name,
                         category_level = @level,
                         is_active = @isActive,
                         modified_at = CURRENT_TIMESTAMP,
@@ -171,8 +165,7 @@ public static class ProductCategoryRepo
                     """;
                 Add(update, "@parentId", parentId);
                 Add(update, "@code", code);
-                Add(update, "@nameAr", nameAr);
-                Add(update, "@nameEn", nameEn);
+                Add(update, "@name", name);
                 Add(update, "@level", level);
                 Add(update, "@isActive", record.IsActive ? 1 : 0);
                 Add(update, "@userId", AppState.CurrentUser?.Username ?? string.Empty);
@@ -190,8 +183,7 @@ public static class ProductCategoryRepo
             {
                 Id = id,
                 Code = code,
-                NameAr = nameAr,
-                NameEn = nameEn,
+                Name = name,
                 ParentId = parentId,
                 Level = level,
                 IsActive = record.IsActive
