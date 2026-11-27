@@ -3308,7 +3308,9 @@
     "CheckFailed": "FAILED — {0}: {1}",
     "ChecksRunning": "Running database checks...",
     "ChecksCompleted": "Maintenance checks completed.",
-    "ChecksCompletedWithErrors": "Checks completed with {0} issue(s)."
+    "ChecksCompletedWithErrors": "Checks completed with {0} issue(s).",
+    "BackupVerifyFailed": "The backup file failed its integrity validation. Maintenance checks were not started.",
+    "BackupVerified": "Backup created and integrity-verified."
   },
   "Rollover": {
     "Title": "Fiscal Year Roll-over",
