@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using Npgsql;
 using ShouTech.Application.Services;
 using ShouTech.Domain.Entities;
 using ShouTech.Infrastructure;
@@ -36,6 +37,28 @@ public class OperationsServiceTests : IDisposable
         SqliteConnection.ClearAllPools();
         if (File.Exists(_path))
             File.Delete(_path);
+    }
+
+    [Fact]
+    public async Task Maintenance_PostgreSql_ChecksAndVacuumAnalyze()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("SHOUTECH_TEST_POSTGRES");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return; // The PostgreSQL CI job supplies a dedicated migrated database.
+
+        var repository = new OperationsRepository("PostgreSQL", connectionString);
+        var service = new OperationsService(repository);
+
+        var summary = await service.GetIntegritySummaryAsync();
+        Assert.Contains("PostgreSQL integrity_check: ok", summary);
+
+        var schema = await service.GetSchemaVersionAsync();
+        Assert.True(schema.AppliedCount > 0);
+
+        var audit = await service.GetTrialBalanceIntegrityAsync("C1");
+        Assert.True(audit.IsClean);
+
+        await service.VacuumAnalyzeAsync();
     }
 
     [Fact]
