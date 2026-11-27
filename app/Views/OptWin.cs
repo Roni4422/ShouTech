@@ -766,8 +766,6 @@ public sealed class OptWin : BaseWin
         public string Key { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Prefix { get; set; } = string.Empty;
-        public int Padding { get; set; }
-        public bool Yearly { get; set; }
         public long StartValue { get; set; }
         public long CurrentValue { get; set; }
     }
@@ -781,8 +779,6 @@ public sealed class OptWin : BaseWin
         _numGrid.ItemsSource = _numRows;
         _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Name)) { Mode = System.Windows.Data.BindingMode.OneWay }, Width = 170, IsReadOnly = true });
         _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Prefix)), Width = 70 });
-        _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Padding)), Width = 60 });
-        _numGrid.Columns.Add(new DataGridCheckBoxColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.Yearly)), Width = 70 });
         _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.StartValue)), Width = 80 });
         _numGrid.Columns.Add(new DataGridTextColumn { Binding = new System.Windows.Data.Binding(nameof(NumRowVm.CurrentValue)) { Mode = System.Windows.Data.BindingMode.OneWay }, Width = 80, IsReadOnly = true });
     }
@@ -790,7 +786,7 @@ public sealed class OptWin : BaseWin
     private void LoadNumbering()
     {
         _numHint.Text = T("Numbering.Hint");
-        var headers = new[] { "Numbering.Series", "Numbering.Prefix", "Numbering.Padding", "Numbering.Yearly", "Numbering.StartValue", "Numbering.CurrentValue" };
+        var headers = new[] { "Numbering.Series", "Numbering.Prefix", "Numbering.StartValue", "Numbering.CurrentValue" };
         for (var i = 0; i < headers.Length && i < _numGrid.Columns.Count; i++)
             _numGrid.Columns[i].Header = T(headers[i]);
         _numRows.Clear();
@@ -802,8 +798,6 @@ public sealed class OptWin : BaseWin
                     Key = row.Key,
                     Name = T(row.NameKey),
                     Prefix = row.Prefix,
-                    Padding = row.Padding,
-                    Yearly = row.Yearly,
                     StartValue = row.StartValue,
                     CurrentValue = row.CurrentValue
                 });
@@ -822,7 +816,7 @@ public sealed class OptWin : BaseWin
         {
             var actor = AppState.CurrentUser?.Username ?? "anonymous";
             SeqSvc.SaveSeries(
-                _numRows.Select(r => new SeqSvc.SeriesRow(r.Key, string.Empty, r.Prefix, r.Padding, r.Yearly, r.StartValue, r.CurrentValue)),
+                _numRows.Select(r => new SeqSvc.SeriesRow(r.Key, string.Empty, r.Prefix, 1, false, r.StartValue, r.CurrentValue)),
                 actor);
             return true;
         }
