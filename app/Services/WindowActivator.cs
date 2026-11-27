@@ -114,12 +114,42 @@ public static class WindowActivator
                 return;
             }
             window.Owner = owner ?? System.Windows.Application.Current?.MainWindow;
+            window.Closed += (_, _) => RestoreOwnerAfterClose(window);
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.NavigationFailed, ex, "WindowActivator.Show");
         }
         window.Show();
+    }
+
+    /// <summary>Restores the owning shell after a modeless child window closes.</summary>
+    public static void RestoreOwnerAfterClose(Window closedWindow)
+    {
+        var owner = closedWindow.Owner;
+        if (owner == null || ReferenceEquals(owner, closedWindow))
+            return;
+
+        try
+        {
+            owner.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                new Action(() =>
+                {
+                    if (!owner.IsVisible || owner.IsLoaded == false)
+                        return;
+
+                    if (owner.WindowState == WindowState.Minimized)
+                        owner.WindowState = WindowState.Normal;
+
+                    owner.Activate();
+                    owner.Focus();
+                }));
+        }
+        catch (Exception ex)
+        {
+            AppHost.Errors.Report(ErrorCodes.NavigationFailed, ex, "WindowActivator.RestoreOwnerAfterClose");
+        }
     }
 
     /// <summary>
