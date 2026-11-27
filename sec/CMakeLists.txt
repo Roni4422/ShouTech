@@ -54,3 +54,15 @@ set_target_properties(SecEng PROPERTIES
   OUTPUT_NAME "SecEng"
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+include(CTest)
+
+if(BUILD_TESTING)
+  add_executable(SecEngLicenseTests tests/license_tests.cpp)
+  target_link_libraries(SecEngLicenseTests PRIVATE SecEng)
+  target_compile_features(SecEngLicenseTests PRIVATE cxx_std_20)
+  set_target_properties(SecEngLicenseTests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  )
+  add_test(NAME SecEngLicenseRejectsUnverifiedPayload COMMAND SecEngLicenseTests)
+endif()
