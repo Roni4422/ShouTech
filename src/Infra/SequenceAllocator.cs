@@ -304,12 +304,6 @@ public static class SequenceAllocator
     }
 
     /// <summary>
-    /// Allocates the single company-wide journal sequence. The counter is
-    /// updated inside the caller's posting transaction, so a failed posting
-    /// cannot leave a journal number detached from its journal entry.
-    /// Journal numbers are continuous across fiscal/calendar years.
-    /// </summary>
-    /// <summary>
     /// Allocates the immutable central JRN number inside the posting transaction.
     /// Each fiscal period has an independent sequence starting at one. The
     /// fiscal-period ID, not the calendar year or machine clock, defines scope.
@@ -369,54 +363,6 @@ public static class SequenceAllocator
             throw new AppError(ErrorCodes.NumberingAllocationFailed, "The JRN allocator returned an invalid number.");
         return Format(config, 0, value);
     }
-    /// <summary>Formats a document number with an unpadded numeric suffix.</summary>
-    public static string Format(SeriesConfig config, int segmentYear, long value) =>
-        segmentYear > 0
-            ? $"{config.Prefix}-{segmentYear}-{value.ToString(CultureInfo.InvariantCulture)}"
-            : $"{config.Prefix}-{value.ToString(CultureInfo.InvariantCulture)}";
-}
-"
-            : $"{suffix} GLOB '[0-9]*' AND {suffix} NOT GLOB '*[^0-9]*'";
-
-        using var max = connection.CreateCommand();
-        max.Transaction = transaction;
-        max.CommandText = $"""
-            SELECT COALESCE(MAX(CAST({suffix} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
-            FROM journal_entries
-            WHERE company_id = @company AND fiscal_period_id = @period
-              AND document_number LIKE @pattern AND {numeric}
-            """;
-        Add(max, "@company", isPg ? (object)companyId : companyId.ToString("D", CultureInfo.InvariantCulture));
-        Add(max, "@period", isPg ? (object)Guid.Parse(fiscalPeriodId) : fiscalPeriodId);
-        Add(max, "@pattern", $"{prefix}%");
-        Add(max, "@start", start);
-        var seed = Convert.ToInt64(max.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-        if (seed >= MaxValue)
-            throw new AppError(ErrorCodes.NumberingLimitReached, "The JRN sequence has reached its supported limit.");
-
-        using var allocate = connection.CreateCommand();
-        allocate.Transaction = transaction;
-        var advance = isPg
-            ? "GREATEST(fiscal_period_number_sequences.last_value + 1, EXCLUDED.last_value)"
-            : "MAX(fiscal_period_number_sequences.last_value + 1, excluded.last_value)";
-        allocate.CommandText = $"""
-            INSERT INTO fiscal_period_number_sequences
-                (company_id, series_key, fiscal_period_id, last_value)
-            VALUES (@company, @series, @period, @next)
-            ON CONFLICT (company_id, series_key, fiscal_period_id)
-            DO UPDATE SET last_value = {advance}
-            RETURNING last_value
-            """;
-        Add(allocate, "@company", companyCode.Trim());
-        Add(allocate, "@series", seriesKey);
-        Add(allocate, "@period", isPg ? (object)Guid.Parse(fiscalPeriodId) : fiscalPeriodId.Trim());
-        Add(allocate, "@next", seed + 1);
-        var value = Convert.ToInt64(allocate.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-        if (value <= 0 || value > MaxValue)
-            throw new AppError(ErrorCodes.NumberingAllocationFailed, "The JRN allocator returned an invalid number.");
-        return Format(config, 0, value);
-    }
-
     /// <summary>Formats a document number with an unpadded numeric suffix.</summary>
     public static string Format(SeriesConfig config, int segmentYear, long value) =>
         segmentYear > 0
