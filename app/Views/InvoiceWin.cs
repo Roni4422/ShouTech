@@ -1060,7 +1060,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
 
     private sealed record InvoicePriceOption(string Level, string ResourceKey, string Fallback);
 
-    private IReadOnlyList<InvoicePriceOption> InvoicePriceOptions()
+    private List<InvoicePriceOption> InvoicePriceOptions()
     {
         var options = new List<InvoicePriceOption>
         {
