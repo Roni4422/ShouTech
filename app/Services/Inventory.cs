@@ -937,39 +937,46 @@ internal static class MatRepo
         using var transaction = connection is SqliteConnection sqliteConnection
             ? sqliteConnection.BeginTransaction(deferred: false)
             : connection.BeginTransaction();
-        // Seed = the highest trailing number among codes with this
-        // prefix, INCLUDING soft-deleted rows: a binned material's code
-        // stays reserved (NUMBERING_STUDY §3.3). The counter itself
-        // lives in document_number_sequences via SequenceAllocator, so
-        // the value is monotonic even after a permanent purge.
+        var (seed, width) = ReadCodeSeed(connection, transaction, company, prefix);
+        var current = SequenceAllocator.PeekMax(connection, transaction, company, $"MAT:{prefix}");
+        transaction.Commit();
+        var next = checked(Math.Max(seed, current) + 1);
+        return prefix + next.ToString("D" + width.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    }
+
+    private static (long Seed, int Width) ReadCodeSeed(
+        DbConnection connection, DbTransaction transaction, string company, string prefix)
+    {
         long seed = 0;
         var width = 4;
-        using (var scan = connection.CreateCommand())
+        using var scan = connection.CreateCommand();
+        scan.Transaction = transaction;
+        scan.CommandText = "SELECT code FROM materials WHERE company_id=$company AND code LIKE $p";
+        Add(scan, "$company", company);
+        Add(scan, "$p", prefix + "%");
+        using var reader = scan.ExecuteReader();
+        while (reader.Read())
         {
-            scan.Transaction = transaction;
-            scan.CommandText = "SELECT code FROM materials WHERE company_id=$company AND code LIKE $p";
-            Add(scan, "$company", company);
-            Add(scan, "$p", prefix + "%");
-            using var reader = scan.ExecuteReader();
-            while (reader.Read())
+            var code = reader.GetString(0);
+            if (!code.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            var i = code.Length - 1;
+            while (i >= 0 && char.IsDigit(code[i])) i--;
+            if (i < code.Length - 1
+                && long.TryParse(code[(i + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
             {
-                var code = reader.GetString(0);
-                if (!code.StartsWith(prefix, StringComparison.Ordinal)) continue;
-                var i = code.Length - 1;
-                while (i >= 0 && char.IsDigit(code[i])) i--;
-                if (i < code.Length - 1
-                    && long.TryParse(code[(i + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-                    && value > seed)
-                {
-                    seed = value;
-                    width = Math.Max(4, code.Length - (i + 1));
-                }
+                seed = Math.Max(seed, value);
+                width = Math.Max(width, code.Length - (i + 1));
             }
         }
-        long allocated;
-        allocated = SequenceAllocator.Allocate(
+        return (seed, width);
+    }
+
+    private static string AllocateCode(
+        DbConnection connection, DbTransaction transaction, string company, string prefix)
+    {
+        var (seed, width) = ReadCodeSeed(connection, transaction, company, prefix);
+        var allocated = SequenceAllocator.Allocate(
             connection, transaction, DatabaseRuntime.IsPostgreSql(), company, $"MAT:{prefix}", 0, seed);
-        transaction.Commit();
         return prefix + allocated.ToString("D" + width.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
     }
 
@@ -982,6 +989,16 @@ internal static class MatRepo
         using var transaction = connection.BeginTransaction();
         if (isNew)
         {
+            // The displayed code is a preview only. Allocate it in this save
+            // transaction when it still matches the next generated value;
+            // cancellation therefore never consumes a material number.
+            var company = AppState.CurrentCompanyCode ?? string.Empty;
+            var (seed, width) = ReadCodeSeed(connection, transaction, company, string.Empty);
+            var nextPreview = checked(Math.Max(seed,
+                SequenceAllocator.PeekMax(connection, transaction, company, "MAT:")) + 1);
+            var expectedPreview = nextPreview.ToString("D" + width.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+            if (string.Equals(value.Code, expectedPreview, StringComparison.Ordinal))
+                value.Code = AllocateCode(connection, transaction, company, string.Empty);
             if (CodeExistsOn(connection, transaction, value.Code, null)) throw new InvalidOperationException("Material code already exists: " + value.Code);
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
