@@ -161,6 +161,21 @@ namespace Kern.Tests
         }
 
         [Fact]
+        public void PreviewCode_DoesNotConsumeNumber_AndSaveAllocatesAtomically()
+        {
+            using var ctx = CreateContext();
+
+            var firstPreview = MatRepo.PreviewCode();
+            var secondPreview = MatRepo.PreviewCode();
+            Assert.Equal("0001", firstPreview);
+            Assert.Equal(firstPreview, secondPreview);
+
+            var saved = MatRepo.Save(FullyPopulated(firstPreview), isNew: true);
+            Assert.Equal("0001", saved.Code);
+            Assert.Equal("0002", MatRepo.PreviewCode());
+        }
+
+        [Fact]
         public void Update_ReplacesOwnChildren_AndNeverTouchesAnotherMaterial()
         {
             using var ctx = CreateContext();
