@@ -352,6 +352,19 @@ public static class DataExportSvc
         // never another company's, and fails closed when the company
         // cannot be resolved: an unscoped SELECT * is not a fallback.
         var tableColumns = await GetColumnNamesAsync(connection, option.TableName, ct);
+        // Product-class exports must never leak the retired Arabic/English split.
+        // Migration 129 renames the canonical value to name and removes both legacy
+        // columns; fail closed if an older tenant database has not applied it.
+        if (option.TableName.Equals("product_categories", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!tableColumns.Contains("name", StringComparer.OrdinalIgnoreCase) ||
+                tableColumns.Contains("category_name_ar", StringComparer.OrdinalIgnoreCase) ||
+                tableColumns.Contains("category_name_en", StringComparer.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Product-class export requires the language-neutral category-name migration (129). Apply pending database migrations, then export again.");
+            }
+        }
         // Use declared database column types for the workbook identity. Runtime
         // values are not a schema: SQLite may return Int64 for a NUMERIC/REAL
         // column when a particular row happens to contain an integral value.
