@@ -132,7 +132,8 @@ public sealed record JournalEntryLineSnapshot(
     string? CostCenter,
     string? Note,
     decimal BaseDebit = 0m,
-    decimal BaseCredit = 0m);
+    decimal BaseCredit = 0m,
+    decimal ExchangeRate = 1m);
 
 /// <summary>One GL line requested by a document posting, by account code.
 /// The infrastructure posting engine resolves the code against the company's chart.</summary>
