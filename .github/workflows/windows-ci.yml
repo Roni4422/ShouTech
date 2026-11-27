@@ -43,6 +43,24 @@ jobs:
       - name: Verify default root project build
         run: dotnet build -warnaserror
 
+      - name: Smoke-test default root dotnet run
+        shell: pwsh
+        run: |
+          $run = Start-Process -FilePath dotnet -ArgumentList 'run' -WorkingDirectory $PWD -PassThru -WindowStyle Hidden
+          $deadline = (Get-Date).AddSeconds(90)
+          $app = $null
+          while ((Get-Date) -lt $deadline) {
+            $app = Get-CimInstance Win32_Process |
+              Where-Object { $_.ProcessId -ne $run.Id -and $_.CommandLine -match 'ShouTech\\.ERP(\\.dll|\\.exe)' } |
+              Select-Object -First 1
+            if ($app) { break }
+            if ($run.HasExited) { throw "dotnet run exited before app startup (exit code $($run.ExitCode))" }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $app) { throw "dotnet run did not launch ShouTech.ERP within 90 seconds" }
+          Stop-Process -Id $app.ProcessId -Force -ErrorAction SilentlyContinue
+          if (-not $run.HasExited) { Stop-Process -Id $run.Id -Force -ErrorAction SilentlyContinue }
+
       - name: Build full solution and tests
         run: dotnet build build/ShouTech.sln --configuration Release --no-restore -warnaserror
 
