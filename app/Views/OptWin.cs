@@ -91,8 +91,8 @@ public sealed class OptWin : BaseWin
     private readonly Button _btnBackup = new();
     private int _backupSection = -1;
 
-    // Numbering section (NUMBERING_STUDY §3.4): per-series prefix /
-    // padding / yearly reset / start, effective for future numbers.
+    // Numbering section: per-series prefix and start value for future numbers.
+    // Counters are continuous and never use leading-zero padding.
     private readonly DataGrid _numGrid = new();
     private readonly TextBlock _numHint = new();
     private readonly ObservableCollection<NumRowVm> _numRows = new();
