@@ -610,7 +610,7 @@ public sealed class JrnWin : BaseWin
                 referenceNumber: _txtRefNo.Text,
                 currencyCode: currency,
                 exchangeRate: rate,
-                documentNumber: _txtDocNo.Text);
+                documentNumber: null);
             _currentJournalId = id;
             _btnSave.IsEnabled = false;
             _btnPost.IsEnabled = true;
