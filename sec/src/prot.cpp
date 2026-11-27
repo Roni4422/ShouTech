@@ -654,9 +654,9 @@ status pbkdf2(const uint8_t* password, size_t passwordLen,
 class StreamingGCMEncryptor {
 private:
     AlgHandle hAlg;
+    std::vector<uint8_t> keyObject;
     KeyHandle hKey;
     std::vector<uint8_t> ivNonce;  // GCM nonce (96-bit)
-    std::vector<uint8_t> keyObject;
     uint32_t chunkSequence{0};
     std::vector<uint8_t> buffer;
     size_t maxChunkSize;
@@ -777,9 +777,9 @@ public:
 class StreamingGCMDecryptor {
 private:
     AlgHandle hAlg;
+    std::vector<uint8_t> keyObject;
     KeyHandle hKey;
     std::vector<uint8_t> ivNonce;
-    std::vector<uint8_t> keyObject;
     uint32_t chunkSequence{0};
     
     void deriveChunkAAD(uint32_t sequence, std::vector<uint8_t>& aad) {
@@ -1247,10 +1247,19 @@ void startRuntimeGuard() noexcept {
     
     g_state.guardThread = std::jthread([](std::stop_token stoken) {
         while (!stoken.stop_requested() && !g_state.stopGuard.load()) {
-            // Periodic checks every 20 seconds
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(GUARD_CHECK_INTERVAL_MS));
-            
+            // Keep shutdown responsive without polling at a high frequency.
+            constexpr auto pollInterval = std::chrono::milliseconds(100);
+            constexpr auto checkInterval = std::chrono::milliseconds(GUARD_CHECK_INTERVAL_MS);
+            auto waited = std::chrono::milliseconds::zero();
+            while (waited < checkInterval &&
+                   !stoken.stop_requested() &&
+                   !g_state.stopGuard.load(std::memory_order_acquire)) {
+                std::this_thread::sleep_for(pollInterval);
+                waited += pollInterval;
+            }
+            if (stoken.stop_requested() || g_state.stopGuard.load(std::memory_order_acquire))
+                break;
+
             // Re-run security checks
             if (!performSecurityChecks()) {
                 g_state.runtimeClean.store(false);
@@ -1380,18 +1389,15 @@ ST_API status ST_CALL ST_InitializeSimple(const uint8_t* licenseData,
  * Stops monitoring threads.
  */
 ST_API status ST_CALL ST_Shutdown() {
-    std::unique_lock lock(g_state.stateMutex);
-    
-    if (!g_state.initialized.load()) return status::not_initialized;
-    
+    if (!g_state.initialized.exchange(false, std::memory_order_acq_rel))
+        return status::not_initialized;
+
+    // Stop and join the monitor without holding stateMutex: the monitor may
+    // be finishing a diagnostic update that also needs this lock.
     stopRuntimeGuard();
     if (g_state.guardThread.joinable())
         g_state.guardThread.join();
 
-    // Secure cleanup
-    secureZero(g_state.hwid, sizeof(g_state.hwid));
-    secureZero(g_state.vaultKey.data(), g_state.vaultKey.size());
-    
     {
         std::unique_lock stateLock(g_state.stateMutex);
         secureZero(g_state.hwid, sizeof(g_state.hwid));
@@ -1414,7 +1420,7 @@ ST_API status ST_CALL ST_Shutdown() {
         g_state.lastValidationTime = {};
         g_state.stopGuard.store(false, std::memory_order_release);
     }
-    
+
     return status::ok;
 }
 
