@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -10,98 +10,84 @@ using ShouTech.Application.Services;
 namespace ShouTech.App.Views;
 
 /// <summary>
-/// Maintenance window: runs the real DatabaseHealth check
-/// (AppHost.DatabaseHealth.CheckAsync) and the provider integrity summary,
-/// offers a real Backup Now through AppHost.Backup (IBkpServ.CreateBackupAsync)
-/// and SQLite VACUUM/ANALYZE through OperationsService. On PostgreSQL the
-/// VACUUM action is disabled with an honest explanation — nothing is faked.
-/// B5 adds the two Al-Ameen-style audits that map to real engines:
-/// Recalculate Costs (StockRecalculationService via OperationsService,
-/// from the picked date, whole company) and a read-only trial-balance
-/// integrity audit (per-period posted Dr=Cr, orphan lines, empty
-/// posted entries).
+/// Safe, read-only maintenance diagnostics. Any future repair/repost action
+/// must be exposed as a separate, explicitly confirmed operation.
 /// </summary>
 public sealed class MaintenanceWin : BaseWin
 {
     protected override string? ScheduleTintName => "Keel";
+
     private readonly OperationsService? _service;
-    private readonly List<(TextBlock Label, string Key)> _labels = new();
+    private readonly ListBox _checks = new();
     private readonly ListBox _results = new();
-    private readonly TextBlock _vacuumNote = new();
     private readonly TextBlock _statusBar = new();
+    private readonly TextBlock _pendingNote = new();
     private readonly Button _runButton = new();
-    private readonly Button _backupButton = new();
-    private readonly Button _vacuumButton = new();
-    private readonly Button _recalcButton = new();
-    private readonly Button _tbAuditButton = new();
-    private readonly Button _closeButton = new();
-    private readonly DatePicker _recalcFrom = new();
-    private readonly TextBlock _recalcFromLabel = new();
+    private bool _running;
 
     public MaintenanceWin()
     {
         _service = AppHost.Operations;
         Width = 860;
-        Height = 560;
+        Height = 600;
         MinWidth = 660;
-        MinHeight = 360;
+        MinHeight = 420;
         BuildUi();
         Loaded += OnLoaded;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (!AppHost.Permissions.Has(PermCat.System.Maintenance))
         {
-            MessageBox.Show(this, T("Maintenance.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, T("Maintenance.PermissionDenied"), Title,
+                MessageBoxButton.OK, MessageBoxImage.Warning);
             Close();
             return;
         }
-        var isPg = string.Equals(CurrentDatabaseProvider, "postgresql", StringComparison.OrdinalIgnoreCase);
-        _vacuumButton.IsEnabled = !isPg;
-        _vacuumNote.Text = isPg ? T("Maintenance.VacuumPgNote") : T("Maintenance.VacuumSqliteNote");
-        await RunChecksAsync();
+
+        // Do not run diagnostics automatically when the window opens.
+        // The user must explicitly start them after the backup decision.
+        PopulateCheckCatalog();
     }
 
     private void BuildUi()
     {
         var root = new DockPanel { Margin = new Thickness(12) };
+
+        DockPanel.SetDock(_statusBar, Dock.Bottom);
         root.Children.Add(F2Ui.StatusBar(_statusBar));
 
         F2Ui.StyleButton(_runButton, "Maintenance.RunChecks");
-        F2Ui.StyleButton(_backupButton, "Maintenance.BackupNow");
-        F2Ui.StyleButton(_vacuumButton, "Maintenance.Vacuum");
-        F2Ui.StyleButton(_recalcButton, "Maintenance.RecalculateCosts");
-        F2Ui.StyleButton(_tbAuditButton, "Maintenance.TbAudit");
-        F2Ui.StyleButton(_closeButton, "Common.Close");
-        _runButton.Click += async (_, _) => await RunChecksAsync();
-        _backupButton.Click += async (_, _) => await BackupAsync();
-        _vacuumButton.Click += async (_, _) => await VacuumAsync();
-        _recalcButton.Click += async (_, _) => await RecalculateCostsAsync();
-        _tbAuditButton.Click += async (_, _) => await TrialBalanceAuditAsync();
-        _closeButton.Click += (_, _) => Close();
-        root.Children.Add(F2Ui.BottomBar(_runButton, _backupButton, _vacuumButton, _recalcButton, _tbAuditButton, _closeButton));
+        _runButton.Click += async (_, _) => await ConfirmBackupAndRunAsync();
+        DockPanel.SetDock(F2Ui.BottomBar(_runButton), Dock.Bottom);
+        root.Children.Add(F2Ui.BottomBar(_runButton));
 
-        var content = new DockPanel();
-        _vacuumNote.Margin = new Thickness(0, 0, 0, 8);
-        _vacuumNote.TextWrapping = TextWrapping.Wrap;
-        DockPanel.SetDock(_vacuumNote, Dock.Top);
-        content.Children.Add(_vacuumNote);
+        var content = new Grid();
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        // Recalculate Costs scope row: replay from this date onward.
-        var recalcRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        _recalcFromLabel.VerticalAlignment = VerticalAlignment.Center;
-        _recalcFromLabel.Margin = new Thickness(0, 0, 8, 0);
-        recalcRow.Children.Add(_recalcFromLabel);
-        _recalcFrom.SelectedDate = new DateTime(DateTime.Today.Year, 1, 1);
-        _recalcFrom.Width = 160;
-        recalcRow.Children.Add(_recalcFrom);
-        DockPanel.SetDock(recalcRow, Dock.Top);
-        content.Children.Add(recalcRow);
+        var checksTitle = new TextBlock { Margin = new Thickness(0, 0, 0, 6), FontWeight = FontWeights.SemiBold };
+        checksTitle.SetResourceReference(TextBlock.TextProperty, "Maintenance.CheckListTitle");
+        Grid.SetRow(checksTitle, 0);
+        content.Children.Add(checksTitle);
 
+        _checks.Margin = new Thickness(0, 0, 0, 10);
+        Grid.SetRow(_checks, 1);
+        content.Children.Add(_checks);
+
+        _pendingNote.Margin = new Thickness(0, 6, 0, 6);
+        _pendingNote.TextWrapping = TextWrapping.Wrap;
+        Grid.SetRow(_pendingNote, 2);
+        content.Children.Add(_pendingNote);
+
+        _results.Margin = new Thickness(0, 0, 0, 6);
+        Grid.SetRow(_results, 3);
         content.Children.Add(_results);
-        root.Children.Add(content);
 
+        root.Children.Add(content);
         Content = root;
         ApplyLocalizedText();
     }
@@ -109,170 +95,144 @@ public sealed class MaintenanceWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("Maintenance.Title");
-        _recalcFromLabel.Text = T("Maintenance.RecalcFrom");
-        F2Ui.ApplyTexts(_labels, new List<(DataGridColumn, string)>(), new[] { _runButton, _backupButton, _vacuumButton, _recalcButton, _tbAuditButton, _closeButton }, T);
+        _pendingNote.Text = T("Maintenance.PendingAudits");
+        F2Ui.ApplyTexts(new List<(TextBlock Label, string Key)>(),
+            new List<(DataGridColumn, string)>(), new[] { _runButton }, T);
+    }
+
+    private void PopulateCheckCatalog()
+    {
+        _checks.Items.Clear();
+        _checks.Items.Add(T("Maintenance.CheckDatabaseConnection"));
+        _checks.Items.Add(T("Maintenance.CheckDatabaseIntegrity"));
+        _checks.Items.Add(T("Maintenance.CheckMigrationLedger"));
+        _checks.Items.Add(T("Maintenance.CheckTrialBalance"));
+        _checks.Items.Add(T("Maintenance.CheckInvoicePosting"));
+        _checks.Items.Add(T("Maintenance.CheckVoucherPosting"));
+        _checks.Items.Add(T("Maintenance.CheckPriceVariance"));
+    }
+
+    private async Task ConfirmBackupAndRunAsync()
+    {
+        if (_running)
+            return;
+
+        var decision = MessageBox.Show(this, T("Maintenance.BackupPrompt"),
+            T("Maintenance.BackupPromptTitle"), MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning, MessageBoxResult.Yes);
+
+        if (decision == MessageBoxResult.Cancel)
+            return;
+
+        if (decision == MessageBoxResult.Yes)
+        {
+            try
+            {
+                if (AppHost.Backup is null)
+                    throw new InvalidOperationException(T("Maintenance.BackupUnavailable"));
+                if (!AppHost.Permissions.Has(PermCat.Backup.Create))
+                    throw new InvalidOperationException(T("Maintenance.BackupPermissionDenied"));
+
+                _runButton.IsEnabled = false;
+                _statusBar.Text = T("Maintenance.CreatingBackup");
+                var backupPath = await AppHost.Backup.CreateBackupAsync(CurrentCompanyCode);
+                _results.Items.Add(Tf("Maintenance.BackupCreated", backupPath));
+            }
+            catch (Exception ex)
+            {
+                _statusBar.Text = T("Maintenance.BackupFailed");
+                MessageBox.Show(this, Tf("Maintenance.BackupFailedDetails", ex.Message),
+                    Title, MessageBoxButton.OK, MessageBoxImage.Error);
+                _runButton.IsEnabled = true;
+                return; // Never proceed when the requested backup failed.
+            }
+        }
+
+        await RunChecksAsync();
     }
 
     private async Task RunChecksAsync()
     {
+        if (_running)
+            return;
+
+        _running = true;
+        _runButton.IsEnabled = false;
         _results.Items.Clear();
+        _statusBar.Text = T("Maintenance.ChecksRunning");
+
         try
         {
-            if (AppHost.DatabaseHealth is { } health)
+            await RunCheckAsync("Maintenance.CheckDatabaseConnection", async () =>
             {
+                if (AppHost.DatabaseHealth is not { } health)
+                    throw new InvalidOperationException(T("Maintenance.HealthUnavailable"));
                 var result = await health.CheckAsync();
-                _results.Items.Add($"{T("Maintenance.Provider")}: {result.Provider}");
-                _results.Items.Add($"{T("Maintenance.Available")}: {result.IsAvailable}");
-                _results.Items.Add($"{T("Maintenance.Latency")}: {(result.Latency.HasValue ? result.Latency.Value.TotalMilliseconds.ToString("0", CultureInfo.CurrentCulture) + " ms" : "-")}");
-                _results.Items.Add($"{T("Maintenance.Message")}: {result.Message}");
-            }
-            else
-            {
-                _results.Items.Add(T("Maintenance.HealthUnavailable"));
-            }
+                if (!result.IsAvailable)
+                    throw new InvalidOperationException(result.Message);
+                return Tf("Maintenance.DatabaseConnectionResult", result.Provider,
+                    result.Latency?.TotalMilliseconds.ToString("0", CultureInfo.CurrentCulture) ?? "-");
+            });
 
-            if (_service is not null)
+            await RunCheckAsync("Maintenance.CheckDatabaseIntegrity", async () =>
             {
+                if (_service is null)
+                    throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
                 var summary = await _service.GetIntegritySummaryAsync();
-                _results.Items.Add($"{T("Maintenance.Integrity")}: {summary}");
-            }
-            _statusBar.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
+                if (summary.Contains("integrity_check:", StringComparison.OrdinalIgnoreCase)
+                    && !summary.Contains("integrity_check: ok", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(summary);
+                return summary;
+            });
 
-    private async Task BackupAsync()
-    {
-        try
-        {
-            if (AppHost.Backup is null)
-                throw new InvalidOperationException(T("Maintenance.BackupUnavailable"));
-            if (!AppHost.Permissions.Has(PermCat.Backup.Create))
-                throw new InvalidOperationException(T("Maintenance.PermissionDenied"));
-            _backupButton.IsEnabled = false;
-            try
+            await RunCheckAsync("Maintenance.CheckMigrationLedger", async () =>
             {
-                var path = await AppHost.Backup.CreateBackupAsync(CurrentCompanyCode);
-                _results.Items.Add($"{T("Maintenance.BackupCreated")}: {path}");
-                _statusBar.Text = path;
-            }
-            finally
-            {
-                _backupButton.IsEnabled = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
+                if (_service is null)
+                    throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
+                var schema = await _service.GetSchemaVersionAsync();
+                return Tf("Maintenance.MigrationLedgerResult", schema.AppliedCount,
+                    string.IsNullOrWhiteSpace(schema.HighestMigrationId) ? "-" : schema.HighestMigrationId);
+            });
 
-    private async Task VacuumAsync()
-    {
-        try
-        {
-            if (_service is null)
-                throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
-            _vacuumButton.IsEnabled = false;
-            try
+            await RunCheckAsync("Maintenance.CheckTrialBalance", async () =>
             {
-                await _service.VacuumAnalyzeAsync();
-                _results.Items.Add(T("Maintenance.VacuumDone"));
-            }
-            finally
-            {
-                _vacuumButton.IsEnabled = true;
-            }
-            await RunChecksAsync();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Recalculate Costs (B5): replays the company's stock valuation
-    /// from the picked date onward. The engine records the job and
-    /// refuses ranges touching a closed fiscal period; its cataloged
-    /// error surfaces here unchanged. GL entries are NOT restated
-    /// (documented engine behavior).
-    /// </summary>
-    private async Task RecalculateCostsAsync()
-    {
-        try
-        {
-            if (_service is null)
-                throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
-            if (_recalcFrom.SelectedDate is not DateTime picked)
-                throw new InvalidOperationException(T("Maintenance.RecalcFromRequired"));
-            _recalcButton.IsEnabled = false;
-            try
-            {
-                var outcome = await _service.RecalculateCostsAsync(
-                    CurrentCompanyCode,
-                    DateOnly.FromDateTime(picked),
-                    T("Maintenance.RecalcReason"),
-                    CurrentUserId);
-                _results.Items.Add(Tf("Maintenance.RecalcResult",
-                    outcome.MovementsReplayed, F2Ui.Fmt(outcome.ValueDelta), outcome.JobId));
-                _statusBar.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
-            }
-            finally
-            {
-                _recalcButton.IsEnabled = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Trial-balance integrity audit (B5, read-only): per-period
-    /// posted Dr=Cr lines, then every anomaly in detail — unbalanced
-    /// entries, orphan lines, posted entries without lines.
-    /// </summary>
-    private async Task TrialBalanceAuditAsync()
-    {
-        try
-        {
-            if (_service is null)
-                throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
-            _tbAuditButton.IsEnabled = false;
-            try
-            {
+                if (_service is null)
+                    throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
                 var audit = await _service.GetTrialBalanceIntegrityAsync(CurrentCompanyCode);
-                _results.Items.Add($"--- {T("Maintenance.TbAudit")} ---");
                 foreach (var period in audit.Periods)
                 {
-                    var name = string.IsNullOrWhiteSpace(period.Period) ? T("Maintenance.NoPeriod") : period.Period;
-                    _results.Items.Add(Tf("Maintenance.TbPeriodLine",
-                        name, period.Entries, F2Ui.Fmt(period.Debit), F2Ui.Fmt(period.Credit),
+                    var periodName = string.IsNullOrWhiteSpace(period.Period)
+                        ? T("Maintenance.NoPeriod") : period.Period;
+                    _results.Items.Add(Tf("Maintenance.TbPeriodLine", periodName, period.Entries,
+                        F2Ui.Fmt(period.Debit), F2Ui.Fmt(period.Credit),
                         period.IsBalanced ? T("Maintenance.TbBalanced") : T("Maintenance.TbUnbalanced")));
-                }
-                foreach (var entry in audit.UnbalancedEntries)
-                {
-                    _results.Items.Add(Tf("Maintenance.TbEntryLine",
-                        entry.EntryId, entry.EntryDate, F2Ui.Fmt(entry.Debit), F2Ui.Fmt(entry.Credit)));
                 }
                 _results.Items.Add(Tf("Maintenance.TbOrphans", audit.OrphanLineCount));
                 _results.Items.Add(Tf("Maintenance.TbNoLines", audit.PostedEntriesWithoutLines));
-                _results.Items.Add(audit.IsClean ? T("Maintenance.TbOk") : T("Maintenance.TbFailed"));
-                _statusBar.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
-            }
-            finally
-            {
-                _tbAuditButton.IsEnabled = true;
-            }
+                if (!audit.IsClean)
+                    throw new InvalidOperationException(T("Maintenance.TbFailed"));
+                return T("Maintenance.TbOk");
+            });
+
+            _statusBar.Text = T("Maintenance.ChecksCompleted");
+        }
+        finally
+        {
+            _running = false;
+            _runButton.IsEnabled = true;
+        }
+    }
+
+    private async Task RunCheckAsync(string labelKey, Func<Task<string>> check)
+    {
+        try
+        {
+            var detail = await check();
+            _results.Items.Add(Tf("Maintenance.CheckPassed", T(labelKey), detail));
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            _results.Items.Add(Tf("Maintenance.CheckFailed", T(labelKey), ex.Message));
         }
     }
 }
