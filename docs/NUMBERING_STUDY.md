@@ -197,3 +197,13 @@ PostgreSQL run of migration 123 + the allocation paths.
   at NextCode, warehouses at save, party/employee codes pre-filled
   at card reset and consumed at allocation (editable before save).
 
+## 7. Final owner decision — continuous unpadded numbering
+
+The implementation policy supersedes the earlier padded/year-segmented examples in this study:
+
+- Operational invoices, commercial documents, manual journal vouchers, receipts, payments and the central GL journal use separate series per company and document family.
+- Numeric suffixes are emitted as plain integers: `1`, `2`, `3`, `10`, `100`. No left-zero padding and no fixed digit width.
+- Invoice and commercial-document counters are continuous across calendar years. Legacy numbers are scanned by their final numeric suffix before the new counter is seeded, preventing a reset from reissuing an old number.
+- Voucher source numbers use `JV`, `RCV` and `PAY`; central GL entries continue to use the independent `JRN` sequence.
+- The Numbering options expose the prefix and starting value only. Padding and yearly-reset controls are removed because they are no longer supported policy choices.
+- The underlying migration columns for padding/yearly settings remain for backward-compatible database upgrades; runtime numbering ignores those legacy formatting settings.
