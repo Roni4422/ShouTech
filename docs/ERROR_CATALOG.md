@@ -279,21 +279,26 @@ Every error line carries a unique incident ID and source metadata:
   not the error type. The same `Code` can therefore have many distinct IDs.
 - `Code` is the stable catalog key; `Name` is its language-independent
   technical identifier. Both map directly to the English index.
-- `Window`, `SourceFile`, `Method`, and `Line` identify the reporting
-  call site. `ErrorCatalogSvc.Report` captures these using compiler caller
-  information; the logger also attempts to recover the first source frame
-  from an exception stack for direct/global logging calls.
-- Exact source line numbers require matching PDB symbols at runtime. If
-  symbols are unavailable, the line is recorded as 0 and the stack trace
-  remains available when supplied by the exception.
+- `Window`, `SourceFile`, `Method`, and `Line` are recovered from the
+  exception stack (or the current stack when no exception exists). Exact
+  source line numbers require matching PDB symbols at runtime; otherwise
+  the line is 0 and the exception stack remains available.
 - Inner exception type/message chains are written up to eight levels deep.
 - The standard prefix remains timestamp, level, category, company, and user.
   Error metadata follows it in a fixed, machine-readable position.
-- When a caller reports a code that is not registered, the line is stamped
-  with the resolved fallback (`SYS-0001`/`UnknownError`) and the originally
-  requested code is appended to the message as `| ReportedCode=<code>`, so
-  no information is lost and the invariant "every emitted code exists in
-  the index" always holds.
+- The English catalog in `app/Resources/Errors/En.json` is checked first.
+  If an error is not in that catalog, `LogServ` checks the persistent
+  `log/error-index.json` index using a stable fingerprint built from the
+  exception type, source file, and method. A match reuses its existing
+  `AUTO-NNNNNN` code and increments its occurrence count.
+- A genuinely new fingerprint is appended to `log/error-index.json` with
+  an English technical name, code, exception type, source, first/last seen
+  timestamps, and occurrence count. The new code is then written to
+  `error.log`; the same incident is mirrored to `log.log`.
+- Each occurrence still gets a separate `ErrorId` GUID. The catalog code
+  identifies the error kind; the incident ID identifies one occurrence.
+- The runtime index stores technical metadata in English only. It does not
+  copy localized UI messages into the index.
 - The pre-existing un-coded `LogError(category, message, ex)` overload
   keeps working for all current call sites: it derives the code from the
   exception (`AppError.Code` when present, otherwise `Classify`) and
