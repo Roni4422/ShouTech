@@ -328,8 +328,14 @@ namespace ShouTech.App.Configuration
     public class BackupSettings
     {
         public bool Enabled { get; set; } = true;
+        public bool AutoBackup { get; set; } = true;
+        public int BackupIntervalHours { get; set; } = 24;
+        public int MaxBackups { get; set; } = 30;
         public int RetentionDays { get; set; } = 30;
-        public string Schedule { get; set; } = "";
+        public string Schedule { get; set; } = "Daily";
+        public string BackupPath { get; set; } = "";
+        public bool CompressBackup { get; set; } = true;
+        public bool EncryptBackup { get; set; }
     }
 
     public class RetrySettings
@@ -407,6 +413,8 @@ namespace ShouTech.App.Configuration
     {
         public bool Enabled { get; set; }
         public string Provider { get; set; } = "";
+        public string BaseCurrency { get; set; } = "SYP";
+        public int UpdateIntervalHours { get; set; } = 6;
     }
 
     public class RoundingSettings
@@ -417,14 +425,21 @@ namespace ShouTech.App.Configuration
 
     public class ModulesSettings
     {
+        public List<string> Enabled { get; set; } = new();
+        public string DefaultStartupModule { get; set; } = "Dashboard";
+        public List<ModuleInfo> AllModules { get; set; } = new();
         public List<ModuleInfo> Available { get; set; } = new();
     }
 
     public class ModuleInfo
     {
+        public string Id { get; set; } = "";
         public string Code { get; set; } = "";
         public string Name { get; set; } = "";
+        public string Version { get; set; } = "";
         public bool Enabled { get; set; } = true;
+        public bool Required { get; set; }
+        public int Order { get; set; }
     }
 
     public class BrandingSettings
@@ -562,17 +577,23 @@ namespace ShouTech.App.Configuration
     public class LicensingSettings
     {
         public DongleInfoSettings Dongle { get; set; } = new();
+        public DongleInfoSettings DongleInfo { get; set; } = new();
         public ActivationSettings Activation { get; set; } = new();
+        public List<string> Features { get; set; } = new();
+        public string ExpiryDate { get; set; } = "";
     }
 
     public class DongleInfoSettings
     {
         public bool Required { get; set; } = true;
+        public string SerialNumber { get; set; } = "";
     }
 
     public class ActivationSettings
     {
         public bool RequireOnlineActivation { get; set; } = true;
+        public bool OfflineActivationAllowed { get; set; } = true;
+        public bool HardwareIdBased { get; set; } = true;
         public string ActivationServer { get; set; } = "";
         public string LicenseValidateEndpoint { get; set; } = "/license/validate";
     }
@@ -589,6 +610,9 @@ namespace ShouTech.App.Configuration
     {
         public string Code { get; set; } = "";
         public string Name { get; set; } = "";
+        public string NameEn { get; set; } = "";
+        public string Database { get; set; } = "";
+        public bool Enabled { get; set; } = true;
         public bool IsDefault { get; set; }
     }
 
@@ -613,13 +637,18 @@ namespace ShouTech.App.Configuration
     {
         public bool Enabled { get; set; }
         public string BaseUrl { get; set; } = "";
+        public string Endpoint { get; set; } = "";
     }
 
     public class OnlineServicesSettings
     {
         public bool Enabled { get; set; }
+        public bool BackupOnStartup { get; set; }
+        public int BackgroundSyncIntervalSeconds { get; set; } = 3600;
+        public int ConnectivityCheckIntervalSeconds { get; set; } = 60;
         public string BackupUploadEndpoint { get; set; } = "/backup/upload";
         public string DeviceRegisterEndpoint { get; set; } = "/device/register";
         public string LicenseValidateEndpoint { get; set; } = "/license/validate";
+        public string SyncEndpoint { get; set; } = "/sync";
     }
 }
