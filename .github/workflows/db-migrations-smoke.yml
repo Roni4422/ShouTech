@@ -9,6 +9,8 @@ on:
       - 'app/Services/SchMig.cs'
       - 'app/Views/MaintWin.cs'
       - 'src/Infra/OperationsRepository.cs'
+      - 'src/Infra/MigrationBundleReader.cs'
+      - 'tools/bundle_migrations.py'
       - 'src/Dom/Interfaces/IOperationsRepository.cs'
       - 'tests/Kern.Tests/OperationsServiceTests.cs'
       - 'tests/Kern.Tests/Kern.Tests.csproj'
@@ -22,6 +24,8 @@ on:
       - 'app/Services/SchMig.cs'
       - 'app/Views/MaintWin.cs'
       - 'src/Infra/OperationsRepository.cs'
+      - 'src/Infra/MigrationBundleReader.cs'
+      - 'tools/bundle_migrations.py'
       - 'src/Dom/Interfaces/IOperationsRepository.cs'
       - 'tests/Kern.Tests/OperationsServiceTests.cs'
       - 'tests/Kern.Tests/Kern.Tests.csproj'
@@ -38,6 +42,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Verify migration classification and bundle checksums
+        run: python3 tools/bundle_migrations.py verify
+      - name: Generate compact migration bundles for this consolidation
+        if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
+        run: python3 tools/bundle_migrations.py apply
+      - name: Regenerate file index for migration bundles
+        if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
+        run: python3 tools/gen_index.py
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
@@ -103,6 +115,16 @@ jobs:
           dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
           dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
 
+      - name: Upload validated migration bundles
+        if: success() && github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
+        uses: actions/upload-artifact@v6
+        with:
+          name: validated-migration-bundles
+          path: |
+            dba/mig/
+            docs/FILE_INDEX.md
+          if-no-files-found: error
+
   postgresql-migrations:
     runs-on: ubuntu-latest
     services:
@@ -121,6 +143,14 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
+      - name: Verify migration classification and bundle checksums
+        run: python3 tools/bundle_migrations.py verify
+      - name: Generate compact migration bundles for this consolidation
+        if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
+        run: python3 tools/bundle_migrations.py apply
+      - name: Regenerate file index for migration bundles
+        if: github.event_name == 'push' && github.ref_name == 'reduce-2-upgrade' && contains(github.event.head_commit.message, '[bundle-migrations]')
+        run: python3 tools/gen_index.py
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
