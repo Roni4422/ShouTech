@@ -304,17 +304,18 @@ internal static class DatabaseRuntime
 
     public static string? GetConnectionString()
     {
+        // A company has exactly one active database. Only the explicitly
+        // selected Default connection is eligible; never fall back to an
+        // arbitrary secondary provider entry.
         var connection = AppCfgSvc.Current?.ConnectionStrings?
             .FirstOrDefault(item => item.Key.Equals("Default", StringComparison.OrdinalIgnoreCase))
             .Value?.ConnectionString;
-        if (string.IsNullOrWhiteSpace(connection))
-            connection = AppCfgSvc.Current?.ConnectionStrings?.Values?.FirstOrDefault()?.ConnectionString;
         if (string.IsNullOrWhiteSpace(connection))
             connection = Environment.GetEnvironmentVariable("SHOUTECH_CONNECTION_STRING");
         if (string.IsNullOrWhiteSpace(connection))
             return null;
 
-        return PrepareConnectionString(connection);
+        return PrepareConnectionString(connection, GetProvider());
     }
 
     /// <summary>
@@ -326,13 +327,32 @@ internal static class DatabaseRuntime
     ///   PostgreSQL — SSL mode from SHOUTECH_PG_SSLMODE (default Prefer).
     /// </summary>
     public static string? PrepareConnectionString(string? connectionString)
+        => PrepareConnectionString(connectionString, GetProvider());
+
+    public static string? PrepareConnectionString(string? connectionString, string provider)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
             return null;
 
-        return IsSqlite()
-            ? NormalizeSqliteConnectionString(connectionString)
-            : ApplyPostgresSslMode(connectionString.Trim());
+        var selectedProvider = DatabaseProviderNames.Normalize(provider);
+        if (!DatabaseProviderNames.IsSupported(selectedProvider))
+            throw new NotSupportedException($"Unsupported database provider '{provider}'. Use SQLite or PostgreSQL.");
+
+        var value = connectionString.Trim();
+        var looksLikePostgres = value.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Server=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Username=", StringComparison.OrdinalIgnoreCase);
+        var looksLikeSqlite = value.Contains("Data Source=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Filename=", StringComparison.OrdinalIgnoreCase);
+
+        if (selectedProvider == DatabaseProviderNames.Sqlite && looksLikePostgres)
+            throw new InvalidOperationException("The active company is configured for SQLite, but its connection string is PostgreSQL.");
+        if (selectedProvider == DatabaseProviderNames.PostgreSql && looksLikeSqlite)
+            throw new InvalidOperationException("The active company is configured for PostgreSQL, but its connection string is SQLite.");
+
+        return selectedProvider == DatabaseProviderNames.Sqlite
+            ? NormalizeSqliteConnectionString(value)
+            : ApplyPostgresSslMode(value);
     }
 
     /// <summary>
