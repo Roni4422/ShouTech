@@ -92,6 +92,48 @@ public sealed class SchemaMigratorTests
                 Directory.Delete(databaseDirectory, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task ProductCategorySchema_UsesOneLanguageNeutralName()
+    {
+        var databaseDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"shoutech-category-schema-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(databaseDirectory);
+        var databasePath = Path.Combine(databaseDirectory, "company.db");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            ForeignKeys = true,
+            Pooling = false
+        }.ToString();
+
+        try
+        {
+            var result = await SchemaMigrator.ApplyAllAsync("sqlite", connectionString);
+            Assert.True(result.Success, result.Message);
+
+            await using var connection = new SqliteConnection(connectionString);
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(product_categories);";
+            await using var reader = await command.ExecuteReaderAsync();
+            var columns = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (await reader.ReadAsync())
+                columns.Add(reader.GetString(1));
+
+            Assert.Contains("name", columns);
+            Assert.DoesNotContain("category_name_ar", columns);
+            Assert.DoesNotContain("category_name_en", columns);
+        }
+        finally
+        {
+            if (Directory.Exists(databaseDirectory))
+                Directory.Delete(databaseDirectory, recursive: true);
+        }
+    }
+
 }
 
 // ---- merged from tests/Kern.Tests/ErpPlanTests.cs ----
