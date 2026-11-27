@@ -628,11 +628,21 @@ public sealed class JournalRepository : IJournalRepository
                     await source.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
                     CultureInfo.InvariantCulture);
             }
-            if (!string.IsNullOrWhiteSpace(sourceDocumentNumber))
+            if (string.IsNullOrWhiteSpace(sourceDocumentNumber))
             {
-                var dash = sourceDocumentNumber.IndexOf('-');
-                sourceSeries = dash > 0 ? sourceDocumentNumber[..dash] : null;
+                await using var company = CreateCommand(connection, transaction,
+                    "SELECT company_code FROM companies WHERE CAST(company_id AS TEXT) = @company");
+                Add(company, "@company", FormatGuid(companyId));
+                var companyCode = Convert.ToString(
+                    await company.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture);
+                if (string.IsNullOrWhiteSpace(companyCode))
+                    throw new InvalidOperationException("The company code is required to allocate the JV source number.");
+                sourceDocumentNumber = SequenceAllocator.AllocateSeriesNumber(
+                    connection, transaction, _provider == "PostgreSQL", companyCode, "JV");
             }
+            var dash = sourceDocumentNumber.IndexOf('-');
+            sourceSeries = dash > 0 ? sourceDocumentNumber[..dash] : null;
             if (sourceSeries is not ("JV" or "RCV" or "PAY"))
                 throw new InvalidOperationException("A manual journal or cash voucher must have a valid JV, RCV, or PAY source number before posting.");
             var centralNumber = SequenceAllocator.AllocateJournalNumber(
