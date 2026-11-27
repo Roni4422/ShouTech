@@ -34,7 +34,7 @@ Do not add runtime DDL to `InvRepo`, `DocSchema`, or a window. `DocSchema` valid
 - Concurrent callers: all allocated values are unique and monotonically increasing.
 - Save path: a missing draft number is allocated inside the same transaction as the draft insert.
 - Provider parity: run the migration smoke workflow for both SQLite and PostgreSQL.
-- Failure behavior: if the company database is unavailable or allocation fails, stop creation and report an error. Never silently fall back to `0001`.
+- Failure behavior: if the company database is unavailable or allocation fails, stop creation and report an error. Never silently fabricate a fallback number.
 
 ## Change policy
 
