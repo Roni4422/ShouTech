@@ -705,12 +705,16 @@ private readonly ILogServ _logger;
                     var fileName = string.IsNullOrWhiteSpace(normalized)
                         ? "Unknown"
                         : Path.GetFileName(normalized);
+                    var appRootIndex = normalized.LastIndexOf("/app/", StringComparison.OrdinalIgnoreCase);
+                    var sourcePath = appRootIndex >= 0
+                        ? normalized[(appRootIndex + 1)..]
+                        : fileName;
                     var window = normalized.Contains("/Views/", StringComparison.OrdinalIgnoreCase)
                         ? Path.GetFileNameWithoutExtension(fileName)
                         : (type?.Name ?? "Unknown");
                     return (
                         string.IsNullOrWhiteSpace(window) ? "Unknown" : window,
-                        fileName,
+                        sourcePath,
                         method.Name,
                         frame.GetFileLineNumber());
                 }
