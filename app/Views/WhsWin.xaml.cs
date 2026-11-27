@@ -541,7 +541,7 @@ namespace ShouTech.App.Views
                 _current = null;
                 _index = -1;
 
-                SafeSet(TxtAutoCode, "");
+                SafeSet(TxtAutoCode, FormatWestern(MatRepo.NextWarehouseCode()));
                 SafeSet(TxtCardNo, SuggestNextCardNo());
                 SafeSet(TxtName, "");
                 SafeSet(TxtNameEn, "");
