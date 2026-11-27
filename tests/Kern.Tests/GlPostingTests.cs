@@ -208,6 +208,20 @@ public class GlPostingTests
         var second = await PostInvoiceAsync(db, InvDocKind.PurchaseInvoice, qty: 1m, price: 25m, taxRate: 0m);
         var secondEntry = SingleEntry(db, "PUR", second.DocId);
         Assert.Equal("JRN-2", secondEntry.DocumentNumber);
+
+        await new AccountingStructureRepository("SQLite", db.ConnectionString)
+            .CreateFiscalYearAsync(db.CompanyId, 2027, Actor);
+        var nextPeriod = await journalStore.PostDocumentAsync(
+            new GlDocumentRequest(db.CompanyId, new DateOnly(2027, 3, 10), "New fiscal year", "MAN", "FY27-1",
+                "MAN-FY27-1", "SAR", 1m, new GlLineRequest[]
+                {
+                    new("131", 10m, 0m), new("301", 0m, 10m)
+                }), Actor);
+        Assert.Equal("JRN-1", nextPeriod.DocumentNumber);
+        var loadedNextPeriod = await journalStore.FindByDocumentNumberAsync(
+            db.CompanyId, "JRN-1", new DateOnly(2027, 3, 10));
+        Assert.NotNull(loadedNextPeriod);
+        Assert.Equal("JRN-1", loadedNextPeriod!.DocumentNumber);
         Assert.Equal(200m, Line(entry, "301").Credit);
         // COGS at the material's current cost (avg 40 x 2).
         Assert.Equal(80m, Line(entry, "401").Debit);
