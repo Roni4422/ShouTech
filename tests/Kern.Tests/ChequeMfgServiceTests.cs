@@ -245,6 +245,22 @@ public class ChequeMfgServiceTests
     }
 
     [Fact]
+    public async Task Mfg_NumberPreview_DoesNotConsumeNumber_AndSaveUsesPreview()
+    {
+        using var db = new TempDb(withCheques: false, withStock: true);
+        var service = new MfgOrderService(new MfgOrderRepository("SQLite", db.ConnectionString));
+
+        Assert.Equal(1, await service.GetNextDocNoAsync(Company));
+        Assert.Equal(1, await service.GetNextDocNoAsync(Company));
+
+        var order = NewOrder(qty: 1m, rawQty: 1m, rawCost: 2m, overhead: 0m);
+        await service.SaveDraftAsync(Company, order, "tester");
+
+        Assert.Equal(1, order.DocNo);
+        Assert.Equal(2, await service.GetNextDocNoAsync(Company));
+    }
+
+    [Fact]
     public async Task Mfg_Service_RejectsInvalidOrders()
     {
         using var db = new TempDb(withCheques: false, withStock: true);
