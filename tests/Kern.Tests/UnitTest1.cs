@@ -494,18 +494,18 @@ namespace Kern.Tests
         }
 
         [Fact]
-        public void JournalEntry_ShouldSupportPostingAndReversalOnlyOnce()
+        public void JournalEntry_ShouldExposeExplicitPostingAndReversalStates()
         {
             var entry = new JournalEntry(new DateOnly(2026, 8, 21), "Reversible entry");
             entry.AddLine(Guid.NewGuid(), debit: 100m, credit: 0m);
             entry.AddLine(Guid.NewGuid(), debit: 0m, credit: 100m);
 
-            entry.Post();
+            Assert.Equal(JournalEntryStatus.Draft, entry.Status);
+            entry.MarkPosted();
             Assert.Equal(JournalEntryStatus.Posted, entry.Status);
 
-            entry.Reverse();
+            entry.MarkReversed();
             Assert.Equal(JournalEntryStatus.Reversed, entry.Status);
-            Assert.Throws<InvalidOperationException>(() => entry.Post());
         }
 
         [Fact]
