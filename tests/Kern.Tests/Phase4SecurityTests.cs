@@ -107,11 +107,11 @@ public class Phase4SecurityTests
         var policy = new PasswordPolicySettings();
         Assert.Equal(3, policy.MinLength);
         Assert.Equal(128, policy.MaxLength);
-        Assert.False(policy.RequireUpperCase);
-        Assert.False(policy.RequireLowerCase);
-        Assert.False(policy.RequireNumbers);
-        Assert.False(policy.RequireSpecialChars);
-        Assert.True(policy.AllowCommonPasswords);
+        Assert.False(policy.RequireUppercase);
+        Assert.False(policy.RequireLowercase);
+        Assert.False(policy.RequireDigit);
+        Assert.False(policy.RequireSpecialChar);
+        Assert.Empty(PwdPolicy.Validate("abc", policy));
     }
 
     // ---------------------------------------------------------- LoginLockout
