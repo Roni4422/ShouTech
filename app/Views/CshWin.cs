@@ -290,7 +290,7 @@ public sealed class CshWin : BaseWin, IWindowMode
             _lines[i].LineNo = i + 1;
     }
 
-    /// <summary>The next sequential RCV/PAY number from the central
+    /// <summary>The next sequential company-wide journal number from the central
     /// allocator (NUMBERING_STUDY). A failure is reported through the
     /// error catalog and leaves the field empty rather than falling
     /// back to a fabricated timestamp number.</summary>
@@ -301,7 +301,7 @@ public sealed class CshWin : BaseWin, IWindowMode
             if (AppHost.JournalStore is not { } store)
                 throw new InvalidOperationException("The journal store is not initialized.");
             return store.NextDocumentNumber(
-                CurrentCompanyCode, _kind == CshKind.Receipt ? "RCV" : "PAY",
+                CurrentCompanyCode, "JRN",
                 DateOnly.FromDateTime(DateTime.Today));
         }
         catch (Exception ex)
