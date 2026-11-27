@@ -3307,7 +3307,8 @@
     "CheckPassed": "PASS — {0}: {1}",
     "CheckFailed": "FAILED — {0}: {1}",
     "ChecksRunning": "Running database checks...",
-    "ChecksCompleted": "Maintenance checks completed."
+    "ChecksCompleted": "Maintenance checks completed.",
+    "ChecksCompletedWithErrors": "Checks completed with {0} issue(s)."
   },
   "Rollover": {
     "Title": "Fiscal Year Roll-over",
