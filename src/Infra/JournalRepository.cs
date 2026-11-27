@@ -1089,6 +1089,72 @@ public sealed class JournalRepository : IJournalRepository
     /// or the central JRN number when explicitly requested. All counters
     /// are company-scoped, continuous and updated transactionally.
     /// </summary>
+    /// <summary>Read-only preview for JV, RCV and PAY source voucher numbers.</summary>
+    public string PreviewDocumentNumber(string companyCode, string seriesKey, DateOnly entryDate)
+    {
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new ArgumentException("Company code is required.", nameof(companyCode));
+        var key = seriesKey.Trim().ToUpperInvariant();
+        if (key is not ("JV" or "RCV" or "PAY"))
+            throw new ArgumentOutOfRangeException(nameof(seriesKey), "Only JV, RCV and PAY previews are supported.");
+        using var connection = CreateConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            var isPg = _provider == "PostgreSQL";
+            var defaults = new SeriesConfig(key, 1, false, 1);
+            var config = SequenceAllocator.ReadConfig(connection, transaction, isPg, companyCode.Trim(), key, defaults);
+            var companyCommand = CreateCommand(connection, transaction,
+                "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @code");
+            Add(companyCommand, "@code", companyCode.Trim());
+            var companyId = Convert.ToString(companyCommand.ExecuteScalar(), CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(companyId))
+                throw new InvalidOperationException("The company could not be resolved for voucher numbering.");
+
+            long seed = SequenceAllocator.PeekMax(connection, transaction, companyCode, key);
+            var pattern = config.Prefix + "-%";
+            if (TableExists(connection, transaction, isPg, "journal_entries"))
+            {
+                using var entries = CreateCommand(connection, transaction,
+                    "SELECT document_number FROM journal_entries WHERE CAST(company_id AS TEXT) = @company AND document_number LIKE @pattern");
+                Add(entries, "@company", companyId);
+                Add(entries, "@pattern", pattern);
+                using var reader = entries.ExecuteReader();
+                while (reader.Read())
+                {
+                    var value = reader.IsDBNull(0) ? string.Empty : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                    var dash = value.LastIndexOf('-');
+                    if (dash >= 0 && long.TryParse(value.AsSpan(dash + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var suffix))
+                        seed = Math.Max(seed, suffix);
+                }
+            }
+            if (key == "RCV" && TableExists(connection, transaction, isPg, "purchase_documents"))
+            {
+                using var receipts = CreateCommand(connection, transaction,
+                    "SELECT doc_no FROM purchase_documents WHERE CAST(company_id AS TEXT) IN (@company, @code) AND doc_kind = 'RCV' AND doc_no LIKE @pattern");
+                Add(receipts, "@company", companyId);
+                Add(receipts, "@code", companyCode.Trim());
+                Add(receipts, "@pattern", pattern);
+                using var reader = receipts.ExecuteReader();
+                while (reader.Read())
+                {
+                    var value = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                    var dash = value.LastIndexOf('-');
+                    if (dash >= 0 && long.TryParse(value.AsSpan(dash + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var suffix))
+                        seed = Math.Max(seed, suffix);
+                }
+            }
+            transaction.Commit();
+            return SequenceAllocator.Format(config, 0, Math.Max(seed + 1, config.StartValue));
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
+    }
+
     public string NextDocumentNumber(string companyCode, string seriesKey, DateOnly entryDate)
     {
         if (string.IsNullOrWhiteSpace(companyCode))
