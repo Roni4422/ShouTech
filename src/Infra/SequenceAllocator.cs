@@ -201,6 +201,59 @@ public static class SequenceAllocator
         return value is null or DBNull ? 0 : Convert.ToInt64(value, CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Allocates the single company-wide journal sequence. The counter is
+    /// updated inside the caller's posting transaction, so a failed posting
+    /// cannot leave a journal number detached from its journal entry.
+    /// Journal numbers are continuous across fiscal/calendar years.
+    /// </summary>
+    public static string AllocateJournalNumber(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        string companyId, DateOnly entryDate)
+    {
+        using var company = connection.CreateCommand();
+        company.Transaction = transaction;
+        company.CommandText = "SELECT company_code FROM companies WHERE CAST(company_id AS TEXT) = @id";
+        Add(company, "@id", companyId.Trim());
+        var companyCode = Convert.ToString(company.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new AppError(ErrorCodes.NumberingAllocationFailed,
+                "The journal company could not be resolved for number allocation.");
+
+        const string seriesKey = "JRN";
+        var defaults = new SeriesConfig("JRN", 8, false, 1);
+        var config = ReadConfig(connection, transaction, isPg, companyCode, seriesKey, defaults);
+        var segment = config.YearlySegment ? entryDate.Year : 0;
+        var prefix = config.YearlySegment
+            ? $"{config.Prefix}-{entryDate.Year}-"
+            : $"{config.Prefix}-";
+        var start = prefix.Length + 1;
+        var suffix = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
+        var numeric = isPg
+            ? $"{suffix} ~ '^[0-9]+    /// year segment, PREFIX-DDDD without one.</summary>
+    public static string Format(SeriesConfig config, int segmentYear, long value) =>
+        segmentYear > 0
+            ? $"{config.Prefix}-{segmentYear}-{value.ToString($"D{config.Padding}", CultureInfo.InvariantCulture)}"
+            : $"{config.Prefix}-{value.ToString($"D{config.Padding}", CultureInfo.InvariantCulture)}";
+}
+"
+            : $"{suffix} GLOB '[0-9]*' AND {suffix} NOT GLOB '*[^0-9]*'";
+        using var max = connection.CreateCommand();
+        max.Transaction = transaction;
+        max.CommandText = $"""
+            SELECT COALESCE(MAX(CAST({suffix} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
+            FROM journal_entries
+            WHERE company_id = @company AND document_number LIKE @pattern AND {numeric}
+            """;
+        Add(max, "@company", companyId.Trim());
+        Add(max, "@pattern", $"{prefix}%");
+        Add(max, "@start", start);
+        var seed = Convert.ToInt64(max.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+        var allocated = Allocate(connection, transaction, isPg, companyCode, seriesKey,
+            segment, seed, config.StartValue - 1);
+        return Format(config, segment, allocated);
+    }
+
     /// <summary>Formats a document-style number: PREFIX-YEAR-DDDD with a
     /// year segment, PREFIX-DDDD without one.</summary>
     public static string Format(SeriesConfig config, int segmentYear, long value) =>
