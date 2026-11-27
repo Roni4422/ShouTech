@@ -7,3 +7,9 @@ CREATE TABLE IF NOT EXISTS fiscal_period_number_sequences (
     last_value INTEGER NOT NULL CHECK (last_value >= 0),
     PRIMARY KEY (company_id, series_key, fiscal_period_id)
 );
+
+-- Allow the same immutable JRN number in different fiscal periods.
+DROP INDEX IF EXISTS ux_journal_entries_company_document_number;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_journal_entries_company_period_document_number
+    ON journal_entries(company_id, fiscal_period_id, document_number)
+    WHERE document_number IS NOT NULL AND length(trim(document_number)) > 0;
