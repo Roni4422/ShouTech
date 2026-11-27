@@ -173,7 +173,7 @@ public sealed class MaintenanceWin : BaseWin
     private async Task RunChecksAsync()
     {
         if (_running)
-            return Task.CompletedTask;
+            return;
 
         _running = true;
         _runButton.IsEnabled = false;
