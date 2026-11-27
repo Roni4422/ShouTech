@@ -92,8 +92,7 @@ public static class SeqSvc
         {
             var config = SequenceAllocator.ReadConfig(connection, transaction, isPg, Company, def.Key,
                 SequenceAllocator.DefaultConfig(def.DefaultPrefix, def.DefaultYearly));
-            const int segment = 0;
-            var current = SequenceAllocator.Peek(connection, transaction, Company, def.Key, segment);
+            var current = SequenceAllocator.PeekMax(connection, transaction, Company, def.Key);
             rows.Add(new SeriesRow(def.Key, def.NameKey, config.Prefix, 1,
                 false, config.StartValue, current));
         }
