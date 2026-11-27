@@ -101,18 +101,25 @@ jobs:
       - name: Test existing SQLite migration-history table
         run: |
           python3 - <<'PY'
-          import sqlite3, os
+          import sqlite3, os, re
+          from pathlib import Path
           path = os.path.join(os.environ["RUNNER_TEMP"], "shoutech-existing-history.db")
+          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/sqlite/sys.sql").read_bytes())
+          if not match:
+              raise SystemExit("SQLite history migration marker was not found")
           con = sqlite3.connect(path)
           con.execute("""CREATE TABLE schema_migrations (
               migration_id TEXT PRIMARY KEY,
               checksum TEXT NOT NULL,
               applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
           )""")
+          con.execute("INSERT INTO schema_migrations (migration_id, checksum) VALUES (?, ?)", ("000_history.sql", match.group(1).decode("ascii")))
           con.commit()
           con.close()
           PY
-          dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
+          output=$(dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db" 2>&1)
+          echo "$output"
+          echo "$output" | grep -q "SKIP 000_history.sql"
           dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider sqlite --connection "Data Source=$RUNNER_TEMP/shoutech-existing-history.db"
 
       - name: Upload validated migration bundles
@@ -193,7 +200,19 @@ jobs:
           # Use a separate empty database: dropping public alone may leave application objects in other schemas.
           PGPASSWORD=shoutest createdb -h localhost -U shoutest shoutest_existing_history
           PGPASSWORD=shoutest psql -h localhost -U shoutest -d shoutest_existing_history -v ON_ERROR_STOP=1 -c "CREATE TABLE schema_migrations (migration_id text PRIMARY KEY, checksum char(64) NOT NULL, applied_at timestamptz NOT NULL DEFAULT now());"
-          dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"
+          history_hash=$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/postgresql/sys.sql").read_bytes())
+          if not match:
+              raise SystemExit("PostgreSQL history migration marker was not found")
+          print(match.group(1).decode("ascii"))
+          PY
+          )
+          PGPASSWORD=shoutest psql -h localhost -U shoutest -d shoutest_existing_history -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations (migration_id, checksum) VALUES ('000_history.sql', '$history_hash');"
+          output=$(dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY" 2>&1)
+          echo "$output"
+          echo "$output" | grep -q "SKIP 000_history.sql"
           dotnet run --project tools/SqlMigrator/SqlMigrator.csproj -- --provider postgresql --connection "$PG_CONN_HISTORY"
       - name: Run PostgreSQL maintenance integration checks
         env:
