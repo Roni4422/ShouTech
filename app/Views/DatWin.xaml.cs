@@ -707,7 +707,7 @@ public partial class DatWin : BaseWin, IWindowMode
             ResultTextBox.Text = BuildFailureText(ex);
             _lastDetails = ResultTextBox.Text;
             DetailsButton.IsEnabled = true;
-            AppHost.Errors.Report(_mode == DataExchangeMode.Import ? ErrorCodes.ImportFailed : ErrorCodes.ExportFailed, ex, $"DatWin.Execute{_mode}");
+            AppHost.Errors.Report(_mode == ExchangeMode.Import ? ErrorCodes.ImportFailed : ErrorCodes.ExportFailed, ex, $"DatWin.Execute{_mode}");
         }
         finally
         {
