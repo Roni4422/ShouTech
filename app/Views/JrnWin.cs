@@ -281,7 +281,7 @@ public sealed class JrnWin : BaseWin
             if (AppHost.JournalStore is not { } store)
                 throw new InvalidOperationException("The journal store is not initialized.");
             var companyCode = AppState.CurrentCompanyCode ?? string.Empty;
-            return store.NextDocumentNumber(companyCode, "JRN", DateOnly.FromDateTime(DateTime.Today));
+            return store.NextDocumentNumber(companyCode, "JV", DateOnly.FromDateTime(DateTime.Today));
         }
         catch (Exception ex)
         {
