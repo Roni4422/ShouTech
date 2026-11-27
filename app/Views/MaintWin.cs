@@ -244,7 +244,7 @@ public sealed class MaintenanceWin : BaseWin
 
     }
 
-    private async Task<string> CheckDatabaseConnectionAsync
+    private async Task<string> CheckDatabaseConnectionAsync()
     {
         if (AppHost.DatabaseHealth is not { } health)
             throw new InvalidOperationException(T("Maintenance.HealthUnavailable"));
