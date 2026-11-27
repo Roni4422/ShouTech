@@ -945,8 +945,9 @@ public sealed class JournalRepository : IJournalRepository
         using var transaction = connection.BeginTransaction();
         try
         {
-            var number = SequenceAllocator.AllocateJournalNumber(
-                connection, transaction, isPg, companyId);
+            var number = string.Equals(seriesKey?.Trim(), "JRN", StringComparison.OrdinalIgnoreCase)
+                ? SequenceAllocator.AllocateJournalNumber(connection, transaction, isPg, companyId)
+                : SequenceAllocator.AllocateSeriesNumber(connection, transaction, isPg, companyCode, seriesKey);
             transaction.Commit();
             return number;
         }
