@@ -304,7 +304,7 @@ public sealed class CshWin : BaseWin, IWindowMode
         {
             if (AppHost.JournalStore is not { } store)
                 throw new InvalidOperationException("The journal store is not initialized.");
-            return store.NextDocumentNumber(
+            return store.PreviewDocumentNumber(
                 CurrentCompanyCode, _kind == CshKind.Receipt ? "RCV" : "PAY",
                 DateOnly.FromDateTime(DateTime.Today));
         }
