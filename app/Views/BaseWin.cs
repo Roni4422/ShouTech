@@ -474,7 +474,7 @@ public abstract class BaseWin : Window
         {
             if (child is Button button)
             {
-                button.Content = button.Tag as string switch
+                button.Content = (button.Tag as string) switch
                 {
                     "Common.First" => rtl ? "▶|" : "|◀",
                     "RecordNavigation.PreviousTen" => rtl ? "▶▶" : "◀◀",
