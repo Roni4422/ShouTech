@@ -22,6 +22,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ShouTech.ERP.csproj" Condition="'$(DatabaseOnly)' != 'true'" />
+    <ProjectReference Include="..\..\src\App\App.csproj" Condition="'$(DatabaseOnly)' == 'true'" />
     <ProjectReference Include="..\..\src\Infra\Infra.csproj" />
     <ProjectReference Include="..\..\tools\SqlMigrator\SqlMigrator.csproj" ReferenceOutputAssembly="false" Condition="'$(DatabaseOnly)' != 'true'" />
   </ItemGroup>
