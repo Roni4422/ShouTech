@@ -223,10 +223,9 @@ public static class SequenceAllocator
         const string seriesKey = "JRN";
         var defaults = new SeriesConfig("JRN", 8, false, 1);
         var config = ReadConfig(connection, transaction, isPg, companyCode, seriesKey, defaults);
-        var segment = config.YearlySegment ? entryDate.Year : 0;
-        var prefix = config.YearlySegment
-            ? $"{config.Prefix}-{entryDate.Year}-"
-            : $"{config.Prefix}-";
+        // Journal numbering never resets at year boundaries.
+        const int segment = 0;
+        var prefix = $"{config.Prefix}-";
         var start = prefix.Length + 1;
         var suffix = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
         var numeric = isPg
