@@ -1,0 +1,371 @@
+using System.Data.Common;
+using System.Globalization;
+using ShouTech.Domain;
+
+namespace ShouTech.Infra;
+
+/// <summary>
+/// The ONE number allocator (NUMBERING_STUDY §3.1): every document,
+/// journal, session, order and card number in the system is drawn from
+/// document_number_sequences (migration 075) through here. Allocation
+/// is an UPSERT inside the CALLER's transaction — the counter row is
+/// the lock, so two simultaneous users can never receive the same
+/// value (Odoo's no_gap counter-row model). The counter only moves
+/// forward: a number, once allocated, is never reissued — not while
+/// its record sits in the Recycle Bin and not after a permanent purge
+/// (study §3.3). Callers pass seedMax = the highest numeric suffix
+/// already present in their family INCLUDING soft-deleted rows, so a
+/// fresh counter row starts above all history, and startFloor from
+/// number_series_config (migration 123) when configured.
+/// </summary>
+public static class SequenceAllocator
+{
+    public const long MaxValue = long.MaxValue - 1;
+
+    /// <summary>Resolved configuration for one series (defaults applied).</summary>
+    public sealed record SeriesConfig(
+        string Prefix,
+        int Padding,
+        bool YearlySegment,
+        long StartValue);
+
+    public static SeriesConfig DefaultConfig(string seriesKey, bool yearlyByDefault = true) =>
+        new(seriesKey, 4, yearlyByDefault, 1);
+
+    private static void Add(DbCommand command, string name, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
+    }
+
+    private static bool TableExists(DbConnection connection, DbTransaction transaction, bool isPg, string table)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = isPg
+            ? "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = @t"
+            : "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @t";
+        Add(command, "@t", table);
+        return Convert.ToInt64(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture) > 0;
+    }
+
+    /// <summary>Reads number_series_config for one series, falling back
+    /// to the supplied defaults when no row exists (or the config table
+    /// is not there yet). Invalid stored values raise NUM-8302.</summary>
+    public static SeriesConfig ReadConfig(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        string companyKey, string seriesKey, SeriesConfig defaults)
+    {
+        if (!TableExists(connection, transaction, isPg, "number_series_config"))
+            return defaults;
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT prefix, padding, yearly_segment, start_value
+            FROM number_series_config
+            WHERE company_id = @company AND series_key = @series
+            """;
+        Add(command, "@company", companyKey.Trim());
+        Add(command, "@series", seriesKey.Trim());
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+            return defaults;
+        var prefix = reader.IsDBNull(0) ? defaults.Prefix : reader.GetString(0).Trim();
+        var padding = reader.IsDBNull(1) ? defaults.Padding : Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture);
+        var yearly = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture) != 0;
+        var start = Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture);
+        if (prefix.Length == 0 || prefix.Length > 12 || start < 1 || start > MaxValue)
+            throw new AppError(ErrorCodes.NumberingInvalidConfig,
+                $"Series '{seriesKey}' has an invalid numbering configuration (prefix '{prefix}', start {start}).");
+        return new SeriesConfig(prefix, padding, yearly, start);
+    }
+
+    /// <summary>Allocates the next value of a series inside the caller's
+    /// transaction. next = MAX(stored + 1, seedMax + 1, startFloor + 1);
+    /// the first allocation inserts MAX(seedMax, startFloor) + 1.</summary>
+    public static long Allocate(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        string companyKey, string seriesKey, int segmentYear, long seedMax, long startFloor = 0)
+    {
+        var floor = Math.Max(seedMax, startFloor);
+        if (floor >= MaxValue)
+            throw new AppError(ErrorCodes.NumberingLimitReached,
+                $"The '{seriesKey}' number sequence has reached its supported limit.");
+        var advanceExpression = isPg
+            ? "GREATEST(document_number_sequences.last_value + 1, EXCLUDED.last_value)"
+            : "MAX(document_number_sequences.last_value + 1, excluded.last_value)";
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            INSERT INTO document_number_sequences (company_id, doc_kind, doc_year, last_value)
+            VALUES (@company, @series, @year, @next)
+            ON CONFLICT (company_id, doc_kind, doc_year)
+            DO UPDATE SET last_value = {advanceExpression}
+            RETURNING last_value
+            """;
+        Add(command, "@company", companyKey.Trim());
+        Add(command, "@series", seriesKey.Trim());
+        Add(command, "@year", segmentYear);
+        Add(command, "@next", floor + 1);
+        var allocated = Convert.ToInt64(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+        if (allocated <= 0 || allocated > MaxValue)
+            throw new AppError(ErrorCodes.NumberingAllocationFailed,
+                $"The '{seriesKey}' number sequence returned an invalid value.");
+        return allocated;
+    }
+
+    /// <summary>Async twin of <see cref="Allocate"/> for the Infra
+    /// repositories.</summary>
+    public static async Task<long> AllocateAsync(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        string companyKey, string seriesKey, int segmentYear, long seedMax, long startFloor = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var floor = Math.Max(seedMax, startFloor);
+        if (floor >= MaxValue)
+            throw new AppError(ErrorCodes.NumberingLimitReached,
+                $"The '{seriesKey}' number sequence has reached its supported limit.");
+        var advanceExpression = isPg
+            ? "GREATEST(document_number_sequences.last_value + 1, EXCLUDED.last_value)"
+            : "MAX(document_number_sequences.last_value + 1, excluded.last_value)";
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            INSERT INTO document_number_sequences (company_id, doc_kind, doc_year, last_value)
+            VALUES (@company, @series, @year, @next)
+            ON CONFLICT (company_id, doc_kind, doc_year)
+            DO UPDATE SET last_value = {advanceExpression}
+            RETURNING last_value
+            """;
+        Add(command, "@company", companyKey.Trim());
+        Add(command, "@series", seriesKey.Trim());
+        Add(command, "@year", segmentYear);
+        Add(command, "@next", floor + 1);
+        var allocated = Convert.ToInt64(
+            await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? 0,
+            CultureInfo.InvariantCulture);
+        if (allocated <= 0 || allocated > MaxValue)
+            throw new AppError(ErrorCodes.NumberingAllocationFailed,
+                $"The '{seriesKey}' number sequence returned an invalid value.");
+        return allocated;
+    }
+
+    /// <summary>Async config read for the Infra repositories.</summary>
+    public static async Task<SeriesConfig> ReadConfigAsync(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        string companyKey, string seriesKey, SeriesConfig defaults,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TableExists(connection, transaction, isPg, "number_series_config"))
+            return defaults;
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT prefix, padding, yearly_segment, start_value
+            FROM number_series_config
+            WHERE company_id = @company AND series_key = @series
+            """;
+        Add(command, "@company", companyKey.Trim());
+        Add(command, "@series", seriesKey.Trim());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            return defaults;
+        var prefix = reader.IsDBNull(0) ? defaults.Prefix : reader.GetString(0).Trim();
+        var padding = reader.IsDBNull(1) ? defaults.Padding : Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture);
+        var yearly = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture) != 0;
+        var start = Convert.ToInt64(reader.GetValue(3), CultureInfo.InvariantCulture);
+        if (prefix.Length == 0 || prefix.Length > 12 || start < 1 || start > MaxValue)
+            throw new AppError(ErrorCodes.NumberingInvalidConfig,
+                $"Series '{seriesKey}' has an invalid numbering configuration (prefix '{prefix}', padding {padding}, start {start}).");
+        return new SeriesConfig(prefix, padding, yearly, start);
+    }
+
+    /// <summary>The current counter of a series (0 when never used) —
+    /// for the OptWin Numbering section's "current value" column.</summary>
+    public static long Peek(
+        DbConnection connection, DbTransaction transaction,
+        string companyKey, string seriesKey, int segmentYear)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT last_value FROM document_number_sequences
+            WHERE company_id = @company AND doc_kind = @series AND doc_year = @year
+            """;
+        Add(command, "@company", companyKey.Trim());
+        Add(command, "@series", seriesKey.Trim());
+        Add(command, "@year", segmentYear);
+        var value = command.ExecuteScalar();
+        return value is null or DBNull ? 0 : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Highest reserved counter across every historical year segment.</summary>
+    public static long PeekMax(
+        DbConnection connection, DbTransaction transaction,
+        string companyKey, string seriesKey)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT COALESCE(MAX(last_value), 0)
+            FROM document_number_sequences
+            WHERE company_id = @company AND doc_kind = @series
+            """;
+        Add(command, "@company", companyKey.Trim());
+        Add(command, "@series", seriesKey.Trim());
+        return Convert.ToInt64(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Allocates a continuous, unpadded source-document sequence such as
+    /// JV, RCV or PAY. The caller owns the transaction; the resulting
+    /// source number remains distinct from the central JRN number.
+    /// </summary>
+    public static string AllocateSeriesNumber(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        string companyCode, string seriesKey)
+    {
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new ArgumentException("Company code is required.", nameof(companyCode));
+        var key = seriesKey.Trim().ToUpperInvariant();
+        if (key is not ("JV" or "RCV" or "PAY"))
+            throw new ArgumentOutOfRangeException(nameof(seriesKey), "Only source voucher series JV, RCV and PAY are allocated here.");
+
+        using var company = connection.CreateCommand();
+        company.Transaction = transaction;
+        company.CommandText = "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @code";
+        Add(company, "@code", companyCode.Trim());
+        var companyId = Convert.ToString(company.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(companyId))
+            throw new AppError(ErrorCodes.NumberingAllocationFailed,
+                $"Company '{companyCode.Trim()}' could not be resolved for voucher number allocation.");
+
+        var defaults = new SeriesConfig(key, 1, false, 1);
+        var config = ReadConfig(connection, transaction, isPg, companyCode, key, defaults);
+        var pattern = $"{config.Prefix}-%";
+        long seed = 0;
+
+        // Seed from all existing journal/voucher rows, including soft-deleted
+        // rows. This protects legacy numeric suffixes when the segment policy
+        // changes from year-based to continuous.
+        if (TableExists(connection, transaction, isPg, "journal_entries"))
+        {
+            using var entries = connection.CreateCommand();
+            entries.Transaction = transaction;
+            entries.CommandText = """
+                SELECT document_number FROM journal_entries
+                WHERE CAST(company_id AS TEXT) = @company AND document_number LIKE @pattern
+                """;
+            Add(entries, "@company", companyId);
+            Add(entries, "@pattern", pattern);
+            using var reader = entries.ExecuteReader();
+            while (reader.Read())
+            {
+                var existing = reader.IsDBNull(0) ? string.Empty : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                var lastDash = existing.LastIndexOf('-');
+                if (lastDash >= 0 && long.TryParse(existing.AsSpan(lastDash + 1),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var suffix))
+                    seed = Math.Max(seed, suffix);
+            }
+        }
+
+        // RCV is shared with purchase receipt documents; include that
+        // source family in the seed so both entry points share one range.
+        if (key == "RCV" && TableExists(connection, transaction, isPg, "purchase_documents"))
+        {
+            using var receipts = connection.CreateCommand();
+            receipts.Transaction = transaction;
+            receipts.CommandText = """
+                SELECT doc_no FROM purchase_documents
+                WHERE CAST(company_id AS TEXT) IN (@company, @code)
+                  AND doc_kind = 'RCV' AND doc_no LIKE @pattern
+                """;
+            Add(receipts, "@company", companyId);
+            Add(receipts, "@code", companyCode.Trim());
+            Add(receipts, "@pattern", pattern);
+            using var reader = receipts.ExecuteReader();
+            while (reader.Read())
+            {
+                var existing = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                var lastDash = existing.LastIndexOf('-');
+                if (lastDash >= 0 && long.TryParse(existing.AsSpan(lastDash + 1),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var suffix))
+                    seed = Math.Max(seed, suffix);
+            }
+        }
+
+        seed = Math.Max(seed, PeekMax(connection, transaction, companyCode, key));
+        const int segment = 0;
+        var allocated = Allocate(connection, transaction, isPg, companyCode, key,
+            segment, seed, config.StartValue - 1);
+        return Format(config, segment, allocated);
+    }
+
+    /// <summary>
+    /// Allocates the immutable central JRN number inside the posting transaction.
+    /// Each fiscal period has an independent sequence starting at one. The
+    /// fiscal-period ID, not the calendar year or machine clock, defines scope.
+    /// </summary>
+    public static string AllocateJournalNumber(
+        DbConnection connection, DbTransaction transaction, bool isPg,
+        Guid companyId, string fiscalPeriodId)
+    {
+        if (companyId == Guid.Empty || string.IsNullOrWhiteSpace(fiscalPeriodId))
+            throw new ArgumentException("Company and fiscal period are required for JRN allocation.");
+
+        using var company = connection.CreateCommand();
+        company.Transaction = transaction;
+        company.CommandText = "SELECT company_code FROM companies WHERE CAST(company_id AS TEXT) = @id";
+        Add(company, "@id", companyId.ToString("D", CultureInfo.InvariantCulture));
+        var companyCode = Convert.ToString(company.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(companyCode))
+            throw new AppError(ErrorCodes.NumberingAllocationFailed,
+                "The journal company could not be resolved for number allocation.");
+
+        const string seriesKey = "JRN";
+        var config = new SeriesConfig("JRN", 1, false, 1);
+        var prefix = config.Prefix + "-";
+        var suffix = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
+        var numeric = isPg
+            ? "SUBSTRING(document_number FROM @start) ~ '^[0-9]+$'"
+            : "SUBSTR(document_number, @start) GLOB '[0-9]*' AND SUBSTR(document_number, @start) NOT GLOB '*[^0-9]*'";
+
+        using var max = connection.CreateCommand();
+        max.Transaction = transaction;
+        max.CommandText = "SELECT COALESCE(MAX(CAST(" + suffix + " AS " + (isPg ? "BIGINT" : "INTEGER") + ")), 0) " +
+            "FROM journal_entries WHERE company_id = @company AND fiscal_period_id = @period " +
+            "AND document_number LIKE @pattern AND " + numeric;
+        Add(max, "@company", isPg ? (object)companyId : companyId.ToString("D", CultureInfo.InvariantCulture));
+        Add(max, "@period", isPg ? (object)Guid.Parse(fiscalPeriodId) : fiscalPeriodId);
+        Add(max, "@pattern", prefix + "%");
+        Add(max, "@start", prefix.Length + 1);
+        var seed = Convert.ToInt64(max.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+        if (seed >= MaxValue)
+            throw new AppError(ErrorCodes.NumberingLimitReached, "The JRN sequence has reached its supported limit.");
+
+        using var allocate = connection.CreateCommand();
+        allocate.Transaction = transaction;
+        var advance = isPg
+            ? "GREATEST(fiscal_period_number_sequences.last_value + 1, EXCLUDED.last_value)"
+            : "MAX(fiscal_period_number_sequences.last_value + 1, excluded.last_value)";
+        allocate.CommandText = "INSERT INTO fiscal_period_number_sequences " +
+            "(company_id, series_key, fiscal_period_id, last_value) VALUES (@company, @series, @period, @next) " +
+            "ON CONFLICT (company_id, series_key, fiscal_period_id) DO UPDATE SET last_value = " + advance +
+            " RETURNING last_value";
+        Add(allocate, "@company", companyCode.Trim());
+        Add(allocate, "@series", seriesKey);
+        Add(allocate, "@period", isPg ? (object)Guid.Parse(fiscalPeriodId) : fiscalPeriodId.Trim());
+        Add(allocate, "@next", seed + 1);
+        var value = Convert.ToInt64(allocate.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+        if (value <= 0 || value > MaxValue)
+            throw new AppError(ErrorCodes.NumberingAllocationFailed, "The JRN allocator returned an invalid number.");
+        return Format(config, 0, value);
+    }
+    /// <summary>Formats a document number with an unpadded numeric suffix.</summary>
+    public static string Format(SeriesConfig config, int segmentYear, long value) =>
+        segmentYear > 0
+            ? $"{config.Prefix}-{segmentYear}-{value.ToString(CultureInfo.InvariantCulture)}"
+            : $"{config.Prefix}-{value.ToString(CultureInfo.InvariantCulture)}";
+}

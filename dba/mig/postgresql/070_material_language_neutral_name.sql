@@ -1,0 +1,3 @@
+-- Material names are stored in one language-neutral column (materials.name).
+-- Fresh databases receive this definition from the inventory base schema.
+-- Legacy development databases are intentionally discarded; no compatibility migration is required.

@@ -1,0 +1,128 @@
+# ================================================================
+# ShouTech ERP — .gitignore
+# ================================================================
+
+# --- .NET Build outputs ---
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# --- Visual Studio ---
+.vs/
+*.vs/
+.vscode/
+
+# --- Build results ---
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+artifacts/
+
+# --- NuGet ---
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+
+# --- Test results ---
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# --- Database files ---
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+
+# --- License / Secrets ---
+license.dat
+*.key
+*.pem
+*.pfx
+*.p12
+secrets.json
+appsettings.Development.json
+appsettings.Local.json
+
+# --- Logs ---
+*.log
+log.txt
+errors.txt
+
+# --- Binaries (built artifacts) ---
+*.dll
+*.exe
+*.pdb
+*.so
+*.dylib
+*.lib
+*.exp
+
+# --- WPF temp ---
+*_wpftmp.csproj
+*_wpftmp/
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# --- Backup / merge files ---
+*.bak
+*.backup
+*.old
+*~
+*.orig
+*.rej
+
+# --- IDE ---
+.idea/
+*.swp
+*.swo
+
+# --- Python (for int/) ---
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+.pytest_cache/
+*.egg-info/
+dist/
+
+# --- Node (future frontend) ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Temp ---
+*.tmp
+*.temp
+*.cache
+*.pid
+*.seed

@@ -1,0 +1,1707 @@
+{
+  "$schema": "https://shoutech.app/schemas/coa-v5.json",
+  "format": "shc",
+  "formatName": "ShouTech Coa",
+  "schemaVersion": 5,
+  "templateCode": "TR",
+  "templateKind": "commercial",
+  "scope": "country",
+  "country": "TR",
+  "sourceEncoding": "utf-8",
+  "languages": [
+    "ar",
+    "en"
+  ],
+  "metadata": {
+    "nameKey": "COA.Template.TR",
+    "nameAr": "Turkish Chart of Accounts",
+    "nameEn": "Turkish Chart of Accounts",
+    "latinName": "Turkish Chart of Accounts",
+    "framework": "Proposed commercial chart aligned to applicable financial reporting principles; not a statutory unified chart of accounts.",
+    "author": "ShouTech",
+    "version": "2.0.0",
+    "releasedAt": "2026-10-14",
+    "basisNote": "Country-specific tax and statutory accounts are configurable placeholders; confirm local filing requirements before production use."
+  },
+  "features": {
+    "isMinimal": false,
+    "hasArabicCodes": false,
+    "usesFlatStructure": false,
+    "hasBills": false,
+    "hasBalSheets": false,
+    "hasPayments": false,
+    "hasTransfers": false,
+    "hasManufacturing": false
+  },
+  "accounts": [
+    {
+      "id": 1,
+      "number": 1,
+      "code": "1",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Assets",
+        "en": "Assets"
+      }
+    },
+    {
+      "id": 2,
+      "number": 11,
+      "code": "11",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Non-current Assets",
+        "en": "Non-current Assets"
+      }
+    },
+    {
+      "id": 3,
+      "number": 1101,
+      "code": "1101",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Land",
+        "en": "Land"
+      }
+    },
+    {
+      "id": 4,
+      "number": 1102,
+      "code": "1102",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Buildings and Structures",
+        "en": "Buildings and Structures"
+      }
+    },
+    {
+      "id": 5,
+      "number": 1103,
+      "code": "1103",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Machinery and Equipment",
+        "en": "Machinery and Equipment"
+      }
+    },
+    {
+      "id": 6,
+      "number": 1104,
+      "code": "1104",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Vehicles",
+        "en": "Vehicles"
+      }
+    },
+    {
+      "id": 7,
+      "number": 1105,
+      "code": "1105",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Furniture and Fixtures",
+        "en": "Furniture and Fixtures"
+      }
+    },
+    {
+      "id": 8,
+      "number": 1106,
+      "code": "1106",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Computer Equipment and Software",
+        "en": "Computer Equipment and Software"
+      }
+    },
+    {
+      "id": 9,
+      "number": 1107,
+      "code": "1107",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Leasehold Improvements",
+        "en": "Leasehold Improvements"
+      }
+    },
+    {
+      "id": 10,
+      "number": 1108,
+      "code": "1108",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Right-of-use Assets",
+        "en": "Right-of-use Assets"
+      }
+    },
+    {
+      "id": 11,
+      "number": 1190,
+      "code": "1190",
+      "parentId": 2,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "ContraAsset",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Accumulated Depreciation and Amortization",
+        "en": "Accumulated Depreciation and Amortization"
+      }
+    },
+    {
+      "id": 12,
+      "number": 12,
+      "code": "12",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Current Assets",
+        "en": "Current Assets"
+      }
+    },
+    {
+      "id": 13,
+      "number": 1201,
+      "code": "1201",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Customer",
+      "names": {
+        "ar": "Trade Accounts Receivable",
+        "en": "Trade Accounts Receivable"
+      }
+    },
+    {
+      "id": 14,
+      "number": 1202,
+      "code": "1202",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Notes Receivable",
+        "en": "Notes Receivable"
+      }
+    },
+    {
+      "id": 15,
+      "number": 1203,
+      "code": "1203",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Inventory",
+      "names": {
+        "ar": "Merchandise Inventory",
+        "en": "Merchandise Inventory"
+      }
+    },
+    {
+      "id": 89,
+      "number": 1215,
+      "code": "1215",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Inventory",
+      "names": {
+        "ar": "بضاعة مسلّمة غير مفوترة",
+        "en": "Stock Delivered But Not Billed"
+      }
+    },
+    {
+      "id": 16,
+      "number": 1204,
+      "code": "1204",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Prepaid Expenses",
+        "en": "Prepaid Expenses"
+      }
+    },
+    {
+      "id": 17,
+      "number": 1205,
+      "code": "1205",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": null,
+      "names": {
+        "ar": "Deductible Input VAT",
+        "en": "Deductible Input VAT"
+      }
+    },
+    {
+      "id": 90,
+      "number": 1215,
+      "code": "1215",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "سلف الموردين",
+        "en": "Advances to Suppliers"
+      }
+    },
+    {
+      "id": 18,
+      "number": 1206,
+      "code": "1206",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Advances and Imprests",
+        "en": "Advances and Imprests"
+      }
+    },
+    {
+      "id": 19,
+      "number": 1207,
+      "code": "1207",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Other Receivables",
+        "en": "Other Receivables"
+      }
+    },
+    {
+      "id": 20,
+      "number": 1208,
+      "code": "1208",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Short-term Investments",
+        "en": "Short-term Investments"
+      }
+    },
+    {
+      "id": 21,
+      "number": 1209,
+      "code": "1209",
+      "parentId": 12,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "ContraAsset",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Allowance for Expected Credit Losses",
+        "en": "Allowance for Expected Credit Losses"
+      }
+    },
+    {
+      "id": 22,
+      "number": 13,
+      "code": "13",
+      "parentId": 1,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Cash and Cash Equivalents",
+        "en": "Cash and Cash Equivalents"
+      }
+    },
+    {
+      "id": 23,
+      "number": 131,
+      "code": "131",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Cash",
+      "names": {
+        "ar": "Cash on Hand",
+        "en": "Cash on Hand"
+      }
+    },
+    {
+      "id": 24,
+      "number": 132,
+      "code": "132",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Bank",
+      "names": {
+        "ar": "Bank Accounts",
+        "en": "Bank Accounts"
+      }
+    },
+    {
+      "id": 25,
+      "number": 133,
+      "code": "133",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Cash in Transit",
+        "en": "Cash in Transit"
+      }
+    },
+    {
+      "id": 26,
+      "number": 134,
+      "code": "134",
+      "parentId": 22,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Bank",
+      "names": {
+        "ar": "Payment Service Provider Balances",
+        "en": "Payment Service Provider Balances"
+      }
+    },
+    {
+      "id": 27,
+      "number": 2,
+      "code": "2",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Liabilities and Equity",
+        "en": "Liabilities and Equity"
+      }
+    },
+    {
+      "id": 28,
+      "number": 21,
+      "code": "21",
+      "parentId": 27,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Equity",
+        "en": "Equity"
+      }
+    },
+    {
+      "id": 29,
+      "number": 2101,
+      "code": "2101",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "Share Capital",
+        "en": "Share Capital"
+      }
+    },
+    {
+      "id": 30,
+      "number": 2102,
+      "code": "2102",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "Owner or Partners Current Account",
+        "en": "Owner or Partners Current Account"
+      }
+    },
+    {
+      "id": 31,
+      "number": 2103,
+      "code": "2103",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "Reserves",
+        "en": "Reserves"
+      }
+    },
+    {
+      "id": 32,
+      "number": 2104,
+      "code": "2104",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "Retained Earnings",
+        "en": "Retained Earnings"
+      }
+    },
+    {
+      "id": 33,
+      "number": 2105,
+      "code": "2105",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "Current Year Profit or Loss",
+        "en": "Current Year Profit or Loss"
+      }
+    },
+    {
+      "id": 34,
+      "number": 2106,
+      "code": "2106",
+      "parentId": 28,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Equity",
+      "names": {
+        "ar": "Dividends Payable",
+        "en": "Dividends Payable"
+      }
+    },
+    {
+      "id": 35,
+      "number": 22,
+      "code": "22",
+      "parentId": 27,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Current Liabilities",
+        "en": "Current Liabilities"
+      }
+    },
+    {
+      "id": 36,
+      "number": 2201,
+      "code": "2201",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Supplier",
+      "names": {
+        "ar": "Trade Accounts Payable",
+        "en": "Trade Accounts Payable"
+      }
+    },
+    {
+      "id": 37,
+      "number": 2202,
+      "code": "2202",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Notes Payable",
+        "en": "Notes Payable"
+      }
+    },
+    {
+      "id": 38,
+      "number": 2203,
+      "code": "2203",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Accrued Expenses",
+        "en": "Accrued Expenses"
+      }
+    },
+    {
+      "id": 39,
+      "number": 2204,
+      "code": "2204",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Salaries and Wages Payable",
+        "en": "Salaries and Wages Payable"
+      }
+    },
+    {
+      "id": 40,
+      "number": 2205,
+      "code": "2205",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": null,
+      "names": {
+        "ar": "VAT Payable",
+        "en": "VAT Payable"
+      }
+    },
+    {
+      "id": 41,
+      "number": 2206,
+      "code": "2206",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Customer Advances",
+        "en": "Customer Advances"
+      }
+    },
+    {
+      "id": 42,
+      "number": 2207,
+      "code": "2207",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Short-term Loans",
+        "en": "Short-term Loans"
+      }
+    },
+    {
+      "id": 43,
+      "number": 2208,
+      "code": "2208",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Withholding Taxes Payable",
+        "en": "Withholding Taxes Payable"
+      }
+    },
+    {
+      "id": 44,
+      "number": 2209,
+      "code": "2209",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Other Current Provisions and Liabilities",
+        "en": "Other Current Provisions and Liabilities"
+      }
+    },
+    {
+      "id": 45,
+      "number": 23,
+      "code": "23",
+      "parentId": 27,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Non-current Liabilities",
+        "en": "Non-current Liabilities"
+      }
+    },
+    {
+      "id": 46,
+      "number": 2301,
+      "code": "2301",
+      "parentId": 45,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Long-term Loans",
+        "en": "Long-term Loans"
+      }
+    },
+    {
+      "id": 47,
+      "number": 2302,
+      "code": "2302",
+      "parentId": 45,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Lease Liabilities",
+        "en": "Lease Liabilities"
+      }
+    },
+    {
+      "id": 48,
+      "number": 2303,
+      "code": "2303",
+      "parentId": 45,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Long-term Provisions",
+        "en": "Long-term Provisions"
+      }
+    },
+    {
+      "id": 49,
+      "number": 3,
+      "code": "3",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Revenue",
+        "en": "Revenue"
+      }
+    },
+    {
+      "id": 50,
+      "number": 301,
+      "code": "301",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "Goods Sales",
+        "en": "Goods Sales"
+      }
+    },
+    {
+      "id": 51,
+      "number": 302,
+      "code": "302",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "Sales Returns and Allowances",
+        "en": "Sales Returns and Allowances"
+      }
+    },
+    {
+      "id": 52,
+      "number": 303,
+      "code": "303",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "Service Revenue",
+        "en": "Service Revenue"
+      }
+    },
+    {
+      "id": 53,
+      "number": 304,
+      "code": "304",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "Contract and Project Revenue",
+        "en": "Contract and Project Revenue"
+      }
+    },
+    {
+      "id": 54,
+      "number": 305,
+      "code": "305",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "Sales Discounts",
+        "en": "Sales Discounts"
+      }
+    },
+    {
+      "id": 55,
+      "number": 306,
+      "code": "306",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "Other Income",
+        "en": "Other Income"
+      }
+    },
+    {
+      "id": 56,
+      "number": 307,
+      "code": "307",
+      "parentId": 49,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Revenue",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Revenue",
+      "names": {
+        "ar": "Gain on Disposal of Assets",
+        "en": "Gain on Disposal of Assets"
+      }
+    },
+    {
+      "id": 57,
+      "number": 4,
+      "code": "4",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Purchase",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Purchases and Cost of Sales",
+        "en": "Purchases and Cost of Sales"
+      }
+    },
+    {
+      "id": 58,
+      "number": 401,
+      "code": "401",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Cost of Goods Sold",
+        "en": "Cost of Goods Sold"
+      }
+    },
+    {
+      "id": 59,
+      "number": 402,
+      "code": "402",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Merchandise Purchases",
+        "en": "Merchandise Purchases"
+      }
+    },
+    {
+      "id": 60,
+      "number": 403,
+      "code": "403",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Purchase Returns",
+        "en": "Purchase Returns"
+      }
+    },
+    {
+      "id": 61,
+      "number": 404,
+      "code": "404",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Freight-in",
+        "en": "Freight-in"
+      }
+    },
+    {
+      "id": 62,
+      "number": 405,
+      "code": "405",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Purchase Discounts",
+        "en": "Purchase Discounts"
+      }
+    },
+    {
+      "id": 63,
+      "number": 406,
+      "code": "406",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Inventory Variances and Adjustments",
+        "en": "Inventory Variances and Adjustments"
+      }
+    },
+    {
+      "id": 89,
+      "number": 415,
+      "code": "415",
+      "parentId": 57,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "فروقات أسعار الشراء",
+        "en": "Purchase Price Variance"
+      }
+    },
+    {
+      "id": 64,
+      "number": 5,
+      "code": "5",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Operating and Administrative Expenses",
+        "en": "Operating and Administrative Expenses"
+      }
+    },
+    {
+      "id": 65,
+      "number": 501,
+      "code": "501",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Salaries and Wages",
+        "en": "Salaries and Wages"
+      }
+    },
+    {
+      "id": 66,
+      "number": 502,
+      "code": "502",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Rent Expense",
+        "en": "Rent Expense"
+      }
+    },
+    {
+      "id": 67,
+      "number": 503,
+      "code": "503",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Utilities and Energy",
+        "en": "Utilities and Energy"
+      }
+    },
+    {
+      "id": 68,
+      "number": 504,
+      "code": "504",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Telecommunications and Internet",
+        "en": "Telecommunications and Internet"
+      }
+    },
+    {
+      "id": 69,
+      "number": 505,
+      "code": "505",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Depreciation and Amortization",
+        "en": "Depreciation and Amortization"
+      }
+    },
+    {
+      "id": 70,
+      "number": 506,
+      "code": "506",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "General and Administrative Expenses",
+        "en": "General and Administrative Expenses"
+      }
+    },
+    {
+      "id": 71,
+      "number": 507,
+      "code": "507",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Marketing and Advertising",
+        "en": "Marketing and Advertising"
+      }
+    },
+    {
+      "id": 72,
+      "number": 508,
+      "code": "508",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Bank Charges",
+        "en": "Bank Charges"
+      }
+    },
+    {
+      "id": 73,
+      "number": 509,
+      "code": "509",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Foreign Exchange Losses",
+        "en": "Foreign Exchange Losses"
+      }
+    },
+    {
+      "id": 74,
+      "number": 510,
+      "code": "510",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Repairs and Maintenance",
+        "en": "Repairs and Maintenance"
+      }
+    },
+    {
+      "id": 75,
+      "number": 511,
+      "code": "511",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Professional and Consulting Fees",
+        "en": "Professional and Consulting Fees"
+      }
+    },
+    {
+      "id": 76,
+      "number": 512,
+      "code": "512",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Travel and Transportation",
+        "en": "Travel and Transportation"
+      }
+    },
+    {
+      "id": 77,
+      "number": 513,
+      "code": "513",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Insurance Expense",
+        "en": "Insurance Expense"
+      }
+    },
+    {
+      "id": 78,
+      "number": 514,
+      "code": "514",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Credit Losses and Bad Debts",
+        "en": "Credit Losses and Bad Debts"
+      }
+    },
+    {
+      "id": 79,
+      "number": 515,
+      "code": "515",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Finance Costs and Interest",
+        "en": "Finance Costs and Interest"
+      }
+    },
+    {
+      "id": 80,
+      "number": 516,
+      "code": "516",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Income Tax Expense",
+        "en": "Income Tax Expense"
+      }
+    },
+    {
+      "id": 81,
+      "number": 518,
+      "code": "518",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Miscellaneous Expenses",
+        "en": "Miscellaneous Expenses"
+      }
+    },
+    {
+      "id": 82,
+      "number": 2211,
+      "code": "2211",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Withholding Taxes Payable",
+        "en": "Withholding Taxes Payable"
+      }
+    },
+    {
+      "id": 83,
+      "number": 517,
+      "code": "517",
+      "parentId": 64,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Expense",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Expense",
+      "names": {
+        "ar": "Income Tax Expense",
+        "en": "Income Tax Expense"
+      }
+    },
+    {
+      "id": 84,
+      "number": 12051,
+      "code": "12051",
+      "parentId": 17,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Domestic Recoverable Input Tax",
+        "en": "Domestic Recoverable Input Tax"
+      }
+    },
+    {
+      "id": 85,
+      "number": 12052,
+      "code": "12052",
+      "parentId": 17,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Asset",
+      "balance": "Debit",
+      "posting": true,
+      "cardType": "Asset",
+      "names": {
+        "ar": "Import Recoverable Input Tax",
+        "en": "Import Recoverable Input Tax"
+      }
+    },
+    {
+      "id": 86,
+      "number": 22051,
+      "code": "22051",
+      "parentId": 40,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Tax Payable on Domestic Sales",
+        "en": "Tax Payable on Domestic Sales"
+      }
+    },
+    {
+      "id": 87,
+      "number": 22052,
+      "code": "22052",
+      "parentId": 40,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "Tax Payable on Imports or Adjustments",
+        "en": "Tax Payable on Imports or Adjustments"
+      }
+    },
+    {
+      "id": 88,
+      "number": 6,
+      "code": "6",
+      "parentId": null,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Equity",
+      "balance": "Credit",
+      "posting": false,
+      "cardType": null,
+      "names": {
+        "ar": "Closing Accounts",
+        "en": "Closing Accounts"
+      }
+    },
+    {
+      "id": 91,
+      "number": 2215,
+      "code": "2215",
+      "parentId": 35,
+      "finalAccountId": 0,
+      "cashFlowType": 0,
+      "incomeType": 0,
+      "balSheetId": 0,
+      "type": "Liability",
+      "balance": "Credit",
+      "posting": true,
+      "cardType": "Liability",
+      "names": {
+        "ar": "ضريبة الاستقطاع المستحقة",
+        "en": "Withholding Tax Payable"
+      }
+    }
+  ],
+  "closingAccounts": [],
+  "defaultAccounts": {
+    "cash": "131",
+    "customer": "123",
+    "balance": null,
+    "profitAndLoss": "214",
+    "trading": "41"
+  },
+  "balSheets": [],
+  "bills": [],
+  "standardBills": [],
+  "standardPayments": [],
+  "transfers": []
+}

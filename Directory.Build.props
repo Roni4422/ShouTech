@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Offline restore: no vulnerability audit calls to nuget.org -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

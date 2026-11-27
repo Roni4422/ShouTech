@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- PerfHarness: headless segment timings for the startup path
+       (docs/STARTUP_PERF_STUDY.md). It times NON-UI segments only —
+       localization catalog loads, the idempotent migrator pass, the
+       permission re-seed — on a real SchemaMigrator-built SQLite
+       database. Its numbers are segment timings, never a claimed
+       application startup time; the real before/after is read from
+       the STARTUP phase lines in log.log on Windows. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>PerfHarness</AssemblyName>
+    <RootNamespace>PerfHarness</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ShouTech.ERP.csproj" />
+  </ItemGroup>
+
+  <!-- LocSvc resolves Resources/Lang next to the running executable;
+       ship the real catalogs with the harness so timings measure the
+       production files. -->
+  <ItemGroup>
+    <None Include="..\..\cod\app\src\Resources\Lang\*.json"
+          Link="Resources\Lang\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

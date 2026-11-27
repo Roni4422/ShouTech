@@ -1,0 +1,116 @@
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
+using System.Globalization;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using Microsoft.Win32;
+using ShouTech.App.Services;
+using ShouTech.Domain.Entities;
+
+namespace ShouTech.App.Views;
+
+/// <summary>
+/// Company-scoped attachment browser. Born for purchase documents (086);
+/// migration 098 generalized the store, so the same window serves sales
+/// documents and parties through the owner discriminator — the second
+/// constructor takes the owner kind/ref, the first keeps the legacy
+/// purchase-document behavior.
+/// </summary>
+public sealed class PurchaseAttachmentsWin : BaseWin
+{
+    protected override string? ScheduleTintName => "Larkspur";
+    private readonly Guid _companyId;
+    private readonly long _documentId;
+    private readonly string _ownerKind;
+    private readonly string _ownerRef;
+    private readonly string _actor;
+    private readonly DataGrid _grid=new();
+    private readonly ObservableCollection<AttachmentRow> _rows=new();
+    private readonly Button _upload=new(),_open=new(),_delete=new(),_refresh=new(),_close=new();
+
+    public PurchaseAttachmentsWin(Guid companyId,long documentId,string actor)
+        : this(companyId,ShouTech.Domain.Entities.AttachmentOwnerKind.PurchaseDocument,
+              documentId.ToString(System.Globalization.CultureInfo.InvariantCulture),actor)
+    {
+    }
+
+    public PurchaseAttachmentsWin(Guid companyId,string ownerKind,string ownerRef,string actor)
+    {
+        _companyId=companyId;_ownerKind=ownerKind;_ownerRef=ownerRef;_actor=actor;
+        _documentId=long.TryParse(ownerRef,System.Globalization.NumberStyles.Integer,System.Globalization.CultureInfo.InvariantCulture,out var parsed)?parsed:0;
+        Title=T("PurchaseAttachments.Title");Width=850;Height=520;MinWidth=650;MinHeight=380;
+        BuildUi();Loaded+=async(_,_)=>await RefreshAsync();
+    }
+
+    private bool IsPurchase => _ownerKind==ShouTech.Domain.Entities.AttachmentOwnerKind.PurchaseDocument;
+    private void BuildUi()
+    {
+        var root=new DockPanel{Margin=new Thickness(12)};
+        // Bottom-buttons rule (owner, restated 2026-11-24): the
+        // command bar lives at the BOTTOM of the window, exclusively.
+        var bar=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0)};
+        StyleButton(_upload,"PurchaseAttachments.Upload");StyleButton(_open,"PurchaseAttachments.OpenFile");StyleButton(_delete,"PurchaseAttachments.Delete");StyleButton(_refresh,"PurchaseAttachments.Refresh");StyleButton(_close,"PurchaseAttachments.Close");
+        _upload.Click+=async(_,_)=>await UploadAsync();_open.Click+=async(_,_)=>await OpenAsync();_delete.Click+=async(_,_)=>await DeleteAsync();_refresh.Click+=async(_,_)=>await RefreshAsync();_close.Click+=(_,_)=>Close();
+        foreach(var b in new[]{_upload,_open,_delete,_refresh,_close})bar.Children.Add(b);
+        DockPanel.SetDock(bar,Dock.Bottom);root.Children.Add(bar);
+        _grid.AutoGenerateColumns=false;_grid.IsReadOnly=true;_grid.CanUserAddRows=false;_grid.SelectionMode=DataGridSelectionMode.Single;_grid.SelectionUnit=DataGridSelectionUnit.FullRow;_grid.ItemsSource=_rows;
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.FileName"),Binding=new Binding(nameof(AttachmentRow.Name)),Width=new DataGridLength(2,DataGridLengthUnitType.Star)});
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.Size"),Binding=new Binding(nameof(AttachmentRow.Size)),Width=100});
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.UploadedBy"),Binding=new Binding(nameof(AttachmentRow.UploadedBy)),Width=130});
+        _grid.Columns.Add(new DataGridTextColumn{Header=T("PurchaseAttachments.UploadedAt"),Binding=new Binding(nameof(AttachmentRow.UploadedAt)),Width=170});
+        root.Children.Add(_grid);Content=root;
+        _upload.IsEnabled=AppHost.Permissions.Has(IsPurchase?"PUR.ATTACH.UPLOAD":"SALES.ATTACH.UPLOAD");_delete.IsEnabled=AppHost.Permissions.Has(IsPurchase?"PUR.ATTACH.DELETE":"SALES.ATTACH.DELETE");
+        ApplyLocalizedText();
+    }
+    private static void StyleButton(Button button,string key){button.Tag=key;button.Content=T(key);button.MinWidth=78;button.Margin=new Thickness(4,0,0,0);button.Padding=new Thickness(8,4,8,4);}
+
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("PurchaseAttachments.Title");
+        StyleButton(_upload, "PurchaseAttachments.Upload");
+        StyleButton(_open, "PurchaseAttachments.OpenFile");
+        StyleButton(_delete, "PurchaseAttachments.Delete");
+        StyleButton(_refresh, "PurchaseAttachments.Refresh");
+        StyleButton(_close, "PurchaseAttachments.Close");
+        if (_grid.Columns.Count == 4)
+        {
+            _grid.Columns[0].Header = T("PurchaseAttachments.FileName");
+            _grid.Columns[1].Header = T("PurchaseAttachments.Size");
+            _grid.Columns[2].Header = T("PurchaseAttachments.UploadedBy");
+            _grid.Columns[3].Header = T("PurchaseAttachments.UploadedAt");
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        var service=AppHost.PurchaseAttachments;if(service is null){MessageBox.Show(this,T("PurchaseAttachments.MissingService"),Title);return;}
+        try{_rows.Clear();var items=IsPurchase?await service.ListAsync(_companyId,_documentId):await service.ListForOwnerAsync(_companyId,_ownerKind,_ownerRef);foreach(var a in items){_rows.Add(new(a.Id,a.OriginalName,$"{a.ByteLength/1024d:N1} KB",a.UploadedBy,a.UploadedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));}}
+        catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}
+    }
+    private async Task UploadAsync()
+    {
+        var service=AppHost.PurchaseAttachments;if(service is null)return;
+        var dlg=new OpenFileDialog{Title=T("PurchaseAttachments.Upload"),Filter=T("PurchaseAttachments.UploadFilter")+"|*.pdf;*.png;*.jpg;*.jpeg;*.xlsx;*.docx;*.csv|All files|*.*",Multiselect=false};
+        if(dlg.ShowDialog(this)!=true)return;
+        try{await using var stream=File.OpenRead(dlg.FileName);if(IsPurchase)await service.UploadAsync(_companyId,_documentId,Path.GetFileName(dlg.FileName),"application/octet-stream",stream,_actor);else await service.UploadForOwnerAsync(_companyId,_ownerKind,_ownerRef,Path.GetFileName(dlg.FileName),"application/octet-stream",stream,_actor);await RefreshAsync();}
+        catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}
+    }
+    private async Task OpenAsync()
+    {
+        if(_grid.SelectedItem is not AttachmentRow row){MessageBox.Show(this,T("PurchaseAttachments.NoSelection"),Title);return;}
+        var service=AppHost.PurchaseAttachments;if(service is null)return;
+        try{await using var source=await service.OpenReadAsync(_companyId,row.Id,_actor);var ext=Path.GetExtension(row.Name);var path=Path.Combine(Path.GetTempPath(),$"shoutech-{Guid.NewGuid():N}{ext}");await using(var target=File.Create(path))await source.CopyToAsync(target);Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}
+        catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}
+    }
+    private async Task DeleteAsync()
+    {
+        if(_grid.SelectedItem is not AttachmentRow row){MessageBox.Show(this,T("PurchaseAttachments.NoSelection"),Title);return;}
+        if(MessageBox.Show(this,T("PurchaseAttachments.ConfirmDelete"),Title,MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
+        var service=AppHost.PurchaseAttachments;if(service is null)return;
+        try{await service.DeleteAsync(_companyId,row.Id,_actor);await RefreshAsync();}
+        catch(Exception ex){MessageBox.Show(this,ex.Message,Title,MessageBoxButton.OK,MessageBoxImage.Warning);}
+    }
+    private sealed record AttachmentRow(Guid Id,string Name,string Size,string UploadedBy,string UploadedAt);
+}

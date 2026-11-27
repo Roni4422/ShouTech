@@ -1,0 +1,227 @@
+﻿<local:BaseWin x:Class="ShouTech.App.Views.CoaWin"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ShouTech.App.Views"
+        xmlns:loc="clr-namespace:ShouTech.App.Localization"
+        loc:LocProps.WindowKey="CoaWin.Title"
+        Title="Chart of accounts"
+        Width="1100" Height="780" MinWidth="660" MinHeight="360" SizeToContent="Manual"
+        WindowStartupLocation="Manual"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="{DynamicResource ApplicationFontFamily}"
+>
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Chart of accounts" FontSize="{DynamicResource FontSize23}" FontWeight="SemiBold" DockPanel.Dock="Right"
+                       loc:LocProps.Key="CoaWin.Title"/>
+        </DockPanel>
+
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Padding="10,5" Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="7">
+                <DockPanel>
+                    <TextBlock Text="⌕" FontSize="{DynamicResource FontSize18}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="TxtSearch" BorderThickness="0" Background="Transparent" FontSize="{DynamicResource FontSize14}"
+                             VerticalContentAlignment="Center" TextChanged="TxtSearch_TextChanged"
+                             loc:LocProps.ToolTipKey="CoaWin.SearchToolTip"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Padding="12,9" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                                    local:FlowAlign.AlignEnd="True">
+                            <TextBlock Text="Levels" loc:LocProps.Key="CoaWin.Levels" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,6,0"/>
+                            <Button Content="1" Tag="1" Click="Level_Click" Width="26" Height="24" Margin="1,0" Padding="0"
+                                    loc:LocProps.ToolTipKey="CoaWin.ExpandToLevel"/>
+                            <Button Content="2" Tag="2" Click="Level_Click" Width="26" Height="24" Margin="1,0" Padding="0"
+                                    loc:LocProps.ToolTipKey="CoaWin.ExpandToLevel"/>
+                            <Button Content="3" Tag="3" Click="Level_Click" Width="26" Height="24" Margin="1,0" Padding="0"
+                                    loc:LocProps.ToolTipKey="CoaWin.ExpandToLevel"/>
+                            <Button Content="4" Tag="4" Click="Level_Click" Width="26" Height="24" Margin="1,0" Padding="0"
+                                    loc:LocProps.ToolTipKey="CoaWin.ExpandToLevel"/>
+                            <Button Content="5" Tag="5" Click="Level_Click" Width="26" Height="24" Margin="1,0" Padding="0"
+                                    loc:LocProps.ToolTipKey="CoaWin.ExpandToLevel"/>
+                        </StackPanel>
+                        <TextBlock Text="Accounts tree" FontWeight="SemiBold" loc:LocProps.Key="CoaWin.TreeHeader" VerticalAlignment="Center"/>
+                    </DockPanel>
+                </Border>
+
+                <TreeView x:Name="TvAccounts" Grid.Row="1" Margin="8" Background="Transparent" BorderThickness="0"
+                          SelectedItemChanged="TvAccounts_SelectedItemChanged"
+                          MouseDoubleClick="TvAccounts_MouseDoubleClick" KeyDown="TvAccounts_KeyDown">
+                    <TreeView.Resources>
+                        <HierarchicalDataTemplate DataType="{x:Type local:AccountNode}" ItemsSource="{Binding Children}">
+                            <Border x:Name="AccountHeader" Padding="5,4" CornerRadius="5" Background="Transparent"
+                                    ToolTip="{Binding ToolTipText}">
+                                <Border.Style>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <!-- Hover belongs to this account row only. Do not use TreeViewItem.IsMouseOver,
+                                                 because that property is true for every ancestor when the pointer is over a child. -->
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="58"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <!-- Folder glyphs (owner spec item 7): group
+                                         accounts are folders — closed E8B7,
+                                         open E838 while expanded; postable
+                                         accounts are documents E8A5. Modern
+                                         Segoe MDL2 glyphs, not legacy bitmaps. -->
+                                    <TextBlock x:Name="NodeGlyph" Grid.Column="0" Text="&#xE8A5;"
+                                               FontFamily="Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding DisplayCode}" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding DisplayName}" Margin="8,0,0,0"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding TypeDisplay}" Margin="18,0,8,0"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                </Grid>
+                            </Border>
+                                <HierarchicalDataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding TypeLabel}" Value="Group">
+                                        <Setter TargetName="NodeGlyph" Property="Text" Value="&#xE8B7;"/>
+                                    </DataTrigger>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding TypeLabel}" Value="Group"/>
+                                            <Condition Binding="{Binding IsExpanded}" Value="True"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter TargetName="NodeGlyph" Property="Text" Value="&#xE838;"/>
+                                    </MultiDataTrigger>
+                                </HierarchicalDataTemplate.Triggers>
+                        </HierarchicalDataTemplate>
+
+                        <Style TargetType="{x:Type TreeViewItem}">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                            <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="{x:Type TreeViewItem}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid Grid.Row="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="22"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ToggleButton x:Name="Expander" Grid.Column="0" Width="18" Height="22"
+                                                              Padding="0" BorderThickness="0" Background="Transparent"
+                                                              Foreground="{DynamicResource TextBrush}"
+                                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                                              Focusable="False" Content="›" FontSize="{DynamicResource FontSize18}"/>
+                                                <Border x:Name="HeaderBorder" Grid.Column="1" Padding="2"
+                                                        Background="Transparent" CornerRadius="5">
+                                                    <ContentPresenter x:Name="PART_Header" ContentSource="Header"
+                                                                      HorizontalAlignment="Stretch"/>
+                                                </Border>
+                                            </Grid>
+                                            <ItemsPresenter x:Name="ItemsHost" Grid.Row="1" Margin="22,0,0,0"/>
+                                        </Grid>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="HasItems" Value="False">
+                                                <Setter TargetName="Expander" Property="Visibility" Value="Collapsed"/>
+                                            </Trigger>
+                                            <Trigger Property="IsExpanded" Value="True">
+                                                <Setter TargetName="Expander" Property="Content" Value="⌄"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="HeaderBorder" Property="Background" Value="{DynamicResource BackgroundBrush}"/>
+                                                <Setter TargetName="PART_Header" Property="Opacity" Value="1"/>
+                                            </Trigger>
+                                            <Trigger Property="IsExpanded" Value="False">
+                                                <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </TreeView.Resources>
+
+                    <TreeView.ContextMenu>
+                        <!-- Direction synced from the window in code-behind
+                             (TreeContextMenu_Opened): a ContextMenu lives in a
+                             popup and does not inherit the window FlowDirection,
+                             so it must never be pinned to one language here. -->
+                        <ContextMenu Opened="TreeContextMenu_Opened">
+                            <MenuItem Header="Account card" loc:LocProps.Key="CoaWin.MenuAccountCard" loc:LocProps.ToolTipKey="CoaWin.TipAccountCard" Click="OpenAccount_Click"/>
+                            <MenuItem Header="Add child account" loc:LocProps.Key="CoaWin.MenuAddChild" loc:LocProps.ToolTipKey="CoaWin.TipAddChild" Click="AddChild_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Account statement" loc:LocProps.Key="CoaWin.MenuStatement" loc:LocProps.ToolTipKey="CoaWin.TipStatement" Click="Statement_Click"/>
+                            <MenuItem Header="Account ledger" loc:LocProps.Key="CoaWin.MenuLedger" loc:LocProps.ToolTipKey="CoaWin.TipLedger" Click="Ledger_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Copy code" loc:LocProps.Key="CoaWin.MenuCopyCode" loc:LocProps.ToolTipKey="CoaWin.TipCopyCode" Click="CopyCode_Click"/>
+                            <MenuItem Header="Copy name" loc:LocProps.Key="CoaWin.MenuCopyName" loc:LocProps.ToolTipKey="CoaWin.TipCopyName" Click="CopyName_Click"/>
+                            <MenuItem Header="Open parent account" loc:LocProps.Key="CoaWin.MenuOpenParent" loc:LocProps.ToolTipKey="CoaWin.TipOpenParent" Click="OpenParent_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Expand branch" loc:LocProps.Key="CoaWin.MenuExpandBranch" loc:LocProps.ToolTipKey="CoaWin.TipExpandBranch" Click="ExpandBranch_Click"/>
+                            <MenuItem Header="Collapse branch" loc:LocProps.Key="CoaWin.MenuCollapseBranch" loc:LocProps.ToolTipKey="CoaWin.TipCollapseBranch" Click="CollapseBranch_Click"/>
+                            <MenuItem Header="Expand all" loc:LocProps.Key="CoaWin.MenuExpandAll" loc:LocProps.ToolTipKey="CoaWin.TipExpandAll" Click="ExpandAll_Click"/>
+                            <MenuItem Header="Collapse all" loc:LocProps.Key="CoaWin.MenuCollapseAll" loc:LocProps.ToolTipKey="CoaWin.TipCollapseAll" Click="CollapseAll_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Print" loc:LocProps.Key="Common.Print" loc:LocProps.ToolTipKey="CoaWin.TipPrint" Click="Print_Click"/>
+                            <MenuItem Header="Refresh" loc:LocProps.Key="Common.Refresh" loc:LocProps.ToolTipKey="CoaWin.RefreshToolTip" Click="Refresh_Click"/>
+                        </ContextMenu>
+                    </TreeView.ContextMenu>
+                </TreeView>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Close" Click="Close_Click" MinWidth="{StaticResource ButtonMinWidth}"
+                    loc:LocProps.Key="Common.Close"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock x:Name="TxtSelected" Text="" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                <TextBlock x:Name="TxtCount" Text="" VerticalAlignment="Center"/>
+            </StackPanel>
+            <!-- Action buttons moved to the bottom row (layout rule) -->
+            <StackPanel x:Name="ActionButtonsPanel" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Export ▾" Click="ExportMenu_Click" MinWidth="{StaticResource ButtonMinWidth}"
+                        loc:LocProps.Key="CoaWin.ExportMenu" loc:LocProps.ToolTipKey="CoaWin.ExportToolTip"/>
+                <Button Content="Import ▾" Click="ImportMenu_Click" MinWidth="{StaticResource ButtonMinWidth}" Margin="6,0,0,0"
+                        loc:LocProps.Key="CoaWin.ImportMenu" loc:LocProps.ToolTipKey="CoaWin.ImportToolTip"/>
+                <Button Content="↻" Click="Refresh_Click" Width="{StaticResource ControlHeight}" MinWidth="{StaticResource ControlHeight}" Margin="6,0,0,0"
+                        Padding="8,5" FontSize="{DynamicResource FontSize17}" loc:LocProps.ToolTipKey="CoaWin.RefreshToolTip"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</local:BaseWin>

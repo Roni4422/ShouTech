@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- W1 withholding headless harness: runs the REAL posting code
+       (InvRepo manual path, OrderService chain path,
+       ReconciliationRepository, WithholdingTax) against a real
+       SqlMigrator/SchemaMigrator-built SQLite database and prints
+       PASS/FAIL counts. On Linux the WindowsDesktop framework entry is
+       stripped from the generated runtimeconfig before execution (the
+       exercised code paths load no WPF types); on Windows it runs
+       as-is. See docs/PURCHASE_CYCLE_COMPLETION.md (W1 section). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>W1Harness</AssemblyName>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ShouTech.ERP.csproj" />
+  </ItemGroup>
+
+</Project>

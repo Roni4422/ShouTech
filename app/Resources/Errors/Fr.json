@@ -1,0 +1,986 @@
+{
+ "ACC-5001": {
+  "code": "ACC-5001",
+  "name": "JournalNotBalanced",
+  "message": "Les totaux débit et crédit de l'écriture comptable doivent être équilibrés.",
+  "hint": "Utilisez au moins 3 caractères. Les lettres, chiffres, symboles ou toute combinaison sont acceptés."
+ },
+ "ACC-5002": {
+  "code": "ACC-5002",
+  "name": "JournalTooFewLines",
+  "message": "Une écriture comptable nécessite au moins deux lignes."
+ },
+ "ACC-5003": {
+  "code": "ACC-5003",
+  "name": "JournalZeroAmount",
+  "message": "Une écriture comptable doit avoir un montant non nul."
+ },
+ "ACC-5004": {
+  "code": "ACC-5004",
+  "name": "JournalPostingFailed",
+  "message": "L'écriture comptable n'a pas pu être comptabilisée."
+ },
+ "ACC-5005": {
+  "code": "ACC-5005",
+  "name": "JournalEntryNotEditable",
+  "message": "Seules les écritures comptables au statut brouillon peuvent être modifiées. Les écritures comptabilisées et contre-passées sont immuables.",
+  "hint": "Contre-passez l'écriture et créez-en une corrigée."
+ },
+ "ACC-5006": {
+  "code": "ACC-5006",
+  "name": "CreditLimitExceeded",
+  "message": "La comptabilisation de ce document dépasserait la limite de crédit du tiers. Limite : {0} ; solde actuel : {1} ; total du document : {2}.",
+  "hint": "Encaissez un paiement, relevez la limite de crédit sur la fiche du tiers, ou réduisez le total du document."
+ },
+ "ACC-5007": {
+  "code": "ACC-5007",
+  "name": "CostCenterAllocationInvalid",
+  "message": "La répartition du centre de coûts « {0} » est invalide : ses pourcentages doivent totaliser 100 et chaque cible doit être un centre de coûts feuille actif.",
+  "hint": "Corrigez la répartition sur la fiche du centre de coûts, puis comptabilisez à nouveau."
+ },
+ "ACC-5008": {
+  "code": "ACC-5008",
+  "name": "CostCenterNotLeaf",
+  "message": "Le centre de coûts « {0} » est un groupe ou un centre inactif et ne peut pas recevoir de comptabilisation.",
+  "hint": "Choisissez un centre de coûts feuille actif, ou définissez une répartition pour le centre groupe."
+ },
+ "ACC-5009": {
+  "code": "ACC-5009",
+  "name": "CostCenterUnknown",
+  "message": "Le centre de coûts « {0} » ne correspond à aucun centre de coûts actif de cette société et ne peut pas être comptabilisé.",
+  "hint": "Créez le centre de coûts ou corrigez le code, puis comptabilisez à nouveau."
+ },
+ "ACC-5010": {
+  "code": "ACC-5010",
+  "name": "CostCenterRequired",
+  "message": "Le compte « {0} » exige un centre de coûts ; la ligne d'écriture n'en a aucun.",
+  "hint": "Ajoutez un centre de coûts à la ligne, ou désactivez l'indicateur d'obligation sur la fiche du compte."
+ },
+ "ACC-5011": {
+  "code": "ACC-5011",
+  "name": "DocumentPostingAccountMissing",
+  "message": "Le compte de comptabilisation du document « {0} » est absent, inactif, supprimé ou non comptabilisable pour cette société.",
+  "hint": "Créez ou activez un compte comptabilisable avec ce code dans le plan comptable, puis comptabilisez à nouveau."
+ },
+ "ACC-5012": {
+  "code": "ACC-5012",
+  "name": "DocumentAlreadyPostedToGl",
+  "message": "Le document « {0} » possède déjà une écriture comptable comptabilisée et ne peut pas être comptabilisé deux fois.",
+  "hint": "Extournez l'écriture existante avant de comptabiliser à nouveau le document."
+ },
+ "ACC-5013": {
+  "code": "ACC-5013",
+  "name": "DocumentTotalMismatch",
+  "message": "Le total enregistré du document « {0} » ({1}) ne correspond pas au total recalculé depuis ses lignes ({2}) ; la comptabilisation utilise le total enregistré.",
+  "hint": "Vérifiez la remise d'en-tête et les frais supplémentaires du document ; corrigez le document enregistré si le total enregistré est faux."
+ },
+ "ACC-5014": {
+  "code": "ACC-5014",
+  "name": "DocumentKindNotPostable",
+  "message": "Le type de document « {0} » ne peut pas être comptabilisé par le chemin de comptabilisation des factures.",
+  "hint": "Utilisez la fenêtre dédiée à ce type de document (les transferts et inventaires de stock passent par les moteurs d'entrepôt), ou vérifiez le type de document."
+ },
+ "ACC-5015": {
+  "code": "ACC-5015",
+  "name": "ExchangeRateMissing",
+  "message": "Aucun taux de change n'est disponible pour la devise '{0}' : le document ne porte aucun taux et aucun taux maître n'existe au {1} ou avant.",
+  "hint": "Saisissez un taux sur le document, ou maintenez un taux daté pour la devise dans la fiche devise, puis validez à nouveau."
+ },
+ "ACC-5016": {
+  "code": "ACC-5016",
+  "name": "BankStatementNotReconciled",
+  "message": "Le relevé bancaire ne peut pas être clôturé tant que sa différence n'est pas nulle.",
+  "hint": "Rapprochez les lignes restantes du relevé avec les lignes comptables (ou comptabilisez les écritures manquantes) jusqu'à ce que la différence soit nulle."
+ },
+ "ACC-5017": {
+  "code": "ACC-5017",
+  "name": "StatementLineAlreadyMatched",
+  "message": "La ligne du relevé est déjà rapprochée d'une ligne comptable.",
+  "hint": "Annulez le rapprochement de la ligne avant de la rapprocher d'une autre ligne comptable."
+ },
+ "AUTH-2001": {
+  "code": "AUTH-2001",
+  "name": "InvalidCredentials",
+  "message": "Le nom d'utilisateur ou le mot de passe est incorrect",
+  "hint": "Vérifiez le nom d'utilisateur et le mot de passe, puis réessayez."
+ },
+ "AUTH-2002": {
+  "code": "AUTH-2002",
+  "name": "AccountLocked",
+  "message": "Ce compte est verrouillé. La connexion a été refusée.",
+  "hint": "Attendez la fin de la période de verrouillage ou demandez à un administrateur de déverrouiller le compte."
+ },
+ "AUTH-2003": {
+  "code": "AUTH-2003",
+  "name": "AccountLockedNow",
+  "message": "Le compte a été verrouillé après plusieurs tentatives de connexion échouées.",
+  "hint": "Attendez la fin de la période de verrouillage ou demandez à un administrateur de déverrouiller le compte."
+ },
+ "AUTH-2004": {
+  "code": "AUTH-2004",
+  "name": "PasswordPolicyViolation",
+  "message": "Le mot de passe administrateur ne respecte pas la politique de mot de passe : {0}",
+  "hint": "Utilisez au moins 3 caractères. Les lettres, chiffres, symboles ou toute combinaison sont acceptés."
+ },
+ "AUTH-2005": {
+  "code": "AUTH-2005",
+  "name": "PermissionDenied",
+  "message": "Vous n'avez pas l'autorisation d'effectuer cette opération.",
+  "hint": "Demandez à un administrateur de vous accorder l'autorisation requise."
+ },
+ "AUTH-2006": {
+  "code": "AUTH-2006",
+  "name": "PermissionLoadFailed",
+  "message": "Impossible de charger les autorisations de l'utilisateur connecté.",
+  "hint": "Reconnectez-vous ; si le problème persiste, vérifiez la base de données de la société."
+ },
+ "CO-3001": {
+  "code": "CO-3001",
+  "name": "CompanyRecordNotFound",
+  "message": "L'enregistrement local de la société requis pour ouvrir cette société est introuvable.",
+  "hint": "La liste des sociétés sur cet ordinateur n'est pas à jour. Réindexez les sociétés ou restaurez les données de la société."
+ },
+ "CO-3002": {
+  "code": "CO-3002",
+  "name": "CompanyDatabasePathMissing",
+  "message": "Le chemin de la base de données de la société n'est pas défini.",
+  "hint": "Modifiez la société et définissez le chemin de sa base de données."
+ },
+ "CO-3003": {
+  "code": "CO-3003",
+  "name": "PostgresDatabaseNameMissing",
+  "message": "Le nom de la base de données PostgreSQL n'est pas défini."
+ },
+ "CO-3004": {
+  "code": "CO-3004",
+  "name": "PostgresConnectionMissing",
+  "message": "La connexion PostgreSQL actuelle n'est pas disponible."
+ },
+ "CO-3005": {
+  "code": "CO-3005",
+  "name": "CompanyLoadFailed",
+  "message": "Échec du chargement des sociétés"
+ },
+ "CO-3006": {
+  "code": "CO-3006",
+  "name": "CompanyOpenFailed",
+  "message": "Impossible d'ouvrir la société"
+ },
+ "CO-3007": {
+  "code": "CO-3007",
+  "name": "CompanyCoaTemplateNotFound",
+  "message": "Le modèle de plan comptable sélectionné est introuvable.",
+  "hint": "Choisissez un autre modèle de plan comptable ou restaurez les fichiers de modèles dans le dossier Resources/COA."
+ },
+ "DATA-4001": {
+  "code": "DATA-4001",
+  "name": "ExportPermissionDenied",
+  "message": "Vous n'avez pas l'autorisation d'exporter des données (DATA.EXPORT).",
+  "hint": "Demandez à un administrateur d'accorder l'autorisation DATA.EXPORT."
+ },
+ "DATA-4002": {
+  "code": "DATA-4002",
+  "name": "ExportFailed",
+  "message": "L'exportation n'a pas pu être terminée."
+ },
+ "DATA-4003": {
+  "code": "DATA-4003",
+  "name": "ImportFailed",
+  "message": "L'importation n'a pas pu être terminée."
+ },
+ "DB-1001": {
+  "code": "DB-1001",
+  "name": "DatabaseConnectionFailed",
+  "message": "Impossible de se connecter à la base de données.",
+  "hint": "Vérifiez que le serveur de base de données fonctionne et que les paramètres de connexion sont corrects."
+ },
+ "DB-1002": {
+  "code": "DB-1002",
+  "name": "DatabaseFileMissing",
+  "message": "Fichier de base de données de la société introuvable.",
+  "hint": "Le fichier de base de données de la société a peut-être été déplacé ou supprimé. Restaurez-le à partir d'une sauvegarde ou recréez la société."
+ },
+ "DB-1003": {
+  "code": "DB-1003",
+  "name": "MigrationFailed",
+  "message": "Une migration de la base de données a échoué."
+ },
+ "DB-1004": {
+  "code": "DB-1004",
+  "name": "DatabaseNotInitialized",
+  "message": "Le fichier de base de données de la société n'est pas correctement initialisé.",
+  "hint": "Le fichier existe mais n'est pas une base de données de société valide. Restaurez à partir d'une sauvegarde ou recréez la société."
+ },
+ "DB-1005": {
+  "code": "DB-1005",
+  "name": "DatabaseQueryFailed",
+  "message": "Une opération de base de données a échoué."
+ },
+ "DB-1006": {
+  "code": "DB-1006",
+  "name": "UnsupportedDatabaseProvider",
+  "message": "Fournisseur de base de données non pris en charge."
+ },
+ "INV-6001": {
+  "code": "INV-6001",
+  "name": "InventoryOperationFailed",
+  "message": "L'opération d'inventaire n'a pas pu être terminée."
+ },
+ "INV-6002": {
+  "code": "INV-6002",
+  "name": "StockValuationFailed",
+  "message": "L'évaluation du stock a échoué pour l'article « {0} ».",
+  "hint": "Vérifiez la méthode de coût et le solde de stock de l'article, puis comptabilisez à nouveau."
+ },
+ "INV-6003": {
+  "code": "INV-6003",
+  "name": "RecalculationFailed",
+  "message": "Le travail de recalcul des coûts a échoué.",
+  "hint": "Consultez l'enregistrement du travail dans stock_revaluation_jobs pour l'erreur, corrigez la cause, puis relancez le travail."
+ },
+ "INV-6004": {
+  "code": "INV-6004",
+  "name": "RecalculationClosedPeriod",
+  "message": "Le recalcul des coûts ne peut pas réécrire les mouvements d'une période fiscale clôturée (à partir du '{0}').",
+  "hint": "Choisissez une date de début dans une période fiscale ouverte."
+ },
+ "INV-6005": {
+  "code": "INV-6005",
+  "name": "BatchSerialRequired",
+  "message": "Les données de lot ou les numéros de série sont requis pour comptabiliser l'article '{0}'.",
+  "hint": "Saisissez le lot (avec sa date d'expiration) ou les numéros de série de la ligne, puis comptabilisez à nouveau."
+ },
+ "INV-6006": {
+  "code": "INV-6006",
+  "name": "BatchStockInsufficient",
+  "message": "Le lot '{0}' ne contient pas assez de stock pour l'article '{1}'.",
+  "hint": "Choisissez un autre lot ou réduisez la quantité, puis comptabilisez à nouveau."
+ },
+ "INV-6007": {
+  "code": "INV-6007",
+  "name": "SerialUnavailable",
+  "message": "Le numéro de série '{0}' n'est pas disponible en stock pour l'article '{1}'.",
+  "hint": "Seuls les numéros de série en stock dans l'entrepôt du document peuvent être émis ; vérifiez le statut et l'entrepôt."
+ },
+ "INV-6008": {
+  "code": "INV-6008",
+  "name": "SerialDuplicate",
+  "message": "Le numéro de série '{0}' existe déjà pour l'article '{1}'.",
+  "hint": "Les numéros de série sont uniques par article ; corrigez le numéro et comptabilisez à nouveau."
+ },
+ "INV-6009": {
+  "code": "INV-6009",
+  "name": "BatchAllocationMismatch",
+  "message": "Les allocations de lots/séries ne correspondent pas à la quantité du mouvement pour l'article '{0}'.",
+  "hint": "Allouez exactement la quantité de la ligne entre les lots, ou exactement un numéro de série par unité."
+ },
+ "INV-6010": {
+  "code": "INV-6010",
+  "name": "BatchExpired",
+  "message": "Le lot '{0}' de l'article '{1}' a expiré le {2} et ne peut pas être émis.",
+  "hint": "Choisissez un lot non expiré, ou comptabilisez avec l'autorisation de dérogation pour lot expiré (la dérogation est enregistrée)."
+ },
+ "LIC-8001": {
+  "code": "LIC-8001",
+  "name": "LicenseCheckFailed",
+  "message": "La licence n'a pas pu être vérifiée."
+ },
+ "SYS-0001": {
+  "code": "SYS-0001",
+  "name": "UnknownError",
+  "message": "Une erreur inattendue s'est produite.",
+  "hint": "Si le problème persiste, notez le code d'erreur et contactez le support."
+ },
+ "SYS-0002": {
+  "code": "SYS-0002",
+  "name": "DispatcherUnhandled",
+  "message": "Une erreur inattendue a interrompu l'opération en cours.",
+  "hint": "Si le problème persiste, notez le code d'erreur et contactez le support."
+ },
+ "SYS-0003": {
+  "code": "SYS-0003",
+  "name": "AppDomainUnhandled",
+  "message": "Une erreur inattendue s'est produite dans l'application."
+ },
+ "SYS-0004": {
+  "code": "SYS-0004",
+  "name": "UnobservedTaskException",
+  "message": "Une tâche en arrière-plan a échoué."
+ },
+ "SYS-0005": {
+  "code": "SYS-0005",
+  "name": "NonFatalInternalFailure",
+  "message": "Une opération interne non critique a échoué et a été récupérée."
+ },
+ "SYS-0006": {
+  "code": "SYS-0006",
+  "name": "ConfigurationLoadFailed",
+  "message": "La configuration de l'application n'a pas pu être chargée."
+ },
+ "SYS-0007": {
+  "code": "SYS-0007",
+  "name": "FileAccessFailed",
+  "message": "Un fichier n'a pas pu être consulté."
+ },
+ "SYS-0009": {
+  "code": "SYS-0009",
+  "name": "StartupFailed",
+  "message": "L'application n'a pas pu démarrer."
+ },
+ "SYS-0010": {
+  "code": "SYS-0010",
+  "name": "SettingsLoadFailed",
+  "message": "Les paramètres n'ont pas pu être chargés ; les valeurs par défaut ont été utilisées."
+ },
+ "SYS-0011": {
+  "code": "SYS-0011",
+  "name": "SettingsSaveFailed",
+  "message": "Les paramètres n'ont pas pu être enregistrés."
+ },
+ "UI-7001": {
+  "code": "UI-7001",
+  "name": "WindowOperationFailed",
+  "message": "L'opération de la fenêtre n'a pas pu être terminée."
+ },
+ "UI-7002": {
+  "code": "UI-7002",
+  "name": "ShellOperationFailed",
+  "message": "Une opération de la fenêtre principale n'a pas pu être terminée."
+ },
+ "UI-7003": {
+  "code": "UI-7003",
+  "name": "WindowLoadFailed",
+  "message": "La fenêtre n'a pas pu être chargée."
+ },
+ "UI-7004": {
+  "code": "UI-7004",
+  "name": "NavigationFailed",
+  "message": "La navigation n'a pas pu être terminée."
+ },
+ "DATA-4004": {
+  "code": "DATA-4004",
+  "name": "ImportPermissionDenied",
+  "message": "Vous n'avez pas l'autorisation d'importer des données (DATA.IMPORT).",
+  "hint": "Demandez à un administrateur d'accorder l'autorisation DATA.IMPORT."
+ },
+ "DATA-4005": {
+  "code": "DATA-4005",
+  "name": "BalanceImportNotAllowed",
+  "message": "Les soldes et les quantités de stock ne peuvent pas être importés depuis un tableur. Ils ne changent que par des mouvements de stock comptabilisés.",
+  "hint": "Comptabilisez plutôt un document de stock initial ou d'ajustement, ou restaurez un package .stei."
+ },
+ "DATA-4006": {
+  "code": "DATA-4006",
+  "name": "DocumentImportRequiresPackage",
+  "message": "Les documents et les écritures de journal ne peuvent pas être importés depuis un tableur. Échangez-les sous forme de package de données .stei chiffré.",
+  "hint": "Exportez le jeu de données en package .stei et importez ce package à la place."
+ },
+ "ACC-5018": {
+  "code": "ACC-5018",
+  "name": "BudgetExceededAnnual",
+  "message": "La comptabilisation de cette écriture dépasserait le budget annuel '{0}'. Limite : {1} ; réel avant cette écriture : {2} ; cette écriture : {3} ; dépassement : {4}.",
+  "hint": "Réduisez l'écriture, affectez le montant à un autre compte ou centre de coûts, ou relevez la ligne budgétaire dans la fenêtre Budgets."
+ },
+ "ACC-5019": {
+  "code": "ACC-5019",
+  "name": "BudgetExceededMonthly",
+  "message": "La comptabilisation de cette écriture dépasserait le budget mensuel cumulé '{0}' jusqu'à ce mois. Limite : {1} ; réel avant cette écriture : {2} ; cette écriture : {3} ; dépassement : {4}.",
+  "hint": "Réduisez l'écriture, comptabilisez-la un mois plus tard, ou ajustez la répartition mensuelle dans la fenêtre Budgets."
+ },
+ "INV-6011": {
+  "code": "INV-6011",
+  "name": "QualityGateBlocked",
+  "message": "Une inspection qualité rejetée bloque le document '{1}' pour l'article '{0}'.",
+  "hint": "Traitez l'alerte de l'inspection échouée (cause racine et action corrective) ou terminez une nouvelle inspection avant la comptabilisation."
+ },
+ "INV-6012": {
+  "code": "INV-6012",
+  "name": "QualityQuarantinedSale",
+  "message": "L'article '{0}' est en quarantaine en attente d'inspection qualité et ne peut pas être vendu en mode Stop (document '{1}').",
+  "hint": "Terminez l'inspection qualité en attente pour libérer le stock, ou passez le mode de contrôle QC de la société sur Warn."
+ },
+ "INV-6013": {
+  "code": "INV-6013",
+  "name": "QualityOutgoingInspectionRequired",
+  "message": "L'article '{0}' exige une inspection qualité sortante acceptée avant la livraison du document '{1}' (mode Stop).",
+  "hint": "Créez et terminez une inspection sortante pour le document, ou passez le mode de contrôle QC de la société sur Warn."
+ },
+ "INV-6014": {
+  "code": "INV-6014",
+  "name": "QualityInspectionStateInvalid",
+  "message": "L'inspection qualité du document '{0}' ne peut pas changer d'état depuis '{1}'.",
+  "hint": "Actualisez la liste des inspections ; seule une inspection au brouillon peut être modifiée ou terminée."
+ },
+ "INV-6015": {
+  "code": "INV-6015",
+  "name": "QualityInspectionQtyMismatch",
+  "message": "Les quantités acceptées et rejetées du document '{0}' ne totalisent pas la quantité inspectée, ou la disposition est manquante.",
+  "hint": "Saisissez des quantités acceptées et rejetées dont la somme égale la quantité inspectée et choisissez une disposition pour la partie rejetée."
+ },
+ "INV-6016": {
+  "code": "INV-6016",
+  "name": "QualityTemplateInvalid",
+  "message": "Le modèle qualité '{0}' est invalide.",
+  "hint": "Vérifiez les lignes du modèle : les paramètres numériques exigent une plage, les paramètres de valeur une valeur acceptée, et un paramètre ne peut apparaître qu'une fois."
+ },
+ "CRM-9001": {
+  "code": "CRM-9001",
+  "name": "CrmLeadAlreadyConverted",
+  "message": "Le prospect '{0}' a déjà été converti.",
+  "hint": "Un prospect converti conserve ses liens de tiers et d'opportunité ; créez un nouveau prospect ou travaillez avec le tiers converti."
+ },
+ "CRM-9002": {
+  "code": "CRM-9002",
+  "name": "CrmLeadStateInvalid",
+  "message": "L'état du prospect '{0}' ne peut pas être modifié comme demandé.",
+  "hint": "Les prospects non qualifiés ne peuvent pas être convertis, et un prospect ne devient Converti que par conversion."
+ },
+ "CRM-9003": {
+  "code": "CRM-9003",
+  "name": "CrmOpportunityStageInvalid",
+  "message": "L'étape d'opportunité '{0}' est invalide.",
+  "hint": "Configurez les étapes du pipeline pour la société, puis réessayez."
+ },
+ "CRM-9004": {
+  "code": "CRM-9004",
+  "name": "CrmQuotationPartyMissing",
+  "message": "Impossible de créer un devis pour '{0}'.",
+  "hint": "Liez l'opportunité à un tiers client (ou convertissez son prospect) et vérifiez que la société se résout avant de créer un devis."
+ },
+ "CRM-9005": {
+  "code": "CRM-9005",
+  "name": "CrmActivityTargetInvalid",
+  "message": "L'activité '{0}' doit cibler exactement un prospect, une opportunité ou un tiers.",
+  "hint": "Choisissez exactement une cible pour l'activité."
+ },
+ "CRM-9006": {
+  "code": "CRM-9006",
+  "name": "CrmLostReasonRequired",
+  "message": "Un motif de perte est requis lorsque l'opportunité '{0}' est marquée perdue.",
+  "hint": "Choisissez un motif de perte (configurez les motifs dans la fenêtre du pipeline si la liste est vide)."
+ },
+ "MFG-1001": {
+  "code": "MFG-1001",
+  "name": "BomCycleDetected",
+  "message": "La nomenclature de '{0}' se reference elle-meme, directement ou via d'autres nomenclatures ; le cycle doit etre supprime avant utilisation.",
+  "hint": "Ouvrez la nomenclature et retirez le composant qui produit (transitivement) l'article fini lui-meme."
+ },
+ "MFG-1002": {
+  "code": "MFG-1002",
+  "name": "BomNotFoundOrInactive",
+  "message": "La nomenclature '{0}' est introuvable ou inactive pour cette societe.",
+  "hint": "Activez la version de la nomenclature dans la fenetre des nomenclatures ou choisissez une autre version."
+ },
+ "MFG-1003": {
+  "code": "MFG-1003",
+  "name": "MfgOrderStageInvalid",
+  "message": "L'ordre de fabrication '{0}' ne peut pas effectuer cette action dans le statut '{1}'.",
+  "hint": "Suivez le flux par etapes : Brouillon, Confirme, En cours, Termine, Clos (ou Annule)."
+ },
+ "MFG-1004": {
+  "code": "MFG-1004",
+  "name": "MfgIssueExceedsRequired",
+  "message": "Sortir {1} de '{0}' depasserait la quantite requise sur l'ordre.",
+  "hint": "Sortez au maximum la quantite requise restante, ou modifiez d'abord les lignes du brouillon."
+ },
+ "MFG-1005": {
+  "code": "MFG-1005",
+  "name": "MfgFinishExceedsPlanned",
+  "message": "Recevoir {1} de '{0}' depasserait la quantite de production planifiee.",
+  "hint": "Recevez au maximum la quantite planifiee restante."
+ },
+ "MFG-1006": {
+  "code": "MFG-1006",
+  "name": "PlanningConversionInvalid",
+  "message": "La ligne de planification '{0}' ne peut pas etre convertie dans le statut '{1}'.",
+  "hint": "Seuls les ordres planifies et les suggestions d'achat peuvent etre convertis, une seule fois."
+ },
+ "HR-1001": {
+  "code": "HR-1001",
+  "name": "HrEmployeeCodeDuplicate",
+  "message": "Le code employe '{0}' existe deja pour cette societe.",
+  "hint": "Choisissez un autre code employe."
+ },
+ "HR-1002": {
+  "code": "HR-1002",
+  "name": "HrEmployeeInvalid",
+  "message": "Les donnees de l'employe '{0}' sont invalides et ne peuvent pas etre enregistrees.",
+  "hint": "Verifiez les champs de la fiche employe et reessayez."
+ },
+ "HR-1003": {
+  "code": "HR-1003",
+  "name": "HrLeaveBalanceInsufficient",
+  "message": "Solde de conges insuffisant pour '{0}' : les jours demandes depassent le solde disponible.",
+  "hint": "Allouez plus de jours, reduisez la demande, ou approuvez avec l'autorisation de depassement."
+ },
+ "HR-1004": {
+  "code": "HR-1004",
+  "name": "HrLeaveStateInvalid",
+  "message": "La demande de conge ne peut pas changer d'etat depuis '{0}'.",
+  "hint": "Actualisez la liste et verifiez le statut de la demande."
+ },
+ "HR-1005": {
+  "code": "HR-1005",
+  "name": "HrPayrollAlreadyPosted",
+  "message": "Le cycle de paie '{0}' est deja comptabilise.",
+  "hint": "Extournez le cycle avant de le regenerer ou de le modifier."
+ },
+ "HR-1006": {
+  "code": "HR-1006",
+  "name": "HrPayrollStateInvalid",
+  "message": "Le cycle de paie '{0}' n'est pas dans un etat permettant cette operation.",
+  "hint": "Actualisez la liste et verifiez le statut du cycle."
+ },
+ "HR-1007": {
+  "code": "HR-1007",
+  "name": "HrSalaryStructureInvalid",
+  "message": "La structure salariale '{0}' est invalide.",
+  "hint": "Verifiez les lignes, composants et comptes de la structure."
+ },
+ "HR-1008": {
+  "code": "HR-1008",
+  "name": "HrMasterInUse",
+  "message": "Cet enregistrement est encore reference par d'autres donnees et ne peut pas etre supprime.",
+  "hint": "Retirez d'abord les references, ou desactivez l'enregistrement."
+ },
+ "HR-1009": {
+  "code": "HR-1009",
+  "name": "HrEmployeeNotPayable",
+  "message": "L'employe '{0}' est parti et ne peut pas recevoir d'affectation salariale ni de paie.",
+  "hint": "Reactivez d'abord l'employe s'il s'agit d'une correction."
+ },
+ "HR-1010": {
+  "code": "HR-1010",
+  "name": "HrMasterCodeDuplicate",
+  "message": "Le code '{0}' existe deja pour cette societe.",
+  "hint": "Choisissez un autre code."
+ },
+ "POS-1001": {
+  "code": "POS-1001",
+  "name": "PosNoOpenSession",
+  "message": "Aucune session PDV n'est ouverte pour cette vente.",
+  "hint": "Ouvrez une session sur le terminal, ou activez la vente sans session avec le droit de dérogation."
+ },
+ "POS-1002": {
+  "code": "POS-1002",
+  "name": "PosSessionAlreadyOpen",
+  "message": "Le terminal '{0}' a déjà une session ouverte.",
+  "hint": "Fermez la session ouverte avant d'en ouvrir une autre sur le même terminal."
+ },
+ "POS-1003": {
+  "code": "POS-1003",
+  "name": "PosSessionStateInvalid",
+  "message": "L'état de la session PDV ne permet pas cette opération.",
+  "hint": "Vérifiez que la session est ouverte (pour fermer, les espèces comptées sont requises et non négatives)."
+ },
+ "POS-1004": {
+  "code": "POS-1004",
+  "name": "PosTenderMismatch",
+  "message": "Les paiements ne soldent pas exactement la facture.",
+  "hint": "Ajustez espèces, carte et crédit pour égaler le total ; le surplus d'espèces est la monnaie."
+ },
+ "POS-1005": {
+  "code": "POS-1005",
+  "name": "PosTenderInvalid",
+  "message": "Un paiement est invalide.",
+  "hint": "Vérifiez types et montants : la carte ne peut pas dépasser, le crédit exige un client nommé, les montants ne sont pas négatifs."
+ },
+ "POS-1006": {
+  "code": "POS-1006",
+  "name": "PosReturnExceedsSold",
+  "message": "La quantité de retour dépasse le retournable de la facture d'origine.",
+  "hint": "Réduisez la quantité au vendu moins le déjà retourné."
+ },
+ "POS-1007": {
+  "code": "POS-1007",
+  "name": "PosReturnOriginalInvalid",
+  "message": "La facture PDV d'origine est invalide ou introuvable.",
+  "hint": "Chargez une facture PDV validée de cette société avant le retour."
+ },
+ "POS-1008": {
+  "code": "POS-1008",
+  "name": "PosHeldBillNotFound",
+  "message": "La facture en attente est introuvable.",
+  "hint": "Actualisez la liste des attentes et choisissez à nouveau."
+ },
+ "POS-1009": {
+  "code": "POS-1009",
+  "name": "PosHeldBillStateInvalid",
+  "message": "L'état de la facture en attente ne permet pas cette opération.",
+  "hint": "Seule une facture encore en attente peut être rappelée ou annulée."
+ },
+ "POS-1010": {
+  "code": "POS-1010",
+  "name": "PosSessionlessNotAllowed",
+  "message": "La vente sans session est active mais cet utilisateur ne peut pas déroger.",
+  "hint": "Demandez le droit POS.SESSION.BYPASS à un administrateur, ou ouvrez une session."
+ },
+ "CRM-9007": {
+  "code": "CRM-9007",
+  "name": "CrmDuplicateLeadOrParty",
+  "message": "Un prospect ou un client avec le même e-mail ou téléphone existe déjà : '{0}'.",
+  "hint": "Liez l'enregistrement existant au lieu de créer un doublon."
+ },
+ "CRM-9008": {
+  "code": "CRM-9008",
+  "name": "CrmOpportunityItemInvalid",
+  "message": "L'article d'opportunité '{0}' doit avoir une quantité supérieure à zéro et un prix non négatif.",
+  "hint": "Corrigez la quantité et le prix de l'article, puis enregistrez à nouveau."
+ },
+ "SAL-7001": {
+  "code": "SAL-7001",
+  "name": "ChainSourceNotPosted",
+  "message": "Le document source '{0}' doit être validé avant de pouvoir être converti.",
+  "hint": "Validez le document source, puis convertissez-le."
+ },
+ "SAL-7002": {
+  "code": "SAL-7002",
+  "name": "ChainQuantityExceedsRemaining",
+  "message": "La quantité demandée pour '{0}' dépasse la quantité restante sur le document source.",
+  "hint": "Réduisez la quantité au montant restant indiqué sur le document source."
+ },
+ "SAL-7003": {
+  "code": "SAL-7003",
+  "name": "ChainSourceFullyFulfilled",
+  "message": "Le document source '{0}' est déjà entièrement exécuté.",
+  "hint": "Choisissez un autre document source ou clôturez celui-ci."
+ },
+ "SAL-7004": {
+  "code": "SAL-7004",
+  "name": "ChainTransitionNotAllowed",
+  "message": "Les documents ne peuvent pas être convertis de '{0}' vers '{1}'.",
+  "hint": "Suivez la chaîne : devis vers commande, commande vers livraison, livraison vers facture."
+ },
+ "SAL-7005": {
+  "code": "SAL-7005",
+  "name": "ChainReversalBlockedDownstream",
+  "message": "Le document '{0}' ne peut pas être contrepassé tant que des documents en aval validés y sont liés.",
+  "hint": "Contrepassez ou annulez d'abord les documents en aval."
+ },
+ "SAL-7006": {
+  "code": "SAL-7006",
+  "name": "ChainReversalBlockedPayments",
+  "message": "Le document '{0}' ne peut pas être contrepassé tant que des paiements y sont affectés.",
+  "hint": "Désaffectez d'abord les paiements, puis contrepassez le document."
+ },
+ "SAL-7007": {
+  "code": "SAL-7007",
+  "name": "ChainDocumentNotReversible",
+  "message": "Le document '{0}' ne peut pas être contrepassé dans son état actuel.",
+  "hint": "Seuls un bon de livraison ou une facture de vente validés de la chaîne peuvent être contrepassés."
+ },
+ "SAL-7008": {
+  "code": "SAL-7008",
+  "name": "QuotationExpired",
+  "message": "Le devis '{0}' a expiré le {1} et ne peut plus être converti.",
+  "hint": "Créez un nouveau devis ou prolongez la validité de celui-ci avant son expiration."
+ },
+ "SAL-7009": {
+  "code": "SAL-7009",
+  "name": "DeliveryCostAllocationFailed",
+  "message": "Le coût de livraison du document '{0}' n'a pas pu être affecté à cette facture.",
+  "hint": "Vérifiez que la livraison est validée et que ses mouvements de stock portent un coût, puis validez à nouveau."
+ },
+ "SAL-7010": {
+  "code": "SAL-7010",
+  "name": "AllocationExceedsOpenAmount",
+  "message": "L'affectation dépasse le montant ouvert du document '{0}'.",
+  "hint": "Réduisez l'affectation au montant ouvert indiqué pour le document."
+ },
+ "SAL-7011": {
+  "code": "SAL-7011",
+  "name": "StockReservationInvalid",
+  "message": "La réservation pour '{0}' dépasse le stock disponible.",
+  "hint": "Réduisez la quantité réservée à la quantité disponible."
+ },
+ "SAL-7012": {
+  "code": "SAL-7012",
+  "name": "PickingExceedsRemaining",
+  "message": "La quantité prélevée pour '{0}' dépasse la quantité restante à livrer.",
+  "hint": "Réduisez la quantité prélevée au montant restant sur la commande."
+ },
+ "SAL-7013": {
+  "code": "SAL-7013",
+  "name": "CommissionPolicyInvalid",
+  "message": "La politique de commission '{0}' est invalide ou incomplète.",
+  "hint": "Complétez la base, le taux et la période de validité de la politique, puis enregistrez à nouveau."
+ },
+ "SAL-7014": {
+  "code": "SAL-7014",
+  "name": "CommissionSettlementInvalid",
+  "message": "Le règlement de commission '{0}' ne peut pas être traité dans son état actuel.",
+  "hint": "Approuvez les écritures de commission avant de les régler."
+ },
+ "SAL-7015": {
+  "code": "SAL-7015",
+  "name": "ContractQuantityExceeded",
+  "message": "La quantité pour '{0}' dépasse la quantité contractuelle restante.",
+  "hint": "Réduisez la quantité au montant restant au titre du contrat."
+ },
+ "SAL-7016": {
+  "code": "SAL-7016",
+  "name": "ApprovalStateInvalid",
+  "message": "Le document '{0}' ne peut pas changer d'état d'approbation depuis son état actuel.",
+  "hint": "Actualisez le document et vérifiez son état d'approbation avant d'agir."
+ },
+ "ACC-5020": {
+  "name": "Party blacklisted",
+  "message": "Le tiers est sur liste noire et ne peut pas être utilisé sur de nouveaux documents."
+ },
+ "SAL-7017": {
+  "name": "Document revision conflict",
+  "message": "Le document a été modifié par une révision plus récente ; rechargez-le avant d'enregistrer."
+ },
+ "SAL-7018": {
+  "name": "Price below minimum",
+  "message": "Le prix de vente est inférieur au prix minimum de l'article et aucun dépassement autorisé n'a été fourni."
+ },
+ "SAL-7019": {
+  "name": "Margin below minimum",
+  "message": "Le prix de vente donne une marge inférieure à la marge cible de l'article et aucun dépassement autorisé n'a été fourni."
+ },
+ "SAL-7020": {
+  "name": "Discount exceeds limit",
+  "message": "La remise dépasse le pourcentage de remise maximum de l'article et aucun dépassement autorisé n'a été fourni."
+ },
+ "SAL-7021": {
+  "name": "Return quantity exceeded",
+  "message": "La quantité retournée dépasse la quantité retournable restante sur la ligne du document source."
+ },
+ "SAL-7022": {
+  "name": "Return inspection required",
+  "message": "Ce retour nécessite une décision d'inspection avant de pouvoir être comptabilisé."
+ },
+ "SAL-7023": {
+  "name": "Contract inactive or expired",
+  "message": "Le contrat de vente n'est pas actif à la date de ce document ; les contrats expirés, suspendus ou pas encore en vigueur ne peuvent pas être utilisés."
+ },
+ "SAL-7024": {
+  "name": "Recurring schedule invalid",
+  "message": "La planification récurrente est invalide : un document modèle, un intervalle positif et une prochaine date d'exécution sont requis."
+ },
+ "SAL-7025": {
+  "name": "RMA state invalid",
+  "message": "La demande RMA n'est pas dans un état permettant cette opération."
+ },
+ "SAL-7026": {
+  "name": "Warranty claim invalid",
+  "message": "La demande de garantie est invalide : la garantie est expirée, annulée ou ne couvre pas cette demande."
+ },
+ "SAL-7027": {
+  "name": "Settlement discount invalid",
+  "message": "L'escompte de règlement est invalide : il dépasse le montant ouvert du document ou n'a pas été autorisé."
+ },
+ "SAL-7028": {
+  "name": "Cross-currency allocation invalid",
+  "message": "L'affectation multidevise est invalide : le montant du document, le montant du paiement ou les taux de change sont incohérents."
+ },
+ "SAL-7029": {
+  "name": "Consolidation mismatch",
+  "message": "Les livraisons ne peuvent pas être consolidées en une seule facture : le tiers, la devise ou le taux de change diffèrent, ou une source n'est pas une livraison."
+ },
+ "PUR-1001": {
+  "code": "PUR-1001",
+  "name": "RequisitionNotEditable",
+  "message": "Une demande ne peut être modifiée qu'avant soumission ou après rejet.",
+  "hint": "Corrigez-la après un rejet, ou créez une nouvelle demande."
+ },
+ "PUR-1002": {
+  "code": "PUR-1002",
+  "name": "RequisitionCancelBlocked",
+  "message": "Une demande convertie, clôturée ou déjà annulée ne peut pas être annulée.",
+  "hint": "Une fois la conversion terminée, clôturez plutôt la demande."
+ },
+ "PUR-1003": {
+  "code": "PUR-1003",
+  "name": "RequisitionCloseInvalid",
+  "message": "Seule une demande entièrement convertie peut être clôturée.",
+  "hint": "Convertissez d'abord la demande en bon de commande ou en demande de prix."
+ },
+ "PUR-1004": {
+  "code": "PUR-1004",
+  "name": "RequisitionStateInvalid",
+  "message": "L'état de la demande ne permet pas cette opération.",
+  "hint": "Rechargez la demande et vérifiez l'état de son flux."
+ },
+ "PUR-1005": {
+  "code": "PUR-1005",
+  "name": "RequisitionReasonRequired",
+  "message": "Un motif est requis pour cette action sur la demande.",
+  "hint": "Saisissez le motif dans le champ de motif de décision."
+ },
+ "PUR-1006": {
+  "code": "PUR-1006",
+  "name": "LandedCostAlreadyBookedNeedsAccount",
+  "message": "La charge de coût landed '{0}' est marquée Déjà comptabilisée mais n'a aucun compte de charges.",
+  "hint": "Saisissez le compte de charges sur lequel la charge a déjà été comptabilisée, ou repassez le mode de crédit de la charge à À payer."
+ },
+ "PUR-1007": {
+  "code": "PUR-1007",
+  "name": "LandedCostPayeeNotFound",
+  "message": "La charge de coût landed '{0}' désigne le bénéficiaire {1}, qui n'est pas un tiers actif de cette société.",
+  "hint": "Choisissez le bénéficiaire dans la liste des tiers de la société, ou effacez-le pour devoir le montant au fournisseur du reçu."
+ },
+ "PUR-1008": {
+  "code": "PUR-1008",
+  "name": "LandedCostReceiptSelectionInvalid",
+  "message": "Le bon de coût landed ne sélectionne aucune ligne de reçu éligible.",
+  "hint": "Sélectionnez au moins un reçu de marchandises validé et incluez au moins une ligne de reçu valorisée en stock."
+ },
+ "PUR-1009": {
+  "code": "PUR-1009",
+  "name": "LandedCostDocumentAlreadyLinked",
+  "message": "Le document fournisseur {1} est déjà consommé par le bon de coût landed validé '{0}'.",
+  "hint": "Un document fournisseur ne peut être lié qu'à un seul bon de coût landed validé. Extournez d'abord ce bon, ou liez un autre document."
+ },
+ "PUR-1010": {
+  "code": "PUR-1010",
+  "name": "LandedCostLinkedDocumentInvalid",
+  "message": "La charge '{0}' ne peut pas être liée au document fournisseur {1}.",
+  "hint": "Liez un document fournisseur validé, dans la même devise, dont le journal débite exactement un compte de coût ; le montant de la charge ne peut pas dépasser ce débit."
+ },
+ "PUR-1012": {
+  "code": "PUR-1012",
+  "name": "AdvancePurchaseOrderMismatch",
+  "message": "L'avance fournisseur ne peut pas être appliquée à '{0}' : la commande d'achat ne correspond pas.",
+  "hint": "Une avance ne règle que les factures de la commande d'achat contre laquelle elle a été payée, pour le même fournisseur dans la même société. Vérifiez la commande de l'avance et la chaîne de commandes de la facture."
+ },
+ "PUR-1013": {
+  "code": "PUR-1013",
+  "name": "AdvanceReversalBlockedWhileConsumed",
+  "message": "L'avance fournisseur '{0}' est partiellement consommée et ne peut pas être annulée.",
+  "hint": "Annulez d'abord les affectations de l'avance dans le rapprochement des paiements ; le bon d'avance pourra être annulé une fois qu'il n'en reste rien de consommé."
+ },
+ "PUR-1011": {
+  "code": "PUR-1011",
+  "name": "SupplierBillReferenceDuplicate",
+  "message": "La facture fournisseur '{0}' existe déjà pour ce fournisseur sur la facture {1}.",
+  "hint": "Un numéro de facture fournisseur ne peut être utilisé qu'une seule fois par fournisseur. Vérifiez la facture existante ou corrigez le numéro / la date à partir du document du fournisseur."
+ },
+ "PUR-1014": {
+  "code": "PUR-1014",
+  "name": "WithholdingConfigurationInvalid",
+  "message": "La règle de retenue '{0}' n'a pas de compte de retenue à payer valide.",
+  "hint": "Configurez un compte de passif imputable sur la règle de retenue à la source (Configuration fiscale), ou retirez le code de retenue du document."
+ },
+ "PUR-1015": {
+  "code": "PUR-1015",
+  "name": "WithholdingExceedsPayable",
+  "message": "La retenue {1} sur la facture '{0}' dépasse le montant payable au fournisseur.",
+  "hint": "La retenue est déduite du montant dû au fournisseur et ne peut jamais le dépasser. Vérifiez le taux et la base de la retenue."
+ },
+ "PUR-1016": {
+  "code": "PUR-1016",
+  "name": "WithholdingRuleNotFound",
+  "message": "Le code de retenue '{0}' n'a aucune règle de retenue active pour cette société à la date du document.",
+  "hint": "Créez ou activez une règle de retenue portant ce code dans la Configuration fiscale, ou retirez le code de retenue du document."
+ },
+ "DSG-8101": {
+  "code": "DSG-8101",
+  "name": "DesignFileInvalid",
+  "message": "Le fichier '{0}' n'est pas un fichier de modèle ShouTech valide, ou il a été modifié ou endommagé.",
+  "hint": "Exportez à nouveau le modèle depuis sa fenêtre de concepteur et assurez-vous que le fichier n'a pas été modifié après l'exportation."
+ },
+ "DSG-8102": {
+  "code": "DSG-8102",
+  "name": "DesignFileKindMismatch",
+  "message": "Le fichier de modèle '{0}' appartient à un autre concepteur et ne peut pas être importé ici.",
+  "hint": "Ouvrez le concepteur correspondant au type de fichier (.strd rapport, .stid facture, .stld étiquette) et importez-y le fichier."
+ },
+ "DSG-8103": {
+  "code": "DSG-8103",
+  "name": "DesignPayloadInvalid",
+  "message": "Le fichier de modèle '{0}' a été lu, mais son contenu n'est pas un modèle utilisable.",
+  "hint": "Réexportez le modèle depuis une version actuelle du programme, puis importez-le à nouveau."
+ },
+ "BIN-8201": {
+  "code": "BIN-8201",
+  "name": "BinItemNotFound",
+  "message": "L'élément est introuvable dans la corbeille.",
+  "hint": "Actualisez la corbeille et réessayez ; l'élément a peut-être déjà été restauré ou supprimé définitivement."
+ },
+ "BIN-8202": {
+  "code": "BIN-8202",
+  "name": "BinBlockedByAllocations",
+  "message": "Ce document ne peut pas être déplacé vers la corbeille car des paiements lui sont affectés.",
+  "hint": "Annulez d'abord l'affectation des paiements dans la fenêtre de rapprochement, puis supprimez le document."
+ },
+ "BIN-8203": {
+  "code": "BIN-8203",
+  "name": "BinBlockedByLinks",
+  "message": "Ce document ne peut pas être déplacé vers la corbeille car d'autres documents y sont liés.",
+  "hint": "Annulez ou supprimez d'abord les documents liés (livraisons, encaissements, retours) depuis leurs propres fenêtres."
+ },
+ "BIN-8204": {
+  "code": "BIN-8204",
+  "name": "BinKindExcluded",
+  "message": "Ce type de document ne peut pas être déplacé vers la corbeille.",
+  "hint": "Les ventes au point de vente se corrigent dans le flux de session du point de vente (retours et annulations), pas via la corbeille."
+ },
+ "BIN-8205": {
+  "code": "BIN-8205",
+  "name": "BinPostedJournalPurgeBlocked",
+  "message": "Une écriture comptable validée ne peut pas être supprimée définitivement.",
+  "hint": "Restaurez-la depuis la corbeille ; les écritures validées font partie de la piste d'audit comptable."
+ },
+ "BIN-8206": {
+  "code": "BIN-8206",
+  "name": "BinRestoreConflict",
+  "message": "L'élément ne peut pas être restauré car un enregistrement actif utilise déjà le même code.",
+  "hint": "Renommez ou supprimez d'abord l'enregistrement actif en conflit, puis restaurez."
+ },
+ "BIN-8207": {
+  "code": "BIN-8207",
+  "name": "BinPurgeStillReferenced",
+  "message": "L'élément ne peut pas être supprimé définitivement car d'autres enregistrements y font encore référence.",
+  "hint": "Supprimez ou réaffectez d'abord les enregistrements référents, puis supprimez définitivement."
+ },
+ "BIN-8208": {
+  "code": "BIN-8208",
+  "name": "BinStateConflict",
+  "message": "L'état de l'élément dans la corbeille ne permet pas cette opération.",
+  "hint": "Actualisez la corbeille ; l'élément a peut-être déjà été supprimé ou restauré."
+ },
+ "NUM-8301": {
+  "name": "NumberingLimitReached",
+  "message": "La séquence de numérotation a atteint sa limite prise en charge."
+ },
+ "NUM-8302": {
+  "name": "NumberingInvalidConfig",
+  "message": "La configuration de numérotation de cette série est invalide."
+ },
+ "NUM-8303": {
+  "name": "NumberingAllocationFailed",
+  "message": "Impossible d'allouer un nouveau numéro. Vérifiez la connexion à la base de données et réessayez."
+ },
+ "INF-8401": {
+  "code": "INF-8401",
+  "name": "InfoEntityNotFound",
+  "message": "L'élément sélectionné est introuvable.",
+  "hint": "Il a peut-être été supprimé ou appartient à une autre société. Actualisez puis sélectionnez à nouveau."
+ },
+ "INF-8402": {
+  "code": "INF-8402",
+  "name": "InfoLoadFailed",
+  "message": "Les informations n'ont pas pu être chargées.",
+  "hint": "Vérifiez la connexion à la base de données et réessayez."
+ },
+ "TLS-8501": {
+  "code": "TLS-8501",
+  "name": "ToolsSettingsNotPersisted",
+  "message": "Les paramètres des outils n'ont pas pu être enregistrés.",
+  "hint": "Aucun fichier de configuration n'est chargé : les modifications ne peuvent pas être conservées. Restaurez le fichier de configuration (cfg/appset.json) puis réessayez."
+ },
+ "TLS-8502": {
+  "code": "TLS-8502",
+  "name": "ToolsHealthCheckFailed",
+  "message": "Un contrôle d'intégrité n'a pas pu aboutir.",
+  "hint": "Vérifiez la connexion à la base de données puis réessayez."
+ },
+ "TLS-8503": {
+  "code": "TLS-8503",
+  "name": "ToolsBackupActionFailed",
+  "message": "L'action de sauvegarde a échoué.",
+  "hint": "Vérifiez le dossier de sauvegarde et l'espace disque disponible, puis réessayez."
+ }
+}
