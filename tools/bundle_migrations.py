@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and validate ShouTech's compact, checksum-preserving SQL migration bundles."""
+"""Build, verify and append ShouTech's compact, checksum-preserving SQL migration bundles."""
 
 from __future__ import annotations
 
