@@ -939,7 +939,7 @@ public sealed class OperationsRepository : IOperationsRepository
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         var chart = await ResolveChartCompanyAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
-        const string companyCond = "(e.company_id = @company OR CAST(e.company_id AS TEXT) = @chart)";
+        const string companyCond = "(CAST(e.company_id AS TEXT) = CAST(@company AS TEXT) OR CAST(e.company_id AS TEXT) = @chart)";
         var hasPeriodCol = await ColumnExistsAsync(connection, "journal_entries", "fiscal_period_id").ConfigureAwait(false);
         var hasPeriods = await TableExistsAsync(connection, "fiscal_periods").ConfigureAwait(false);
         var periodExpr = hasPeriodCol && hasPeriods ? "COALESCE(fp.period_name, '')" : "''";
