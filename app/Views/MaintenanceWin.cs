@@ -139,7 +139,10 @@ public sealed class MaintenanceWin : BaseWin
                 _runButton.IsEnabled = false;
                 _statusBar.Text = T("Maintenance.CreatingBackup");
                 var backupPath = await AppHost.Backup.CreateBackupAsync(CurrentCompanyCode);
+                if (!await AppHost.Backup.ValidateBackupAsync(backupPath))
+                    throw new InvalidOperationException(T("Maintenance.BackupVerifyFailed"));
                 _results.Items.Add(Tf("Maintenance.BackupCreated", backupPath));
+                _results.Items.Add(T("Maintenance.BackupVerified"));
             }
             catch (Exception ex)
             {
