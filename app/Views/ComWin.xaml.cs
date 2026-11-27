@@ -667,6 +667,10 @@ namespace ShouTech.App.Views
                     AppState.CurrentUser = null;
 
                     ConfigureRuntimeDatabase(record);
+                    // Company databases are selected after process startup. Apply the
+                    // provider migration chain now, against this company's connection,
+                    // before any company-bound service or window can query its schema.
+                    SchemaBootstrapper.EnsureSchema();
                     AppHost.RebindDatabaseContext();
                     AppState.SetCompany(record.Code, record.Name, record.NameEn);
                     var app = WpfApp.Current;
@@ -683,6 +687,9 @@ namespace ShouTech.App.Views
             else
             {
                 ConfigureRuntimeDatabase(record);
+                // Startup may have run before a company connection existed. Migrate
+                // the selected company database before binding services or opening login.
+                SchemaBootstrapper.EnsureSchema();
                 AppHost.RebindDatabaseContext();
                 AppState.SetCompany(record.Code, record.Name, record.NameEn);
                 var app = WpfApp.Current;
