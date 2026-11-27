@@ -236,6 +236,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            draft = draft with { DocNo = await ResolveNextDocNoAsync(connection, transaction, side, draft.CompanyId, draft.DocKind, allocate: true, cancellationToken).ConfigureAwait(false) };
             draft = ApplySalesPricing(connection, transaction, side, draft, priceOverride);
             var docId = await InsertDocumentAsync(connection, transaction, side, draft, CommercialDocumentStatus.Draft, userId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -323,6 +324,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                         "This supplier quotation already has an active purchase order.");
             }
 
+            draft = draft with { DocNo = await ResolveNextDocNoAsync(connection, transaction, side, draft.CompanyId, draft.DocKind, allocate: true, cancellationToken).ConfigureAwait(false) };
             var targetId = await InsertDocumentAsync(
                 connection, transaction, side, draft, CommercialDocumentStatus.Draft, userId, cancellationToken).ConfigureAwait(false);
             await using (var link = CreateCommand(connection, transaction, """
@@ -828,58 +830,62 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
     public async Task<string> NextDocNoAsync(CommercialDocSide side, Guid companyId, string docKind, CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
-        var (docs, _) = Tables(side);
-        var kind = docKind.Trim();
-        var isPg = _provider == "PostgreSQL";
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        // The sequence is keyed by the company CODE so chain SAL/PUR
-        // documents share ONE counter with InvRepo's (NUMBERING_STUDY).
-        var companyCode = await ResolveCompanyCodeAsync(connection, null, companyId, cancellationToken).ConfigureAwait(false)
-            ?? companyId.ToString("D");
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyCode, kind,
-                SequenceAllocator.DefaultConfig(PrefixFor(kind)), cancellationToken).ConfigureAwait(false);
-            // All document families use a continuous, unpadded sequence.
-            // Seed from the numeric tail of legacy and current document numbers.
-            const int segment = 0;
-            long seed = 0;
-            await using (var maxCommand = CreateCommand(connection, transaction, $"""
-                SELECT doc_no
-                FROM {docs}
-                WHERE company_id IN (@guid, @code) AND doc_kind = @kind
-                  AND doc_no LIKE @pattern
-                """))
-            {
-                Add(maxCommand, "@guid", companyId.ToString("D"));
-                Add(maxCommand, "@code", companyCode);
-                Add(maxCommand, "@kind", kind);
-                Add(maxCommand, "@pattern", $"{config.Prefix}-%");
-                await using var reader = await maxCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    var existing = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
-                    var lastDash = existing.LastIndexOf('-');
-                    if (lastDash >= 0
-                        && long.TryParse(existing.AsSpan(lastDash + 1), NumberStyles.None,
-                            CultureInfo.InvariantCulture, out var suffix))
-                        seed = Math.Max(seed, suffix);
-                }
-            }
-            seed = Math.Max(seed, SequenceAllocator.PeekMax(connection, transaction, companyCode, kind));
-            var allocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyCode, kind,
-                segment, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false);
-
+            var preview = await ResolveNextDocNoAsync(connection, transaction, side, companyId, docKind, allocate: false, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return SequenceAllocator.Format(config, segment, allocated);
+            return preview;
         }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async Task<string> ResolveNextDocNoAsync(
+        DbConnection connection, DbTransaction transaction, CommercialDocSide side,
+        Guid companyId, string docKind, bool allocate, CancellationToken cancellationToken)
+    {
+        var (docs, _) = Tables(side);
+        var kind = docKind.Trim();
+        var isPg = _provider == "PostgreSQL";
+        var companyCode = await ResolveCompanyCodeAsync(connection, transaction, companyId, cancellationToken).ConfigureAwait(false)
+            ?? companyId.ToString("D");
+        var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyCode, kind,
+            SequenceAllocator.DefaultConfig(PrefixFor(kind)), cancellationToken).ConfigureAwait(false);
+        const int segment = 0;
+        long seed = 0;
+        await using (var maxCommand = CreateCommand(connection, transaction, $"""
+            SELECT doc_no
+            FROM {docs}
+            WHERE company_id IN (@guid, @code) AND doc_kind = @kind
+              AND doc_no LIKE @pattern
+            """))
+        {
+            Add(maxCommand, "@guid", companyId.ToString("D"));
+            Add(maxCommand, "@code", companyCode);
+            Add(maxCommand, "@kind", kind);
+            Add(maxCommand, "@pattern", $"{config.Prefix}-%");
+            await using var reader = await maxCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var existing = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                var dash = existing.LastIndexOf('-');
+                if (dash >= 0 && long.TryParse(existing.AsSpan(dash + 1), NumberStyles.None,
+                    CultureInfo.InvariantCulture, out var suffix))
+                    seed = Math.Max(seed, suffix);
+            }
+        }
+        seed = Math.Max(seed, SequenceAllocator.PeekMax(connection, transaction, companyCode, kind));
+        var next = allocate
+            ? await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyCode, kind,
+                segment, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false)
+            : Math.Max(seed + 1, config.StartValue);
+        return SequenceAllocator.Format(config, segment, next);
     }
 
     public async Task<IReadOnlyList<CommercialDocumentSummary>> ListAsync(CommercialDocSide side, Guid companyId, string? docKind, string? status, string? search, DateOnly? from, DateOnly? to, int limit = 500, CancellationToken cancellationToken = default)
