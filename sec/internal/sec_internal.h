@@ -64,11 +64,11 @@ namespace stbk2 {
         std::uint8_t  payload_tag[16]{};
         std::uint32_t metadata_len{};
         std::uint64_t payload_len{};
-        std::uint8_t  reserved[48]{};
+        std::uint8_t  reserved[32]{};
     };
     #pragma pack(pop)
 
-    static_assert(sizeof(header) <= 256, "STBK2 header must fit reserved layout");
+    static_assert(sizeof(header) == 256, "STBK2 header must be exactly 256 bytes");
 }
 
 // Key vault record (in-memory / future persistence)
