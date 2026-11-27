@@ -985,6 +985,9 @@ namespace Kern.Tests
             public Task<string?> FindAdjacentDocumentNumberAsync(Guid companyId, string currentDocumentNumber, string seriesPrefix, int offset, CancellationToken cancellationToken = default)
                 => Task.FromResult<string?>(null);
 
+            public Task<IReadOnlyList<CashMovementRow>> ListSourceVouchersForDateAsync(Guid companyId, DateOnly entryDate, IReadOnlyList<string> seriesPrefixes, CancellationToken cancellationToken = default)
+                => Task.FromResult<IReadOnlyList<CashMovementRow>>(Array.Empty<CashMovementRow>());
+
             public Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default, VoucherPartyLinkRequest? partyLink = null)
             {
                 SavedEntry = entry;
