@@ -766,60 +766,78 @@ public sealed class MasterCardRepository : IMasterCardRepository
         return result;
     }
 
-    /// <summary>Allocates the next party code (CUS/SUP series) through
-    /// the central SequenceAllocator (NUMBERING_STUDY §3): seeded from
-    /// the highest existing numeric suffix across the configured and
-    /// legacy prefixes INCLUDING soft-deleted parties, advanced inside
-    /// its own transaction. The card pre-fills it for a new party; the
-    /// user may still replace it before first save (uniqueness is
-    /// enforced at save).</summary>
+    /// <summary>Previews the next party code without consuming it. The
+    /// actual code is allocated inside SavePartyAsync's write transaction.</summary>
     public async Task<string> NextPartyCodeAsync(string companyId, string kind, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);
-        var normalizedKind = kind.Trim().ToUpperInvariant();
-        var series = normalizedKind == "S" ? "SUP" : "CUS";
-        var isPg = _provider == "PostgreSQL";
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyId.Trim(), series,
-                SequenceAllocator.DefaultConfig(series, yearlyByDefault: false), cancellationToken).ConfigureAwait(false);
-            var prefixes = normalizedKind == "S"
-                ? new[] { config.Prefix, "SUP" }
-                : new[] { config.Prefix, "CUS", "CUST" };
-            long seed = 0;
-            foreach (var prefix in prefixes.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                var documentPrefix = prefix + "-";
-                var suffixStart = documentPrefix.Length + 1;
-                var substr = isPg ? "SUBSTRING(code FROM @start)" : "SUBSTR(code, @start)";
-                var predicate = isPg
-                    ? $"{substr} ~ '^[0-9]+$'"
-                    : $"{substr} GLOB '[0-9]*' AND {substr} NOT GLOB '*[^0-9]*'";
-                await using var maxCommand = CreateCommand(connection, transaction, $"""
-                    SELECT COALESCE(MAX(CAST({substr} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
-                    FROM parties
-                    WHERE company_id = @company AND kind = @kind AND code LIKE @pattern AND {predicate}
-                    """);
-                Add(maxCommand, "@company", companyId.Trim());
-                Add(maxCommand, "@kind", normalizedKind);
-                Add(maxCommand, "@pattern", $"{documentPrefix}%");
-                Add(maxCommand, "@start", suffixStart);
-                var value = Convert.ToInt64(await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-                if (value > seed) seed = value;
-            }
-            var allocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyId.Trim(), series,
-                0, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false);
+            var preview = await ResolvePartyCodeAsync(connection, transaction, companyId, kind,
+                allocate: false, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return SequenceAllocator.Format(config, 0, allocated);
+            return preview;
         }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async Task<string> ResolvePartyCodeAsync(
+        DbConnection connection, DbTransaction transaction, string companyId, string kind,
+        bool allocate, CancellationToken cancellationToken)
+    {
+        var normalizedKind = kind.Trim().ToUpperInvariant();
+        var series = normalizedKind == "S" ? "SUP" : "CUS";
+        var isPg = _provider == "PostgreSQL";
+        var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg,
+            companyId.Trim(), series, SequenceAllocator.DefaultConfig(series, yearlyByDefault: false),
+            cancellationToken).ConfigureAwait(false);
+        var prefixes = normalizedKind == "S"
+            ? new[] { config.Prefix, "SUP" }
+            : new[] { config.Prefix, "CUS", "CUST" };
+        long seed = 0;
+        foreach (var prefix in prefixes.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var documentPrefix = prefix + "-";
+            var suffixStart = documentPrefix.Length + 1;
+            var substr = isPg ? "SUBSTRING(code FROM @start)" : "SUBSTR(code, @start)";
+            var predicate = isPg
+                ? $"{substr} ~ '^[0-9]+$'"
+                : $"{substr} GLOB '[0-9]*' AND {substr} NOT GLOB '*[^0-9]*'";
+            await using var maxCommand = CreateCommand(connection, transaction, $"""
+                SELECT COALESCE(MAX(CAST({substr} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
+                FROM parties
+                WHERE company_id = @company AND kind = @kind AND code LIKE @pattern AND {predicate}
+                """);
+            Add(maxCommand, "@company", companyId.Trim());
+            Add(maxCommand, "@kind", normalizedKind);
+            Add(maxCommand, "@pattern", $"{documentPrefix}%");
+            Add(maxCommand, "@start", suffixStart);
+            var value = Convert.ToInt64(
+                await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                CultureInfo.InvariantCulture);
+            seed = Math.Max(seed, value);
+        }
+
+        if (allocate)
+        {
+            var value = await SequenceAllocator.AllocateAsync(connection, transaction, isPg,
+                companyId.Trim(), series, 0, seed, config.StartValue - 1, cancellationToken)
+                .ConfigureAwait(false);
+            return SequenceAllocator.Format(config, 0, value);
+        }
+
+        var current = SequenceAllocator.PeekMax(connection, transaction, companyId.Trim(), series);
+        var next = checked(Math.Max(Math.Max(seed, current), config.StartValue - 1) + 1);
+        if (next > SequenceAllocator.MaxValue)
+            throw new AppError(ErrorCodes.NumberingLimitReached, $"The '{series}' party sequence has reached its supported limit.");
+        return SequenceAllocator.Format(config, 0, next);
     }
 
     public async Task SavePartyAsync(string companyId, Party party, string userId, CancellationToken cancellationToken = default)
@@ -831,6 +849,15 @@ public sealed class MasterCardRepository : IMasterCardRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            var exists = await ExistsByIdAsync(connection, transaction, "parties", companyId, party.Id, cancellationToken).ConfigureAwait(false);
+            if (!exists)
+            {
+                var preview = await ResolvePartyCodeAsync(connection, transaction, companyId, party.Kind,
+                    allocate: false, cancellationToken).ConfigureAwait(false);
+                if (string.Equals(party.Code, preview, StringComparison.OrdinalIgnoreCase))
+                    party.Code = await ResolvePartyCodeAsync(connection, transaction, companyId, party.Kind,
+                        allocate: true, cancellationToken).ConfigureAwait(false);
+            }
             await EnsureCodeUniqueAsync(connection, transaction, "parties", companyId, party.Code, party.Kind, party.Id, "Party", cancellationToken).ConfigureAwait(false);
             if (party.PartyGroupId.HasValue)
             {
@@ -845,7 +872,6 @@ public sealed class MasterCardRepository : IMasterCardRepository
                     throw new InvalidOperationException("The party group belongs to a different party kind.");
             }
 
-            var exists = await ExistsByIdAsync(connection, transaction, "parties", companyId, party.Id, cancellationToken).ConfigureAwait(false);
             if (!exists)
             {
                 // Step 4: every canonical party owns ONE stable ledger_id,
