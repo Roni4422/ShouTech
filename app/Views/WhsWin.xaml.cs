@@ -898,7 +898,7 @@ namespace ShouTech.App.Views
             ClearDirty();
 
             if (_isNew) { ShowAt(_items.Count - 1); return; }
-            ShowAt(_index <= 0 ? _items.Count - 1 : _index - 1);
+            ShowAt(Math.Max(0, _index - 1));
         }
 
         private void PrevTen_Click(object sender, RoutedEventArgs e)
@@ -916,7 +916,7 @@ namespace ShouTech.App.Views
             ClearDirty();
 
             if (_isNew) { ShowAt(0); return; }
-            ShowAt(_index >= _items.Count - 1 ? 0 : _index + 1);
+            ShowAt(Math.Min(_items.Count - 1, _index + 1));
         }
 
         private void NextTen_Click(object sender, RoutedEventArgs e)
