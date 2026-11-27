@@ -163,7 +163,7 @@ public static class GlPosting
                     $"Document '{request.SourceDocNo}' already has a posted general-ledger entry and cannot be posted twice.", request.SourceDocNo);
         }
 
-        var periodId = ResolveOpenPeriod(connection, transaction, prov, request.CompanyId, request.EntryDate);
+        var periodId = ResolveOpenPeriod(connection, transaction, prov, request.CompanyId);
 
         // Resolve every account code against the canonical chart.
         var resolved = new List<ResolvedLine>();
@@ -405,7 +405,7 @@ public static class GlPosting
             Add(insert, "@currency", currencyCode);
             Add(insert, "@rate", exchangeRate);
             Add(insert, "@documentNumber", SequenceAllocator.AllocateJournalNumber(
-                connection, transaction, prov == "PostgreSQL", companyId, entryDate));
+                connection, transaction, prov == "PostgreSQL", companyId));
             Add(insert, "@sourceType", (object?)sourceType ?? DBNull.Value);
             Add(insert, "@sourceId", (object?)sourceId ?? DBNull.Value);
             Add(insert, "@sourceNo", (object?)sourceNo ?? DBNull.Value);
