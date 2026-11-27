@@ -469,7 +469,7 @@ public sealed class JournalRepository : IJournalRepository
                 Add(link, "@party", partyLink.PartyId);
                 Add(link, "@code", partyLink.PartyCode.Trim());
                 Add(link, "@docKind", partyLink.DocKind);
-                Add(link, "@docNo", sourceDocumentNumber.Trim());
+                Add(link, "@docNo", sourceDocumentNumber!.Trim());
                 Add(link, "@amount", partyLink.Amount);
                 Add(link, "@currency", string.IsNullOrWhiteSpace(partyLink.CurrencyCode) ? "SAR" : partyLink.CurrencyCode.Trim());
                 Add(link, "@user", userId.Trim());
@@ -1103,7 +1103,7 @@ public sealed class JournalRepository : IJournalRepository
         try
         {
             var isPg = _provider == "PostgreSQL";
-            var defaults = new SeriesConfig(key, 1, false, 1);
+            var defaults = new SequenceAllocator.SeriesConfig(key, 1, false, 1);
             var config = SequenceAllocator.ReadConfig(connection, transaction, isPg, companyCode.Trim(), key, defaults);
             var companyCommand = CreateCommand(connection, transaction,
                 "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @code");
