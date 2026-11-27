@@ -594,6 +594,9 @@ private readonly ILogServ _logger;
         private static readonly UTF8Encoding Utf8NoBom =
             new(encoderShouldEmitUTF8Identifier: false);
 
+        private static readonly JsonSerializerOptions ErrorIndexJsonOptions =
+            new() { WriteIndented = true };
+
         public LogServ()
         {
             _logDir = ResolveLogDirectory();
@@ -856,7 +859,7 @@ private readonly ILogServ _logger;
         private void SaveErrorIndex(Dictionary<string, ErrorIndexEntry> entries)
         {
             var tempPath = _errorIndexPath + ".tmp";
-            var json = JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(entries, ErrorIndexJsonOptions);
             File.WriteAllText(tempPath, json, Utf8NoBom);
             File.Move(tempPath, _errorIndexPath, overwrite: true);
         }
