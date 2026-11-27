@@ -201,6 +201,23 @@ public static class SequenceAllocator
         return value is null or DBNull ? 0 : Convert.ToInt64(value, CultureInfo.InvariantCulture);
     }
 
+    /// <summary>Highest reserved counter across every historical year segment.</summary>
+    public static long PeekMax(
+        DbConnection connection, DbTransaction transaction,
+        string companyKey, string seriesKey)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT COALESCE(MAX(last_value), 0)
+            FROM document_number_sequences
+            WHERE company_id = @company AND doc_kind = @series
+            """;
+        Add(command, "@company", companyKey.Trim());
+        Add(command, "@series", seriesKey.Trim());
+        return Convert.ToInt64(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+    }
+
     /// <summary>
     /// Allocates a continuous, unpadded source-document sequence such as
     /// JV, RCV or PAY. The caller owns the transaction; the resulting
@@ -279,6 +296,7 @@ public static class SequenceAllocator
             }
         }
 
+        seed = Math.Max(seed, PeekMax(connection, transaction, companyCode, key));
         const int segment = 0;
         var allocated = Allocate(connection, transaction, isPg, companyCode, key,
             segment, seed, config.StartValue - 1);
