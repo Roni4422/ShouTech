@@ -32,14 +32,7 @@ public partial class AccCard : BaseWin, IInfoContextProvider
 
     public event EventHandler? Saved;
 
-    public AccCard() : this(LoadDefaultRecord(), null) { }
-
-    private static AccRepo.AccRec? LoadDefaultRecord()
-    {
-        try { return AccRepo.LoadAll().OrderByDescending(x => x.Id).FirstOrDefault(); }
-        catch (Exception exL27) {
-            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL27, "AccCard.xaml.LoadDefaultRecord"); return null; }
-    }
+    public AccCard() : this(null, null) { }
 
     public AccCard(string parentCode) : this(null, parentCode) { }
 
