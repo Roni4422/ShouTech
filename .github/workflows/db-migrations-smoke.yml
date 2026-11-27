@@ -45,7 +45,7 @@ jobs:
           missing = sorted(required - columns)
           if missing:
               raise SystemExit(f"SQLite journal_entries is missing columns: {missing}")
-          if "ux_journal_entries_company_document_number" not in indexes:
+          if "ux_journal_entries_company_period_document_number" not in indexes:
               raise SystemExit("SQLite journal document-number uniqueness index is missing")
           group_table = con.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='material_group_items'").fetchone()[0]
           if group_table != 1:
@@ -127,7 +127,7 @@ jobs:
         run: |
           count=$(psql -h localhost -U shoutest -d shoutest -Atc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='journal_entries' AND column_name IN ('reference_number','currency_code','exchange_rate','document_number','fiscal_period_id')")
           test "$count" = "5" || { echo "Expected five journal header columns, found $count"; exit 1; }
-          index_count=$(psql -h localhost -U shoutest -d shoutest -Atc "SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='journal_entries' AND indexname='ux_journal_entries_company_document_number'")
+          index_count=$(psql -h localhost -U shoutest -d shoutest -Atc "SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='journal_entries' AND indexname='ux_journal_entries_company_period_document_number'")
           test "$index_count" = "1" || { echo "PostgreSQL journal document-number uniqueness index is missing"; exit 1; }
           group_table_count=$(psql -h localhost -U shoutest -d shoutest -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='material_group_items'")
           test "$group_table_count" = "1" || { echo "PostgreSQL material_group_items table is missing"; exit 1; }
