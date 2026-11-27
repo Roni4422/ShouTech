@@ -74,7 +74,7 @@
                                VerticalAlignment="Center"/>
 
                     <!-- First + Previous (left side) -->
-                    <Button x:Name="BtnFirst"
+                    <Button x:Name="BtnFirst" Tag="Common.First"
                             Style="{DynamicResource VisuNavBtnStyle}"
                             Click="First_Click"
                             ToolTip="">
@@ -86,12 +86,12 @@
                               Fill="Transparent"
                               Data="M 10,3 L 4,9 L 10,15 M 16,3 L 10,9 L 16,15"/>
                     </Button>
-                    <Button x:Name="BtnPrevTen"
+                    <Button x:Name="BtnPrevTen" Tag="RecordNavigation.PreviousTen"
                             Style="{DynamicResource VisuNavBtnStyle}"
                             Content="≪"
                             Click="PrevTen_Click"
                             loc:LocProps.ToolTipKey="RecordNavigation.PreviousTen"/>
-                    <Button x:Name="BtnPrev"
+                    <Button x:Name="BtnPrev" Tag="RecordNavigation.PreviousOne"
                             Style="{DynamicResource VisuNavBtnStyle}"
                             Click="Prev_Click"
                             ToolTip="">
@@ -115,12 +115,12 @@
                              VerticalContentAlignment="Center"/>
 
                     <!-- Next + Last (right side) -->
-                    <Button x:Name="BtnNextTen"
+                    <Button x:Name="BtnNextTen" Tag="RecordNavigation.NextTen"
                             Style="{DynamicResource VisuNavBtnStyle}"
                             Content="≫"
                             Click="NextTen_Click"
                             loc:LocProps.ToolTipKey="RecordNavigation.NextTen"/>
-                    <Button x:Name="BtnNext"
+                    <Button x:Name="BtnNext" Tag="RecordNavigation.NextOne"
                             Style="{DynamicResource VisuNavBtnStyle}"
                             Click="Next_Click"
                             ToolTip="">
@@ -132,7 +132,7 @@
                               Fill="Transparent"
                               Data="M 5,3 L 12,9 L 5,15"/>
                     </Button>
-                    <Button x:Name="BtnLast"
+                    <Button x:Name="BtnLast" Tag="Common.Last"
                             Style="{DynamicResource VisuNavBtnStyle}"
                             Click="Last_Click"
                             ToolTip="">
