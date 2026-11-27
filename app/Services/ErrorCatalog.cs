@@ -257,7 +257,7 @@ namespace ShouTech.App.Services
                 // more reliable than guessing the originating window from a
                 // translated message or from a later global exception handler.
                 var normalizedPath = (sourceFile ?? string.Empty)
-                    .Replace('\\\\', '/');
+                    .Replace('\\', '/');
                 var fileName = string.IsNullOrWhiteSpace(normalizedPath)
                     ? "Unknown"
                     : Path.GetFileName(normalizedPath);
