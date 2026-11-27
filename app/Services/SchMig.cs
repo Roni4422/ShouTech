@@ -5,7 +5,6 @@ using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +12,7 @@ using Microsoft.Data.Sqlite;
 using Npgsql;
 
 using ShouTech.Domain;
+using ShouTech.Infrastructure;
 namespace ShouTech.App.Services;
 
 /// <summary>
@@ -30,8 +30,6 @@ public static class SchemaMigrator
         public string Message { get; init; } = "";
         public string? FailedMigrationId { get; init; }
     }
-
-    private sealed record MigrationFile(string Id, string Path, string Sql, string Hash);
 
     public static string NormalizeProvider(string? provider)
     {
@@ -95,18 +93,7 @@ public static class SchemaMigrator
         try
         {
             var directory = ResolveMigrationDirectory(normalized);
-            var migrations = Directory.GetFiles(directory, "*.sql", SearchOption.TopDirectoryOnly)
-                .Select(path =>
-                {
-                    var bytes = File.ReadAllBytes(path);
-                    return new MigrationFile(
-                        Path.GetFileName(path),
-                        path,
-                        File.ReadAllText(path, Encoding.UTF8),
-                        Convert.ToHexString(SHA256.HashData(bytes)));
-                })
-                .OrderBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var migrations = MigrationBundleReader.Load(directory);
 
             // Keep desktop startup behavior aligned with SqlMigrator. Reject
             // case-insensitive path collisions before opening the company DB.
@@ -139,7 +126,7 @@ public static class SchemaMigrator
 
             await using var connection = CreateConnection(normalized, connectionString);
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            await EnsureHistoryTableAsync(connection, normalized, cancellationToken).ConfigureAwait(false);
+            await EnsureHistoryTableAsync(connection, migrations, cancellationToken).ConfigureAwait(false);
 
             var applied = await ReadAppliedAsync(connection, cancellationToken).ConfigureAwait(false);
             if (applied.Count == 0 &&
@@ -249,23 +236,16 @@ public static class SchemaMigrator
 
     private static async Task EnsureHistoryTableAsync(
         DbConnection connection,
-        string provider,
+        IReadOnlyList<MigrationBundleReader.Migration> migrations,
         CancellationToken cancellationToken)
     {
         // The migration ledger is schema and must have one canonical owner:
         // the provider-specific bootstrap SQL under dba/mig. Keep this runner
         // aligned with the standalone SqlMigrator so desktop startup and
         // administrative migration runs cannot drift.
-        var migrationDirectory = ResolveMigrationDirectory(provider);
-        var historyPath = Path.Combine(migrationDirectory, "000_history.sql");
-        if (!File.Exists(historyPath))
-            throw new FileNotFoundException(
-                "Required DBA migration-history bootstrap is missing.", historyPath);
-
-        var historySql = await File.ReadAllTextAsync(
-            historyPath, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+        var history = MigrationBundleReader.FindHistory(migrations);
         await using var command = connection.CreateCommand();
-        command.CommandText = historySql;
+        command.CommandText = history.Sql;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -302,7 +282,7 @@ public static class SchemaMigrator
 
     private static async Task RecordMigrationAsync(
         DbConnection connection,
-        MigrationFile migration,
+        MigrationBundleReader.Migration migration,
         DbTransaction transaction,
         CancellationToken cancellationToken)
     {

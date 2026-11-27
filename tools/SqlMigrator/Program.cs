@@ -1,13 +1,11 @@
 using System.Data.Common;
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using ShouTech.Infrastructure;
 
 internal static class Program
 {
-    private sealed record Migration(string Id, string Path, string Sql, string Hash);
-
     private static async Task<int> Main(string[] args)
     {
         var options = ParseArgs(args);
@@ -38,14 +36,7 @@ internal static class Program
             return 2;
         }
 
-        var migrations = Directory.GetFiles(migrationDirectory, "*.sql", SearchOption.AllDirectories)
-            .Select(path => new Migration(
-                Path.GetRelativePath(migrationDirectory, path).Replace('\\', '/'),
-                path,
-                File.ReadAllText(path),
-                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)))))
-            .OrderBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var migrations = MigrationBundleReader.Load(migrationDirectory);
 
         // Migration IDs are relative paths. Reject case-insensitive collisions
         // before opening the database so Windows and Linux discover the same set.
@@ -83,7 +74,7 @@ internal static class Program
         {
             await using var connection = CreateConnection(provider, connectionString);
             await connection.OpenAsync();
-            await EnsureHistoryTableAsync(connection, migrationDirectory);
+            await EnsureHistoryTableAsync(connection, migrations);
 
             var applied = await ReadAppliedAsync(connection);
             var hasExistingSchema = await HasExistingApplicationSchemaAsync(connection, provider);
@@ -260,18 +251,14 @@ internal static class Program
         return builder.ToString();
     }
 
-    private static async Task EnsureHistoryTableAsync(DbConnection connection, string migrationDirectory)
+    private static async Task EnsureHistoryTableAsync(DbConnection connection, IReadOnlyList<MigrationBundleReader.Migration> migrations)
     {
         // The history table is schema too: its canonical definition lives in DBA migrations.
         // Bootstrap it before reading the applied-migration ledger, then let 000_history.sql
         // be recorded normally by the standard migration loop.
-        var path = Path.Combine(migrationDirectory, "000_history.sql");
-        if (!File.Exists(path))
-            throw new FileNotFoundException(
-                "Required DBA migration-history bootstrap is missing.", path);
-
+        var history = MigrationBundleReader.FindHistory(migrations);
         await using var command = connection.CreateCommand();
-        command.CommandText = await File.ReadAllTextAsync(path);
+        command.CommandText = history.Sql;
         await command.ExecuteNonQueryAsync();
     }
 
