@@ -118,17 +118,11 @@ public enum LicEd : byte
                 return _last;
             }
 
-            var modules = new HashSet<string>(_coreModules, StringComparer.OrdinalIgnoreCase);
-
             _last = new LicResult
             {
-                Status = LicStat.Valid,
-                Edition = LicEd.Core,
-                ExpiresAt = DateTime.UtcNow.AddYears(1),
-                MaxDevices = 3,
-                ActiveDevices = 1,
-                Message = "License valid (Core — development mode, SecEng not loaded)",
-                Modules = modules
+                Status = LicStat.NotFound,
+                Edition = LicEd.Demo,
+                Message = "License validation is unavailable. A valid license and the SecEng security engine are required."
             };
 
             return _last;
