@@ -842,31 +842,35 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         {
             var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyCode, kind,
                 SequenceAllocator.DefaultConfig(PrefixFor(kind)), cancellationToken).ConfigureAwait(false);
-            var year = DateTime.Today.Year;
-            var segment = config.YearlySegment ? year : 0;
-            var documentPrefix = config.YearlySegment ? $"{config.Prefix}-{year}-" : $"{config.Prefix}-";
-            var suffixStart = documentPrefix.Length + 1;
-            var substr = isPg ? "SUBSTRING(doc_no FROM @start)" : "SUBSTR(doc_no, @start)";
-            var predicate = isPg
-                ? $"{substr} ~ '^[0-9]+$'"
-                : $"{substr} GLOB '[0-9]*' AND {substr} NOT GLOB '*[^0-9]*'";
-            long seed;
+            // All document families use a continuous, unpadded sequence.
+            // Seed from the numeric tail of legacy and current document numbers.
+            const int segment = 0;
+            long seed = 0;
             await using (var maxCommand = CreateCommand(connection, transaction, $"""
-                SELECT COALESCE(MAX(CAST({substr} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
+                SELECT doc_no
                 FROM {docs}
                 WHERE company_id IN (@guid, @code) AND doc_kind = @kind
-                  AND doc_no LIKE @pattern AND {predicate}
+                  AND doc_no LIKE @pattern
                 """))
             {
                 Add(maxCommand, "@guid", companyId.ToString("D"));
                 Add(maxCommand, "@code", companyCode);
                 Add(maxCommand, "@kind", kind);
-                Add(maxCommand, "@pattern", $"{documentPrefix}%");
-                Add(maxCommand, "@start", suffixStart);
-                seed = Convert.ToInt64(await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+                Add(maxCommand, "@pattern", $"{config.Prefix}-%");
+                await using var reader = await maxCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    var existing = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                    var lastDash = existing.LastIndexOf('-');
+                    if (lastDash >= 0
+                        && long.TryParse(existing.AsSpan(lastDash + 1), NumberStyles.None,
+                            CultureInfo.InvariantCulture, out var suffix))
+                        seed = Math.Max(seed, suffix);
+                }
             }
             var allocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyCode, kind,
                 segment, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false);
+
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return SequenceAllocator.Format(config, segment, allocated);
         }
