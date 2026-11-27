@@ -425,6 +425,8 @@ public partial class AccCard : BaseWin, IInfoContextProvider
             TxtCode.IsReadOnly = true;
             TxtSerial.Text = SerialText(id);
             Saved?.Invoke(this, EventArgs.Empty);
+            // Keep the card ready for the next account after a successful save.
+            New_Click(this, new RoutedEventArgs());
             MessageBox.Show(this, T("AccCard.MsgSaved"), "ShouTech ERP", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
