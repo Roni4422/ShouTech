@@ -309,10 +309,20 @@ public static class SequenceAllocator
     /// cannot leave a journal number detached from its journal entry.
     /// Journal numbers are continuous across fiscal/calendar years.
     /// </summary>
+    /// <summary>
+    /// Allocates the immutable central JRN number inside the posting
+    /// transaction. Each fiscal period owns an independent sequence that
+    /// starts at one; the fiscal-period ID, not the machine/calendar year,
+    /// is the sequence scope. The unique counter row serializes concurrent
+    /// postings for the same company and period.
+    /// </summary>
     public static string AllocateJournalNumber(
         DbConnection connection, DbTransaction transaction, bool isPg,
-        Guid companyId)
+        Guid companyId, string fiscalPeriodId)
     {
+        if (companyId == Guid.Empty || string.IsNullOrWhiteSpace(fiscalPeriodId))
+            throw new ArgumentException("Company and fiscal period are required for JRN allocation.");
+
         using var company = connection.CreateCommand();
         company.Transaction = transaction;
         company.CommandText = "SELECT company_code FROM companies WHERE CAST(company_id AS TEXT) = @id";
@@ -323,15 +333,21 @@ public static class SequenceAllocator
                 "The journal company could not be resolved for number allocation.");
 
         const string seriesKey = "JRN";
-        var defaults = new SeriesConfig("JRN", 8, false, 1);
-        var config = ReadConfig(connection, transaction, isPg, companyCode, seriesKey, defaults);
-        // Journal numbering never resets at year boundaries.
-        const int segment = 0;
+        var config = ReadConfig(connection, transaction, isPg, companyCode, seriesKey,
+            new SeriesConfig("JRN", 1, false, 1));
         var prefix = $"{config.Prefix}-";
         var start = prefix.Length + 1;
         var suffix = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
         var numeric = isPg
-            ? $"{suffix} ~ '^[0-9]+$'"
+            ? $"{suffix} ~ '^[0-9]+
+
+    /// <summary>Formats a document number with an unpadded numeric suffix.</summary>
+    public static string Format(SeriesConfig config, int segmentYear, long value) =>
+        segmentYear > 0
+            ? $"{config.Prefix}-{segmentYear}-{value.ToString(CultureInfo.InvariantCulture)}"
+            : $"{config.Prefix}-{value.ToString(CultureInfo.InvariantCulture)}";
+}
+"
             : $"{suffix} GLOB '[0-9]*' AND {suffix} NOT GLOB '*[^0-9]*'";
 
         using var max = connection.CreateCommand();
@@ -339,15 +355,38 @@ public static class SequenceAllocator
         max.CommandText = $"""
             SELECT COALESCE(MAX(CAST({suffix} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
             FROM journal_entries
-            WHERE company_id = @company AND document_number LIKE @pattern AND {numeric}
+            WHERE company_id = @company AND fiscal_period_id = @period
+              AND document_number LIKE @pattern AND {numeric}
             """;
         Add(max, "@company", companyId.ToString("D", CultureInfo.InvariantCulture));
+        Add(max, "@period", isPg ? (object)Guid.Parse(fiscalPeriodId) : fiscalPeriodId);
         Add(max, "@pattern", $"{prefix}%");
         Add(max, "@start", start);
         var seed = Convert.ToInt64(max.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
-        var allocated = Allocate(connection, transaction, isPg, companyCode, seriesKey,
-            segment, seed, config.StartValue - 1);
-        return Format(config, segment, allocated);
+        if (seed >= MaxValue)
+            throw new AppError(ErrorCodes.NumberingLimitReached, "The JRN sequence has reached its supported limit.");
+
+        using var allocate = connection.CreateCommand();
+        allocate.Transaction = transaction;
+        var advance = isPg
+            ? "GREATEST(fiscal_period_number_sequences.last_value + 1, EXCLUDED.last_value)"
+            : "MAX(fiscal_period_number_sequences.last_value + 1, excluded.last_value)";
+        allocate.CommandText = $"""
+            INSERT INTO fiscal_period_number_sequences
+                (company_id, series_key, fiscal_period_id, last_value)
+            VALUES (@company, @series, @period, @next)
+            ON CONFLICT (company_id, series_key, fiscal_period_id)
+            DO UPDATE SET last_value = {advance}
+            RETURNING last_value
+            """;
+        Add(allocate, "@company", companyCode.Trim());
+        Add(allocate, "@series", seriesKey);
+        Add(allocate, "@period", fiscalPeriodId.Trim());
+        Add(allocate, "@next", seed + 1);
+        var value = Convert.ToInt64(allocate.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+        if (value <= 0 || value > MaxValue)
+            throw new AppError(ErrorCodes.NumberingAllocationFailed, "The JRN allocator returned an invalid number.");
+        return Format(config, 0, value);
     }
 
     /// <summary>Formats a document number with an unpadded numeric suffix.</summary>
