@@ -288,8 +288,9 @@ Every error line carries a unique incident ID and source metadata:
   Error metadata follows it in a fixed, machine-readable position.
 - The English catalog in `app/Resources/Errors/En.json` is checked first.
   If an error is not in that catalog, `LogServ` checks the persistent
-  `log/error-index.json` index using a stable fingerprint built from the
-  exception type, source file, and method. A match reuses its existing
+  `log/error-index.json` index using a stable SHA-256 fingerprint built from the exception type, source
+  file, method, and exception message. Only the hash is persisted; the raw
+  message is not copied into the index. A match reuses its existing
   `AUTO-NNNNNN` code and increments its occurrence count.
 - A genuinely new fingerprint is appended to `log/error-index.json` with
   an English technical name, code, exception type, source, first/last seen
