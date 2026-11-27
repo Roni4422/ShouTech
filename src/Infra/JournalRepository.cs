@@ -11,7 +11,7 @@ using ShouTech.Infra;
 namespace ShouTech.Infrastructure;
 
 /// <summary>Provider-neutral journal persistence for the supported SQLite and PostgreSQL engines.</summary>
-public sealed class JournalRepository : IJournalRepository
+public sealed partial class JournalRepository : IJournalRepository
 {
     private readonly string _provider;
     private readonly string _connectionString;
