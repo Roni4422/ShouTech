@@ -215,11 +215,73 @@ public static class SequenceAllocator
         var key = seriesKey.Trim().ToUpperInvariant();
         if (key is not ("JV" or "RCV" or "PAY"))
             throw new ArgumentOutOfRangeException(nameof(seriesKey), "Only source voucher series JV, RCV and PAY are allocated here.");
+
+        using var company = connection.CreateCommand();
+        company.Transaction = transaction;
+        company.CommandText = "SELECT CAST(company_id AS TEXT) FROM companies WHERE company_code = @code";
+        Add(company, "@code", companyCode.Trim());
+        var companyId = Convert.ToString(company.ExecuteScalar(), CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(companyId))
+            throw new AppError(ErrorCodes.NumberingAllocationFailed,
+                $"Company '{companyCode.Trim()}' could not be resolved for voucher number allocation.");
+
         var defaults = new SeriesConfig(key, 1, false, 1);
         var config = ReadConfig(connection, transaction, isPg, companyCode, key, defaults);
+        var pattern = $"{config.Prefix}-%";
+        long seed = 0;
+
+        // Seed from all existing journal/voucher rows, including soft-deleted
+        // rows. This protects legacy numeric suffixes when the segment policy
+        // changes from year-based to continuous.
+        if (TableExists(connection, transaction, isPg, "journal_entries"))
+        {
+            using var entries = connection.CreateCommand();
+            entries.Transaction = transaction;
+            entries.CommandText = """
+                SELECT document_number FROM journal_entries
+                WHERE CAST(company_id AS TEXT) = @company AND document_number LIKE @pattern
+                """;
+            Add(entries, "@company", companyId);
+            Add(entries, "@pattern", pattern);
+            using var reader = entries.ExecuteReader();
+            while (reader.Read())
+            {
+                var existing = reader.IsDBNull(0) ? string.Empty : Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty;
+                var lastDash = existing.LastIndexOf('-');
+                if (lastDash >= 0 && long.TryParse(existing.AsSpan(lastDash + 1),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var suffix))
+                    seed = Math.Max(seed, suffix);
+            }
+        }
+
+        // RCV is shared with purchase receipt documents; include that
+        // source family in the seed so both entry points share one range.
+        if (key == "RCV" && TableExists(connection, transaction, isPg, "purchase_documents"))
+        {
+            using var receipts = connection.CreateCommand();
+            receipts.Transaction = transaction;
+            receipts.CommandText = """
+                SELECT doc_no FROM purchase_documents
+                WHERE CAST(company_id AS TEXT) IN (@company, @code)
+                  AND doc_kind = 'RCV' AND doc_no LIKE @pattern
+                """;
+            Add(receipts, "@company", companyId);
+            Add(receipts, "@code", companyCode.Trim());
+            Add(receipts, "@pattern", pattern);
+            using var reader = receipts.ExecuteReader();
+            while (reader.Read())
+            {
+                var existing = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                var lastDash = existing.LastIndexOf('-');
+                if (lastDash >= 0 && long.TryParse(existing.AsSpan(lastDash + 1),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out var suffix))
+                    seed = Math.Max(seed, suffix);
+            }
+        }
+
         const int segment = 0;
         var allocated = Allocate(connection, transaction, isPg, companyCode, key,
-            segment, 0, config.StartValue - 1);
+            segment, seed, config.StartValue - 1);
         return Format(config, segment, allocated);
     }
 
