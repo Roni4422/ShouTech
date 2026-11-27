@@ -701,7 +701,7 @@ private readonly ILogServ _logger;
                     if (method == null)
                         continue;
 
-                    var normalized = (file ?? string.Empty).Replace('\\\\', '/');
+                    var normalized = (file ?? string.Empty).Replace('\\', '/');
                     var fileName = string.IsNullOrWhiteSpace(normalized)
                         ? "Unknown"
                         : Path.GetFileName(normalized);
