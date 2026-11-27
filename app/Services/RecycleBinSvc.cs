@@ -105,7 +105,7 @@ public static class RecycleBinSvc
             ["brand_name_ar", "name", "code"],
             ["brand_id", "id"], CompanyIdIsCode: true),
         new("product_categories", "ProductClasses",
-            ["category_name_ar", "name", "code"],
+            ["name", "code"],
             ["category_id", "id"], CompanyIdIsCode: true),
         new("units_of_measure", "Units",
             ["unit_name_ar", "name", "uom_code", "code"],
