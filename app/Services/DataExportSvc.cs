@@ -1660,17 +1660,21 @@ public static class DataExportSvc
     /// Category cards (material_groups) of the active company: code -> display name.
     /// materials.category stores the CARD CODE; spreadsheets show the NAME.
     /// </summary>
-    private static List<MatRepo.MatGroupRec> LoadCategoryCards()
+    // materials.category stores product_categories.category_id, not a
+    // material_groups code. Resolve the actual class card so Excel displays
+    // its name while retaining the stable category ID in the hidden dataset
+    // identity for safe round-trip imports.
+    private static List<MatRepo.ProductCategoryRec> LoadCategoryCards()
     {
-        try { return MatRepo.LoadGroups() ?? new(); }
+        try { return MatRepo.LoadProductCategories() ?? new(); }
         catch (Exception ex)
         {
-            LogWarn($"Category cards could not be loaded for the workbook: {ex.Message}");
+            LogWarn($"Product categories could not be loaded for the workbook: {ex.Message}");
             return new();
         }
     }
 
-    private static string CategoryDisplayName(MatRepo.MatGroupRec card)
+    private static string CategoryDisplayName(MatRepo.ProductCategoryRec card)
     {
         var arabic = string.Equals(App.CurrentLanguageCode?.Trim(), "ar", StringComparison.OrdinalIgnoreCase);
         var name = arabic
@@ -1679,29 +1683,33 @@ public static class DataExportSvc
         return string.IsNullOrWhiteSpace(name) ? card.Code : name.Trim();
     }
 
-    /// <summary>Export: category code -> category name (unknown values are left as stored).</summary>
-    private static string? CategoryCodeToName(string? value, IReadOnlyList<MatRepo.MatGroupRec> cards)
+    /// <summary>Export: category ID or code -> category display name.</summary>
+    private static string? CategoryCodeToName(string? value, IReadOnlyList<MatRepo.ProductCategoryRec> cards)
     {
         if (string.IsNullOrWhiteSpace(value)) return value;
+        var key = value.Trim();
         var card = cards.FirstOrDefault(c =>
-            string.Equals(c.Code, value.Trim(), StringComparison.OrdinalIgnoreCase));
+            string.Equals(c.Id, key, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c.Code, key, StringComparison.OrdinalIgnoreCase));
         return card == null ? value : CategoryDisplayName(card);
     }
 
     /// <summary>
-    /// Import: a category NAME (either language) or code typed in Excel -> the card code that
-    /// materials.category stores. Ambiguous or unknown names are kept exactly as typed.
+    /// Import: a category name, code or ID from Excel -> category_id stored
+    /// in materials.category. Ambiguous or unknown names remain unchanged.
     /// </summary>
-    private static string? CategoryNameToCode(string? value, IReadOnlyList<MatRepo.MatGroupRec> cards)
+    private static string? CategoryNameToCode(string? value, IReadOnlyList<MatRepo.ProductCategoryRec> cards)
     {
         if (string.IsNullOrWhiteSpace(value)) return value;
         var text = value.Trim();
-        var byCode = cards.FirstOrDefault(c => string.Equals(c.Code, text, StringComparison.OrdinalIgnoreCase));
-        if (byCode != null) return byCode.Code;
+        var byIdOrCode = cards.FirstOrDefault(c =>
+            string.Equals(c.Id, text, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c.Code, text, StringComparison.OrdinalIgnoreCase));
+        if (byIdOrCode != null) return byIdOrCode.Id;
         var byName = cards.Where(c =>
                 string.Equals(c.Name?.Trim(), text, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(c.NameEn?.Trim(), text, StringComparison.OrdinalIgnoreCase))
-            .Select(c => c.Code)
+            .Select(c => c.Id)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         return byName.Count == 1 ? byName[0] : value;
