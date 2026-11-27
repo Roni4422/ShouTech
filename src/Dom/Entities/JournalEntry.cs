@@ -134,6 +134,29 @@ public sealed record JournalEntryLineSnapshot(
     decimal BaseDebit = 0m,
     decimal BaseCredit = 0m);
 
-public sealed record BudgetWarning(string Code, string Message);
+/// <summary>One GL line requested by a document posting, by account code.
+/// The infrastructure posting engine resolves the code against the company's chart.</summary>
+public sealed record GlLineRequest(
+    string AccountCode, decimal Debit, decimal Credit,
+    string? CostCenter = null, string? Note = null);
+
+/// <summary>A document-to-GL posting request. Source identity links the
+/// resulting journal entry to its originating business document.</summary>
+public sealed record GlDocumentRequest(
+    Guid CompanyId,
+    DateOnly EntryDate,
+    string Description,
+    string SourceDocType,
+    string SourceDocId,
+    string SourceDocNo,
+    string CurrencyCode,
+    decimal ExchangeRate,
+    IReadOnlyList<GlLineRequest> Lines);
+
+/// <summary>Result of a document GL posting, including non-blocking budget warnings.</summary>
+public sealed record GlPostingResult(Guid JournalEntryId, string DocumentNumber)
+{
+    public IReadOnlyList<BudgetWarning> BudgetWarnings { get; init; } = Array.Empty<BudgetWarning>();
+}
 
 public sealed record CreditOverrideContext(string Actor, string? DocKind, string? DocNo);
