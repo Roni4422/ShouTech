@@ -919,9 +919,9 @@ public sealed class JournalRepository : IJournalRepository
     }
 
     /// <summary>
-    /// Allocates the next number from the single company-wide journal
-    /// sequence. The same transactional allocator is used by automatic
-    /// document posting and reversal, so every source shares one counter.
+    /// Allocates a source voucher number (JV, RCV or PAY) independently,
+    /// or the central JRN number when explicitly requested. All counters
+    /// are company-scoped, continuous and updated transactionally.
     /// </summary>
     public string NextDocumentNumber(string companyCode, string seriesKey, DateOnly entryDate)
     {
