@@ -7,24 +7,14 @@
 
 #include "sec.h"
 #include "../internal/sec_internal.h"
-#include "../internal/keyvault_internal.h"
 
 // Primary ST_Initialize / ST_Shutdown remain in prot.cpp for compatibility.
-// This translation unit ensures modular object files are linked and provides
-// process detach cleanup hooks for key material.
+// Keep the DLL entry point minimal: Windows loader-lock callbacks must not
+// acquire application locks, stop threads, or perform other complex cleanup.
 
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
+BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
 {
-    switch (reason)
-    {
-    case DLL_PROCESS_ATTACH:
-        DisableThreadLibraryCalls(module);
-        break;
-    case DLL_PROCESS_DETACH:
-        shoutech::security::internal::keyvault::clear_all();
-        break;
-    default:
-        break;
-    }
+    if (reason == DLL_PROCESS_ATTACH)
+        DisableThreadLibraryCalls(instance);
     return TRUE;
 }
