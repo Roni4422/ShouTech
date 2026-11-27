@@ -14,6 +14,7 @@ public sealed class MaintenanceWin : BaseWin
 {
     protected override string? ScheduleTintName => "Keel";
 
+    private static readonly string[] IntegrityMetrics = { "foreign_key_violations", "invalid_indexes", "unvalidated_constraints" };
     private readonly OperationsService? _service;
     private readonly ListBox _checks = new();
     private readonly TextBlock _statusBar = new();
@@ -250,7 +251,7 @@ public sealed class MaintenanceWin : BaseWin
             && !summary.Contains("integrity_check: ok", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        foreach (var metric in new[] { "foreign_key_violations", "invalid_indexes", "unvalidated_constraints" })
+        foreach (var metric in IntegrityMetrics)
         {
             var marker = metric + ":";
             var index = summary.IndexOf(marker, StringComparison.OrdinalIgnoreCase);

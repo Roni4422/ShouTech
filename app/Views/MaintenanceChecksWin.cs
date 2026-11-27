@@ -73,10 +73,10 @@ internal sealed class MaintenanceChecksWin : BaseWin
             DockPanel.SetDock(state, Dock.Right);
             heading.Children.Add(state);
             heading.Children.Add(label);
-            var body = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-            body.Children.Add(heading);
-            body.Children.Add(detail);
-            var border = new Border { Child = body, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 0, 0, 6), BorderThickness = new Thickness(1) };
+            var rowPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+            rowPanel.Children.Add(heading);
+            rowPanel.Children.Add(detail);
+            var border = new Border { Child = rowPanel, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 0, 0, 6), BorderThickness = new Thickness(1) };
             border.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
             _rows.Children.Add(border);
             _items.Add(new CheckRow(check.LabelKey, check.Execute, label, detail, state));
@@ -130,8 +130,7 @@ internal sealed class MaintenanceChecksWin : BaseWin
 
         _summary.Text = FailedCount == 0
             ? T("Maintenance.ChecksCompleted")
-            : string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                T("Maintenance.ChecksCompletedWithErrors"), FailedCount);
+            : Tf("Maintenance.ChecksCompletedWithErrors", FailedCount);
         _finished = true;
         _closeButton.IsEnabled = true;
     }
