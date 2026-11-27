@@ -104,7 +104,7 @@ jobs:
           import sqlite3, os, re
           from pathlib import Path
           path = os.path.join(os.environ["RUNNER_TEMP"], "shoutech-existing-history.db")
-          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/sqlite/sys.sql").read_bytes())
+          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/sqlite/sys.sql").read_bytes())
           if not match:
               raise SystemExit("SQLite history migration marker was not found")
           con = sqlite3.connect(path)
@@ -203,7 +203,7 @@ jobs:
           history_hash=$(python3 - <<'PY'
           import re
           from pathlib import Path
-          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/postgresql/sys.sql").read_bytes())
+          match = re.search(rb"(?m)^-- @shoutech-migration 000_history\.sql ([0-9A-Fa-f]{64}) ", Path("dba/mig/postgresql/sys.sql").read_bytes())
           if not match:
               raise SystemExit("PostgreSQL history migration marker was not found")
           print(match.group(1).decode("ascii"))
