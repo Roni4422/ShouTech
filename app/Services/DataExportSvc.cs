@@ -445,6 +445,7 @@ public static class DataExportSvc
         {
             ReportKey = $"DataExport.{option.Key}",
             Title = option.DisplayName,
+            FileName = $"ShouTech_{option.Key}",
             CompanyName = companyName,
             GeneratedBy = generatedBy,
             FilterSummary =
@@ -1219,6 +1220,7 @@ public static class DataExportSvc
         {
             ReportKey = "DataExport.SystemInfo",
             Title = option.DisplayName,
+            FileName = $"ShouTech_{option.Key}",
             CompanyName = companyName,
             GeneratedBy = generatedBy,
             FilterSummary = "1 record",
