@@ -378,8 +378,7 @@ public abstract class BaseWin : Window
         {
             Orientation = Orientation.Horizontal,
             FlowDirection = FlowDirection.LeftToRight,
-            HorizontalAlignment = FlowDirection == FlowDirection.RightToLeft
-                ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2, 2, 2, 6),
             Tag = "RecordNavigationBar"
