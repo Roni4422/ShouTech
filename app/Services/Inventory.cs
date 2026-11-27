@@ -594,7 +594,6 @@ internal static class MatRepo
 		public string Id { get; set; } = "";
 		public string Code { get; set; } = "";
 		public string Name { get; set; } = "";
-		public string NameEn { get; set; } = "";
 	}
 
     public sealed class MatGroupRec
@@ -2361,7 +2360,7 @@ internal static class MatRepo
 		var activeValue = DatabaseRuntime.IsPostgreSql() ? "TRUE" : "1";
 		var notDeletedValue = DatabaseRuntime.IsPostgreSql() ? "FALSE" : "0";
 		cmd.CommandText = $@"
-			SELECT category_id, category_code, category_name_ar, category_name_en
+			SELECT category_id, category_code, name
 			FROM product_categories
 			WHERE company_id = $company
 			  AND is_active = {activeValue}
@@ -2375,8 +2374,7 @@ internal static class MatRepo
 			{
 				Id = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? "",
 				Code = Convert.ToString(reader.GetValue(1), CultureInfo.InvariantCulture) ?? "",
-				Name = reader.IsDBNull(2) ? "" : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? "",
-				NameEn = reader.IsDBNull(3) ? "" : Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) ?? ""
+				Name = reader.IsDBNull(2) ? "" : Convert.ToString(reader.GetValue(2), CultureInfo.InvariantCulture) ?? ""
 			});
 		}
 		return result;
