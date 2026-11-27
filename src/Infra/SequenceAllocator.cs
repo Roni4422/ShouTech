@@ -209,7 +209,7 @@ public static class SequenceAllocator
     /// </summary>
     public static string AllocateJournalNumber(
         DbConnection connection, DbTransaction transaction, bool isPg,
-        Guid companyId, DateOnly entryDate)
+        Guid companyId)
     {
         using var company = connection.CreateCommand();
         company.Transaction = transaction;
