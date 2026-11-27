@@ -394,6 +394,9 @@ public sealed class HrEmployeeWin : BaseWin
             if (!AppHost.Permissions.Has(PermCat.Hr.EmployeeEdit)) throw new InvalidOperationException(T("Hr.PermissionDenied"));
             var e = BuildEmployee();
             await _service.SaveEmployeeAsync(CurrentCompanyCode, e, CurrentUserId);
+            // The final number may differ from the preview if another user
+            // committed first; display the value returned by the save transaction.
+            _code.Text = e.EmployeeCode;
             _selectedId = e.Id;
             _statusBar.Text = T("Hr.Saved");
             await RefreshAsync();
