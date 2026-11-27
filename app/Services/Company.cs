@@ -1417,7 +1417,8 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 AdminPasswordHash = hash,
                 AdminPasswordSalt = salt,
                 AdminFullName = fullName,
-                DatabaseProvider = string.IsNullOrWhiteSpace(request.DatabaseProvider) ? "SQLite" : request.DatabaseProvider.Trim(),
+                // Persist the one provider selected for this company in canonical form.
+                DatabaseProvider = provider == "postgresql" ? "PostgreSQL" : "SQLite",
                 DbPath = request.DbPath.Trim(),
                 BackupPath = request.BackupPath.Trim(),
                 AltDbPath = request.AltDbPath.Trim(),
