@@ -77,7 +77,7 @@ namespace ShouTech.App.Services
 
         /// <summary>
         /// The one-line error report: stamps the catalog code + name into
-        /// errors.log / log.log through the coded LogError overload.
+        /// error.log / log.log through the coded LogError overload.
         /// Never throws.
         /// </summary>
         void Report(
