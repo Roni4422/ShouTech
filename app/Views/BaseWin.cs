@@ -232,9 +232,9 @@ public abstract class BaseWin : Window
     /// Creates the one shared column grid of a form: <paramref name="pairs"/>
     /// repetitions of (label column = FormLabelWidth, field column = *).
     /// </summary>
-    protected Grid CreateFormGrid(int pairs)
+    protected static Grid CreateFormGrid(int pairs)
     {
-        var grid = new Grid { FlowDirection = this.FlowDirection };
+        var grid = new Grid { Tag = "SharedFormGrid" };
         for (var i = 0; i < pairs; i++)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(VisuId.FormLabelWidth) });
@@ -250,7 +250,7 @@ public abstract class BaseWin : Window
     /// pairs, so a wide field (name, address, memo) still ends exactly on
     /// the shared column edges of the rows above and below it.
     /// </summary>
-    protected void AddFormField(Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
+    protected static void AddFormField(Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
     {
         EnsureFormRow(grid, row);
         var label = new TextBlock
@@ -259,9 +259,7 @@ public abstract class BaseWin : Window
             Tag = key,
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            Margin = grid.FlowDirection == FlowDirection.RightToLeft
-                ? new Thickness(8, 0, 0, 8)
-                : FormLabelMargin
+            Margin = FormLabelMargin
         };
         label.SetResourceReference(StyleProperty, "VisuTextBlockLabelStyle");
         label.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
@@ -279,7 +277,7 @@ public abstract class BaseWin : Window
     /// ApplyLocalizedText can set its text from the key, exactly as the old
     /// per-window Labeled helpers did.
     /// </summary>
-    protected void AddFormField(
+    protected static void AddFormField(
         List<(TextBlock Label, string Key)> labels,
         Grid grid, int row, int pair, string key, UIElement control, int spanPairs = 1)
     {
@@ -307,7 +305,7 @@ public abstract class BaseWin : Window
     /// no label into the field cell of the form grid, leaving the label
     /// cell empty so the column edges stay aligned.
     /// </summary>
-    protected void AddFormElement(Grid grid, int row, int pair, UIElement control, int spanPairs = 1)
+    protected static void AddFormElement(Grid grid, int row, int pair, UIElement control, int spanPairs = 1)
     {
         EnsureFormRow(grid, row);
         PlaceFormControl(grid, row, pair, control, spanPairs);
@@ -319,14 +317,12 @@ public abstract class BaseWin : Window
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
     }
 
-    private void PlaceFormControl(Grid grid, int row, int pair, UIElement control, int spanPairs)
+    private static void PlaceFormControl(Grid grid, int row, int pair, UIElement control, int spanPairs)
     {
         ApplyFieldStyle(control);
         if (control is FrameworkElement fe)
         {
-            fe.Margin = grid.FlowDirection == FlowDirection.RightToLeft
-                ? new Thickness(12, 0, 0, 8)
-                : FormFieldMargin;
+            fe.Margin = FormFieldMargin;
             if (control is CheckBox or RadioButton)
                 fe.VerticalAlignment = VerticalAlignment.Center;
         }
@@ -456,10 +452,28 @@ public abstract class BaseWin : Window
                 panel.HorizontalAlignment = FlowDirection == FlowDirection.RightToLeft
                     ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             }
+            else if (current is Grid formGrid &&
+                     string.Equals(formGrid.Tag as string, "SharedFormGrid", StringComparison.Ordinal))
+            {
+                ApplyFormGridSpacing(formGrid);
+            }
 
             var count = VisualTreeHelper.GetChildrenCount(current);
             for (var index = count - 1; index >= 0; index--)
                 pending.Push(VisualTreeHelper.GetChild(current, index));
+        }
+    }
+
+    private static void ApplyFormGridSpacing(Grid grid)
+    {
+        var rtl = grid.FlowDirection == FlowDirection.RightToLeft;
+        foreach (UIElement child in grid.Children)
+        {
+            if (child is not FrameworkElement element) continue;
+            var isLabelColumn = Grid.GetColumn(child) % 2 == 0;
+            element.Margin = isLabelColumn
+                ? (rtl ? new Thickness(8, 0, 0, 8) : FormLabelMargin)
+                : (rtl ? new Thickness(12, 0, 0, 8) : FormFieldMargin);
         }
     }
 
