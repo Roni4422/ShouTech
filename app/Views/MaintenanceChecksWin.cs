@@ -81,6 +81,7 @@ internal sealed class MaintenanceChecksWin : BaseWin
             _rows.Children.Add(border);
             _items.Add(new CheckRow(check.LabelKey, check.Execute, label, detail, state));
         }
+        ApplyLocalizedText();
     }
 
     protected override void ApplyLocalizedText()
