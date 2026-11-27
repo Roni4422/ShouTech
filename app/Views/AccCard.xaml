@@ -82,14 +82,18 @@
                  First/Previous/Next/Last order mirrors under RTL like the
                  rest of the window. The serial box inside is centered
                  numeric text and needs no direction pin. -->
-            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
-                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5,0,0">
+            <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal"
+                        HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,5,0,0"
+                        Tag="RecordNavigationBar">
                 <Button x:Name="BtnFirst" Click="First_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.First" Margin="0,0,10,0">
                     <Path Width="30" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                           Data="M 18,3 L 10,14 L 18,25 M 11,3 L 3,14 L 11,25"/>
                 </Button>
 
+                <Button x:Name="BtnPreviousTen" Content="≪" Click="PreviousTen_Click"
+                        Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="RecordNavigation.PreviousTen"
+                        Margin="0,0,6,0"/>
                 <Button x:Name="BtnPrevious" Click="Previous_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Prev" Margin="0,0,10,0">
                     <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
@@ -101,6 +105,9 @@
                          VerticalContentAlignment="Center" IsReadOnly="True"
                          Background="{DynamicResource BackgroundBrush}" loc:LocProps.ToolTipKey="AccCard.SerialToolTip"/>
 
+                <Button x:Name="BtnNextTen" Content="≫" Click="NextTen_Click"
+                        Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="RecordNavigation.NextTen"
+                        Margin="6,0,0,0"/>
                 <Button x:Name="BtnNext" Click="Next_Click" Style="{StaticResource NavArrowStyle}" loc:LocProps.ToolTipKey="Common.Next" Margin="10,0,0,0">
                     <Path Width="25" Height="25" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                           StrokeThickness="3.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
