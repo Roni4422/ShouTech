@@ -384,7 +384,7 @@ public sealed class JrnWin : BaseWin
                 throw new InvalidOperationException("The journal service is not initialized; check the database connection setup.");
 
             var companyId = await store.ResolveCompanyIdAsync(companyCode);
-            var snapshot = await journal.FindByDocumentNumberAsync(companyId, documentNumber);
+            var snapshot = await journal.FindByDocumentNumberAsync(companyId, documentNumber, DateOnly.FromDateTime(_dtDate.SelectedDate ?? DateTime.Today));
             if (snapshot is null)
                 throw new InvalidOperationException($"Journal entry '{documentNumber}' was not found in the active company.");
 
