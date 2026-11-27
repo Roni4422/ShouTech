@@ -12,6 +12,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using System;
 using System.Data.Common;
@@ -583,6 +585,7 @@ private readonly ILogServ _logger;
         private readonly string _logDir;
         private readonly string _logPath;
         private readonly string _errorLogPath;
+        private readonly string _errorIndexPath;
         private readonly object _lock = new();
 
         private const long MaxLogFileBytes = 5L * 1024 * 1024;
@@ -599,6 +602,7 @@ private readonly ILogServ _logger;
 
             _logPath = Path.Combine(_logDir, "log.log");
             _errorLogPath = Path.Combine(_logDir, "error.log");
+            _errorIndexPath = Path.Combine(_logDir, "error-index.json");
 
             Debug.WriteLine($"LOG DIRECTORY = {_logDir}");
 
@@ -727,6 +731,113 @@ private readonly ILogServ _logger;
             return ("Unknown", "Unknown", "Unknown", 0);
         }
 
+        private sealed class ErrorIndexEntry
+        {
+            public string Code { get; set; } = string.Empty;
+            public string Name { get; set; } = string.Empty;
+            public string Fingerprint { get; set; } = string.Empty;
+            public string ExceptionType { get; set; } = string.Empty;
+            public string SourceFile { get; set; } = string.Empty;
+            public string Method { get; set; } = string.Empty;
+            public string FirstSeenUtc { get; set; } = string.Empty;
+            public string LastSeenUtc { get; set; } = string.Empty;
+            public long Occurrences { get; set; }
+        }
+
+        // The static English catalog is checked first. Unclassified/new
+        // failures are matched against this persistent English index;
+        // only a genuinely new fingerprint receives a new AUTO code.
+        private (string Code, string Name, string Suffix) ResolveOrRegisterError(
+            string requestedCode,
+            Exception? exception,
+            (string Window, string File, string Method, int Line) source)
+        {
+            var isGenericUnclassified =
+                string.Equals(requestedCode, ErrorCodes.Unknown, StringComparison.OrdinalIgnoreCase) &&
+                exception != null && exception is not AppError;
+            if (ErrorCatalogSvc.IsKnownCode(requestedCode) && !isGenericUnclassified)
+                return (requestedCode, ErrorCatalogSvc.GetCatalogName(requestedCode), string.Empty);
+
+            var exceptionType = exception?.GetType().FullName ?? "UnknownException";
+            var fingerprintInput = string.Join("|",
+                exceptionType,
+                source.File ?? "Unknown",
+                source.Method ?? "Unknown");
+            var fingerprint = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput)));
+            var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+
+            try
+            {
+                lock (_lock)
+                {
+                    var entries = new Dictionary<string, ErrorIndexEntry>(StringComparer.OrdinalIgnoreCase);
+                    if (File.Exists(_errorIndexPath))
+                    {
+                        var loaded = JsonSerializer.Deserialize<Dictionary<string, ErrorIndexEntry>>(
+                            File.ReadAllText(_errorIndexPath, Utf8NoBom));
+                        if (loaded != null)
+                            entries = new Dictionary<string, ErrorIndexEntry>(loaded, StringComparer.OrdinalIgnoreCase);
+                    }
+
+                    if (entries.TryGetValue(fingerprint, out var existing))
+                    {
+                        existing.LastSeenUtc = now;
+                        existing.Occurrences++;
+                        SaveErrorIndex(entries);
+                        return (existing.Code, existing.Name,
+                            string.IsNullOrWhiteSpace(requestedCode) || requestedCode == ErrorCodes.Unknown
+                                ? string.Empty
+                                : $" | ReportedCode={requestedCode}");
+                    }
+
+                    var next = entries.Values
+                        .Select(x => int.TryParse(x.Code.StartsWith("AUTO-", StringComparison.OrdinalIgnoreCase)
+                            ? x.Code[5..] : string.Empty, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0)
+                        .DefaultIfEmpty(0).Max() + 1;
+                    var code = $"AUTO-{next:000000}";
+                    var name = $"AutoRegisteredError{next:000000}";
+                    entries[fingerprint] = new ErrorIndexEntry
+                    {
+                        Code = code,
+                        Name = name,
+                        Fingerprint = fingerprint,
+                        ExceptionType = exceptionType,
+                        SourceFile = source.File ?? "Unknown",
+                        Method = source.Method ?? "Unknown",
+                        FirstSeenUtc = now,
+                        LastSeenUtc = now,
+                        Occurrences = 1
+                    };
+                    SaveErrorIndex(entries);
+                    var suffix = string.IsNullOrWhiteSpace(requestedCode) ||
+                                 requestedCode == ErrorCodes.Unknown
+                        ? string.Empty
+                        : $" | ReportedCode={requestedCode}";
+                    return (code, name, suffix);
+                }
+            }
+            catch (Exception indexException)
+            {
+                // Index persistence is best-effort. Do not recurse into the
+                // error reporter if the index itself cannot be read or written.
+                Debug.WriteLine($"Error index failure: {indexException.GetType().Name}: {indexException.Message}");
+                var fallback = ErrorCatalogSvc.IsKnownCode(ErrorCodes.Unknown)
+                    ? ErrorCodes.Unknown
+                    : "SYS-0001";
+                return (fallback, ErrorCatalogSvc.GetCatalogName(fallback),
+                    $" | ErrorIndexFailure={indexException.GetType().Name}");
+            }
+        }
+
+        private void SaveErrorIndex(Dictionary<string, ErrorIndexEntry> entries)
+        {
+            var tempPath = _errorIndexPath + ".tmp";
+            var json = JsonSerializer.Serialize(entries, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(tempPath, json, Utf8NoBom);
+            File.Move(tempPath, _errorIndexPath, overwrite: true);
+        }
+
         // ================================================================
         // General logging
         // ================================================================
@@ -771,20 +882,11 @@ private readonly ILogServ _logger;
             string message,
             Exception? ex = null)
         {
-            var stampedCode = code;
-            var reportedSuffix = string.Empty;
-            if (!ErrorCatalogSvc.IsKnownCode(code))
-            {
-                // Invariant: every emitted code exists in the catalog.
-                // An unregistered code is stamped as SYS-0001 and the
-                // reported code is preserved in the message body.
-                reportedSuffix = $" | ReportedCode={code}";
-                stampedCode = ErrorCodes.Unknown;
-            }
-
-            var name = ErrorCatalogSvc.GetCatalogName(stampedCode);
-            var errorId = Guid.NewGuid().ToString("N").ToUpperInvariant();
             var source = ResolveErrorSource(ex);
+            var (stampedCode, name, reportedSuffix) =
+                ResolveOrRegisterError(code, ex, source);
+
+            var errorId = Guid.NewGuid().ToString("N").ToUpperInvariant();
             var detail =
                 $"[ErrorId={errorId}] [Code={stampedCode}] [Name={name}] " +
                 $"[Window={source.Window}] [SourceFile={source.File}] " +
