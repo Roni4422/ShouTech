@@ -2015,7 +2015,9 @@ internal static class MatRepo
 			using var conn = Open(cs);
 			EnsureWarehouseSchema(conn);
 
-			using var tx = conn.BeginTransaction();
+			using var tx = conn is SqliteConnection sqlite
+				? sqlite.BeginTransaction(deferred: false)
+				: conn.BeginTransaction();
 
 			try
 			{
