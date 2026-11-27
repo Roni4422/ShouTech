@@ -187,6 +187,24 @@ public class MasterCardServiceTests
     // ---------------------------------------------------------------- Parties
 
     [Fact]
+    public async Task PartyCodePreview_DoesNotConsume_AndSaveAllocates()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var service = db.Service;
+
+        var firstPreview = await service.NextPartyCodeAsync(Company, "C");
+        var secondPreview = await service.NextPartyCodeAsync(Company, "C");
+        Assert.Equal(firstPreview, secondPreview);
+
+        var party = new Party { Kind = "C", Code = firstPreview, NameEn = "Preview Customer" };
+        await service.SavePartyAsync(Company, party, User);
+        Assert.Equal(firstPreview, party.Code);
+
+        var nextPreview = await service.NextPartyCodeAsync(Company, "C");
+        Assert.NotEqual(firstPreview, nextPreview);
+    }
+
+    [Fact]
     public async Task Party_Save_BalanceFromLedger_AndDeleteGuard()
     {
         await using var db = await TestDb.CreateAsync();
