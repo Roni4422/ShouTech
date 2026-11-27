@@ -4992,7 +4992,7 @@
       "SUP": "Suppliers",
       "EMP": "Employees"
     },
-    "Hint": "Changes apply to future numbers only. Existing documents keep their numbers; a counter never moves backward."
+    "Hint": "Changes apply to future numbers only. Existing documents keep their numbers; counters continue across years and display without leading zeroes."
   },
   "InfoWin": {
     "Title": "Information",
