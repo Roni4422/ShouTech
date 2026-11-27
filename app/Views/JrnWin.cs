@@ -454,7 +454,8 @@ public sealed class JrnWin : BaseWin
     {
         _grid.IsReadOnly = readOnly;
         _dtDate.IsEnabled = !readOnly;
-        _txtDocNo.IsReadOnly = readOnly;
+        // Journal numbers are centrally allocated and must never be user-edited.
+        _txtDocNo.IsReadOnly = true;
         _txtRefNo.IsReadOnly = readOnly;
         _txtCur.IsReadOnly = readOnly;
         _txtRate.IsReadOnly = readOnly;
