@@ -4,36 +4,32 @@ using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using ShouTech.App.Services;
 using ShouTech.Application.Services;
 
 namespace ShouTech.App.Views;
 
-/// <summary>
-/// Safe, read-only maintenance diagnostics. Any future repair/repost action
-/// must be exposed as a separate, explicitly confirmed operation.
-/// </summary>
 public sealed class MaintenanceWin : BaseWin
 {
     protected override string? ScheduleTintName => "Keel";
 
     private readonly OperationsService? _service;
     private readonly ListBox _checks = new();
-    private readonly ListBox _results = new();
     private readonly TextBlock _statusBar = new();
     private readonly TextBlock _checksTitle = new();
-    private readonly TextBlock _pendingNote = new();
     private readonly Button _runButton = new();
+    private readonly ProgressBar _progress = new() { Minimum = 0, Maximum = 100, Width = 190, Height = 16, Margin = new Thickness(14, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _progressText = new() { MinWidth = 48, VerticalAlignment = VerticalAlignment.Center };
     private bool _running;
-    private int _failedChecks;
 
     public MaintenanceWin()
     {
         _service = AppHost.Operations;
-        Width = 860;
-        Height = 600;
-        MinWidth = 660;
-        MinHeight = 420;
+        Width = 760;
+        Height = 500;
+        MinWidth = 620;
+        MinHeight = 380;
         BuildUi();
         Loaded += OnLoaded;
     }
@@ -48,8 +44,6 @@ public sealed class MaintenanceWin : BaseWin
             return;
         }
 
-        // Do not run diagnostics automatically when the window opens.
-        // The user must explicitly start them after the backup decision.
         PopulateCheckCatalog();
     }
 
@@ -57,39 +51,33 @@ public sealed class MaintenanceWin : BaseWin
     {
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        var statusBar = F2Ui.StatusBar(_statusBar);
-        DockPanel.SetDock(statusBar, Dock.Bottom);
-        root.Children.Add(statusBar);
+        var status = F2Ui.StatusBar(_statusBar);
+        DockPanel.SetDock(status, Dock.Bottom);
+        root.Children.Add(status);
 
         F2Ui.StyleButton(_runButton, "Maintenance.RunChecks");
         _runButton.Click += async (_, _) => await ConfirmBackupAndRunAsync();
         var bottomBar = F2Ui.BottomBar(_runButton);
+        if (bottomBar.Child is StackPanel commands)
+        {
+            commands.Children.Add(_progress);
+            commands.Children.Add(_progressText);
+        }
         DockPanel.SetDock(bottomBar, Dock.Bottom);
         root.Children.Add(bottomBar);
 
         var content = new Grid();
         content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        _checksTitle.Margin = new Thickness(0, 0, 0, 6);
+        _checksTitle.Margin = new Thickness(0, 0, 0, 8);
         _checksTitle.FontWeight = FontWeights.SemiBold;
         Grid.SetRow(_checksTitle, 0);
         content.Children.Add(_checksTitle);
 
-        _checks.Margin = new Thickness(0, 0, 0, 10);
+        _checks.Margin = new Thickness(0, 0, 0, 8);
         Grid.SetRow(_checks, 1);
         content.Children.Add(_checks);
-
-        _pendingNote.Margin = new Thickness(0, 6, 0, 6);
-        _pendingNote.TextWrapping = TextWrapping.Wrap;
-        Grid.SetRow(_pendingNote, 2);
-        content.Children.Add(_pendingNote);
-
-        _results.Margin = new Thickness(0, 0, 0, 6);
-        Grid.SetRow(_results, 3);
-        content.Children.Add(_results);
 
         root.Children.Add(content);
         Content = root;
@@ -100,9 +88,11 @@ public sealed class MaintenanceWin : BaseWin
     {
         Title = T("Maintenance.Title");
         _checksTitle.Text = T("Maintenance.CheckListTitle");
-        _pendingNote.Text = T("Maintenance.PendingAudits");
+        if (_checks.Items.Count > 0)
+            PopulateCheckCatalog();
         F2Ui.ApplyTexts(new List<(TextBlock Label, string Key)>(),
             new List<(DataGridColumn, string)>(), new[] { _runButton }, T);
+        _progressText.Text = Tf("Maintenance.ChecksProgress", (int)_progress.Value);
     }
 
     private void PopulateCheckCatalog()
@@ -119,15 +109,12 @@ public sealed class MaintenanceWin : BaseWin
         if (_running)
             return;
 
-        _results.Items.Clear();
-        var decision = MessageBox.Show(this, T("Maintenance.BackupPrompt"),
-            T("Maintenance.BackupPromptTitle"), MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning, MessageBoxResult.Yes);
-
-        if (decision == MessageBoxResult.Cancel)
+        var prompt = new MaintenanceBackupPromptWin { Owner = this };
+        var decision = prompt.ShowDialog();
+        if (decision is null)
             return;
 
-        if (decision == MessageBoxResult.Yes)
+        if (decision.Value)
         {
             try
             {
@@ -141,8 +128,7 @@ public sealed class MaintenanceWin : BaseWin
                 var backupPath = await AppHost.Backup.CreateBackupAsync(CurrentCompanyCode);
                 if (!await AppHost.Backup.ValidateBackupAsync(backupPath))
                     throw new InvalidOperationException(T("Maintenance.BackupVerifyFailed"));
-                _results.Items.Add(Tf("Maintenance.BackupCreated", backupPath));
-                _results.Items.Add(T("Maintenance.BackupVerified"));
+                _statusBar.Text = Tf("Maintenance.BackupCreated", backupPath);
             }
             catch (Exception ex)
             {
@@ -150,98 +136,176 @@ public sealed class MaintenanceWin : BaseWin
                 MessageBox.Show(this, Tf("Maintenance.BackupFailedDetails", ex.Message),
                     Title, MessageBoxButton.OK, MessageBoxImage.Error);
                 _runButton.IsEnabled = true;
-                return; // Never proceed when the requested backup failed.
+                return;
             }
         }
 
         await RunChecksAsync();
     }
 
-    private async Task RunChecksAsync()
+    private Task RunChecksAsync()
     {
         if (_running)
-            return;
+            return Task.CompletedTask;
 
         _running = true;
         _runButton.IsEnabled = false;
-        _failedChecks = 0;
+        _progress.Value = 0;
+        _progressText.Text = Tf("Maintenance.ChecksProgress", 0);
         _statusBar.Text = T("Maintenance.ChecksRunning");
+
+        var progress = new Progress<double>(value =>
+        {
+            _progress.Value = Math.Clamp(value, 0, 100);
+            _progressText.Text = Tf("Maintenance.ChecksProgress", (int)Math.Round(_progress.Value));
+        });
+
+        var checks = new List<(string LabelKey, Func<Task<string>> Execute)>
+        {
+            ("Maintenance.CheckDatabaseConnection", CheckDatabaseConnectionAsync),
+            ("Maintenance.CheckDatabaseIntegrity", CheckDatabaseIntegrityAsync),
+            ("Maintenance.CheckMigrationLedger", CheckMigrationLedgerAsync),
+            ("Maintenance.CheckTrialBalance", CheckTrialBalanceAsync)
+        };
 
         try
         {
-            await RunCheckAsync("Maintenance.CheckDatabaseConnection", async () =>
-            {
-                if (AppHost.DatabaseHealth is not { } health)
-                    throw new InvalidOperationException(T("Maintenance.HealthUnavailable"));
-                var result = await health.CheckAsync();
-                if (!result.IsAvailable)
-                    throw new InvalidOperationException(result.Message);
-                return Tf("Maintenance.DatabaseConnectionResult", result.Provider,
-                    result.Latency?.TotalMilliseconds.ToString("0", CultureInfo.CurrentCulture) ?? "-");
-            });
-
-            await RunCheckAsync("Maintenance.CheckDatabaseIntegrity", async () =>
-            {
-                if (_service is null)
-                    throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
-                var summary = await _service.GetIntegritySummaryAsync();
-                if (summary.Contains("integrity_check:", StringComparison.OrdinalIgnoreCase)
-                    && !summary.Contains("integrity_check: ok", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException(summary);
-                return summary;
-            });
-
-            await RunCheckAsync("Maintenance.CheckMigrationLedger", async () =>
-            {
-                if (_service is null)
-                    throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
-                var schema = await _service.GetSchemaVersionAsync();
-                return Tf("Maintenance.MigrationLedgerResult", schema.AppliedCount,
-                    string.IsNullOrWhiteSpace(schema.HighestMigrationId) ? "-" : schema.HighestMigrationId);
-            });
-
-            await RunCheckAsync("Maintenance.CheckTrialBalance", async () =>
-            {
-                if (_service is null)
-                    throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
-                var audit = await _service.GetTrialBalanceIntegrityAsync(CurrentCompanyCode);
-                foreach (var period in audit.Periods)
-                {
-                    var periodName = string.IsNullOrWhiteSpace(period.Period)
-                        ? T("Maintenance.NoPeriod") : period.Period;
-                    _results.Items.Add(Tf("Maintenance.TbPeriodLine", periodName, period.Entries,
-                        F2Ui.Fmt(period.Debit), F2Ui.Fmt(period.Credit),
-                        period.IsBalanced ? T("Maintenance.TbBalanced") : T("Maintenance.TbUnbalanced")));
-                }
-                _results.Items.Add(Tf("Maintenance.TbOrphans", audit.OrphanLineCount));
-                _results.Items.Add(Tf("Maintenance.TbNoLines", audit.PostedEntriesWithoutLines));
-                if (!audit.IsClean)
-                    throw new InvalidOperationException(T("Maintenance.TbFailed"));
-                return T("Maintenance.TbOk");
-            });
-
-            _statusBar.Text = _failedChecks == 0
+            var window = new MaintenanceChecksWin(checks, progress) { Owner = this };
+            window.ShowDialog();
+            _statusBar.Text = window.FailedCount == 0
                 ? T("Maintenance.ChecksCompleted")
-                : Tf("Maintenance.ChecksCompletedWithErrors", _failedChecks);
+                : Tf("Maintenance.ChecksCompletedWithErrors", window.FailedCount);
+            _progress.Value = 100;
+            _progressText.Text = Tf("Maintenance.ChecksProgress", 100);
         }
         finally
         {
             _running = false;
             _runButton.IsEnabled = true;
         }
+
+        return Task.CompletedTask;
     }
 
-    private async Task RunCheckAsync(string labelKey, Func<Task<string>> check)
+    private async Task<string> CheckDatabaseConnectionAsync()
     {
-        try
+        if (AppHost.DatabaseHealth is not { } health)
+            throw new InvalidOperationException(T("Maintenance.HealthUnavailable"));
+        var result = await health.CheckAsync();
+        if (!result.IsAvailable)
+            throw new InvalidOperationException(result.Message);
+        return Tf("Maintenance.DatabaseConnectionResult", result.Provider,
+            result.Latency?.TotalMilliseconds.ToString("0", CultureInfo.CurrentCulture) ?? "-");
+    }
+
+    private async Task<string> CheckDatabaseIntegrityAsync()
+    {
+        if (_service is null)
+            throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
+
+        var summary = await _service.GetIntegritySummaryAsync();
+        if (!IntegritySummaryIsClean(summary))
+            throw new InvalidOperationException(summary);
+        return summary;
+    }
+
+    private async Task<string> CheckMigrationLedgerAsync()
+    {
+        if (_service is null)
+            throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
+        var schema = await _service.GetSchemaVersionAsync();
+        return Tf("Maintenance.MigrationLedgerResult", schema.AppliedCount,
+            string.IsNullOrWhiteSpace(schema.HighestMigrationId) ? "-" : schema.HighestMigrationId);
+    }
+
+    private async Task<string> CheckTrialBalanceAsync()
+    {
+        if (_service is null)
+            throw new InvalidOperationException(T("Maintenance.ServiceUnavailable"));
+
+        var audit = await _service.GetTrialBalanceIntegrityAsync(CurrentCompanyCode);
+        if (!audit.IsClean)
+            throw new InvalidOperationException(T("Maintenance.TbFailed"));
+
+        var periods = new List<string>();
+        foreach (var period in audit.Periods)
         {
-            var detail = await check();
-            _results.Items.Add(Tf("Maintenance.CheckPassed", T(labelKey), detail));
+            var periodName = string.IsNullOrWhiteSpace(period.Period)
+                ? T("Maintenance.NoPeriod") : period.Period;
+            periods.Add(Tf("Maintenance.TbPeriodLine", periodName, period.Entries,
+                F2Ui.Fmt(period.Debit), F2Ui.Fmt(period.Credit),
+                period.IsBalanced ? T("Maintenance.TbBalanced") : T("Maintenance.TbUnbalanced")));
         }
-        catch (Exception ex)
+        periods.Add(T("Maintenance.TbOk"));
+        periods.Add(Tf("Maintenance.TbOrphans", audit.OrphanLineCount));
+        periods.Add(Tf("Maintenance.TbNoLines", audit.PostedEntriesWithoutLines));
+        return string.Join(Environment.NewLine, periods);
+    }
+
+    private static bool IntegritySummaryIsClean(string summary)
+    {
+        if (string.IsNullOrWhiteSpace(summary))
+            return false;
+        if (summary.Contains("integrity_check:", StringComparison.OrdinalIgnoreCase)
+            && !summary.Contains("integrity_check: ok", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        foreach (var metric in new[] { "foreign_key_violations", "invalid_indexes", "unvalidated_constraints" })
         {
-            _failedChecks++;
-            _results.Items.Add(Tf("Maintenance.CheckFailed", T(labelKey), ex.Message));
+            var marker = metric + ":";
+            var index = summary.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+                continue;
+            var value = summary[(index + marker.Length)..].TrimStart();
+            var token = value.Split(new[] { ';', '|', ' ' }, StringSplitOptions.RemoveEmptyEntries)[0];
+            if (!long.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count != 0)
+                return false;
         }
+        return true;
+    }
+}
+
+internal sealed class MaintenanceBackupPromptWin : BaseWin
+{
+    private readonly TextBlock _message = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 16) };
+    private readonly Button _backupButton = new();
+    private readonly Button _skipButton = new();
+
+    protected override bool PersistGeometry => false;
+
+    public MaintenanceBackupPromptWin()
+    {
+        Width = 460;
+        Height = 220;
+        MinWidth = 460;
+        MinHeight = 220;
+        MaxWidth = 460;
+        MaxHeight = 220;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        BuildUi();
+    }
+
+    private void BuildUi()
+    {
+        var root = new DockPanel { Margin = new Thickness(16) };
+        F2Ui.StyleButton(_backupButton, "Maintenance.BackupPromptOk");
+        F2Ui.StyleButton(_skipButton, "Maintenance.BackupPromptCancel");
+        _backupButton.Click += (_, _) => DialogResult = true;
+        _skipButton.Click += (_, _) => DialogResult = false;
+        var commands = F2Ui.BottomBar(_skipButton, _backupButton);
+        DockPanel.SetDock(commands, Dock.Bottom);
+        root.Children.Add(commands);
+        root.Children.Add(_message);
+        Content = root;
+        ApplyLocalizedText();
+    }
+
+    protected override void ApplyLocalizedText()
+    {
+        Title = T("Maintenance.BackupPromptTitle");
+        _message.Text = T("Maintenance.BackupPrompt");
+        F2Ui.ApplyTexts(new List<(TextBlock Label, string Key)>(),
+            new List<(DataGridColumn, string)>(), new[] { _backupButton, _skipButton }, T);
     }
 }
