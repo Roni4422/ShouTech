@@ -197,6 +197,7 @@ public sealed class CshWin : BaseWin, IWindowMode
 
         var body = new Grid();
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         // Header = one shared column grid (4 pairs), side labels, edges
@@ -227,7 +228,10 @@ public sealed class CshWin : BaseWin, IWindowMode
             AddFormField(headerForm, 4, 0, "Vouchers.AdvanceForPo", _chkAdvance);
             AddFormField(headerForm, 4, 1, "Vouchers.PurchaseOrderNo", _txtPoNo);
         }
-        Grid.SetRow(headerForm, 0);
+        var recordBar = CreateRecordNumberBar(_txtDocNo, offset => { _ = NavigateVouchersAsync(offset); });
+        Grid.SetRow(recordBar, 0);
+        body.Children.Add(recordBar);
+        Grid.SetRow(headerForm, 1);
         body.Children.Add(headerForm);
 
         _grid.AutoGenerateColumns = false;
@@ -277,7 +281,7 @@ public sealed class CshWin : BaseWin, IWindowMode
         gridHost.Children.Add(chooserStrip);
         gridHost.Children.Add(_grid);
 
-        Grid.SetRow(gridHost, 1);
+        Grid.SetRow(gridHost, 2);
         body.Children.Add(gridHost);
 
         root.Children.Add(body);
@@ -614,6 +618,33 @@ public sealed class CshWin : BaseWin, IWindowMode
         catch (Exception ex)
         {
             ReportFailure("Delete", ex);
+        }
+    }
+
+    private async Task NavigateVouchersAsync(int offset)
+    {
+        try
+        {
+            if (_currentJournalId is null && _lines.Any(line =>
+                    !string.IsNullOrWhiteSpace(line.AccountCode) || line.Amount != 0m))
+            {
+                if (MessageBox.Show(this, T("RecordNavigation.DiscardChanges"),
+                    T("RecordNavigation.Title"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    return;
+            }
+
+            var (journal, store, _, _) = RequireJournalContext();
+            var companyId = await store.ResolveCompanyIdAsync(CurrentCompanyCode);
+            var prefix = _kind == CshKind.Receipt ? "RCV" : "PAY";
+            var target = await journal.FindAdjacentDocumentNumberAsync(
+                companyId, _txtDocNo.Text, prefix, offset);
+            if (string.IsNullOrWhiteSpace(target)) return;
+            _txtDocNo.Text = target;
+            await LoadVoucherAsync();
+        }
+        catch (Exception ex)
+        {
+            ReportFailure("Navigate", ex);
         }
     }
 
