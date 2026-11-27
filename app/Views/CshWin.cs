@@ -629,7 +629,7 @@ public sealed class CshWin : BaseWin, IWindowMode
         {
             var (journal, store, _, _) = RequireJournalContext();
             var companyId = await store.ResolveCompanyIdAsync(CurrentCompanyCode);
-            var snapshot = await journal.FindByDocumentNumberAsync(companyId, documentNumber)
+            var snapshot = await journal.FindByDocumentNumberAsync(companyId, documentNumber, DateOnly.FromDateTime(_dtDate.SelectedDate ?? DateTime.Today))
                 ?? throw new InvalidOperationException($"{T("CashVoucher.NotFound")}: {documentNumber}");
             _currentJournalId = snapshot.Id;
             _isPosted = snapshot.Status != JournalEntryStatus.Draft;
