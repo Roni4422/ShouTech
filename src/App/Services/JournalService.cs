@@ -43,6 +43,16 @@ public sealed class JournalService
         return _repository.FindAdjacentDocumentNumberAsync(companyId, currentDocumentNumber, seriesPrefix, offset, cancellationToken);
     }
 
+    public Task<IReadOnlyList<CashMovementRow>> ListSourceVouchersForDateAsync(
+        Guid companyId,
+        DateOnly entryDate,
+        IReadOnlyList<string> seriesPrefixes,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        return _repository.ListSourceVouchersForDateAsync(companyId, entryDate, seriesPrefixes, cancellationToken);
+    }
+
     public async Task<Guid> CreateDraftAsync(
         Guid companyId,
         DateOnly entryDate,
@@ -67,16 +77,6 @@ public sealed class JournalService
         return entry.Id;
     }
 
-    /// <summary>
-    /// Replaces the header and lines of an existing DRAFT journal entry with
-    /// the supplied values, under exactly the same validation as
-    /// <see cref="CreateDraftAsync"/> (balanced, at least two lines, non-zero
-    /// total, active postable accounts, open fiscal period). Posted and
-    /// reversed entries are immutable: the repository rejects the update
-    /// with a cataloged <see cref="ShouTech.Domain.AppError"/>
-    /// (ACC-5005). The document number is the entry's identity and is not
-    /// changed by an update.
-    /// </summary>
     public async Task UpdateDraftAsync(
         Guid companyId,
         Guid journalEntryId,
@@ -92,9 +92,6 @@ public sealed class JournalService
         if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
         ArgumentNullException.ThrowIfNull(lines);
 
-        // The JournalEntry aggregate reuses the create-path validation; its
-        // own Id is irrelevant here — the repository updates the row named
-        // by journalEntryId and keeps that row's document number.
         var entry = new JournalEntry(entryDate, description, referenceNumber, currencyCode, exchangeRate);
         foreach (var line in lines)
             entry.AddLine(line.AccountId, line.Debit, line.Credit, line.Note, line.CostCenter);
@@ -103,12 +100,24 @@ public sealed class JournalService
         await _repository.UpdateDraftAsync(companyId, journalEntryId, entry, userId, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Posts a draft entry, returning any budget warnings the
-    /// posting produced in Warn mode (Phase B 055) so the posting
-    /// window can show them after the entry posts.</summary>
-    public Task<IReadOnlyList<BudgetWarning>> PostAsync(Guid journalEntryId, string userId, CancellationToken cancellationToken = default) =>
-        _repository.PostAsync(journalEntryId, userId, cancellationToken);
+    public Task<IReadOnlyList<BudgetWarning>> PostAsync(
+        Guid journalEntryId,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        return _repository.PostAsync(journalEntryId, userId, cancellationToken);
+    }
 
-    public Task<Guid> ReverseAsync(Guid journalEntryId, string userId, string? details = null, CancellationToken cancellationToken = default) =>
-        _repository.ReverseAsync(journalEntryId, userId, details, cancellationToken);
+    public Task<Guid> ReverseAsync(
+        Guid journalEntryId,
+        string userId,
+        string? details = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (journalEntryId == Guid.Empty) throw new ArgumentException("Journal entry is required.", nameof(journalEntryId));
+        if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
+        return _repository.ReverseAsync(journalEntryId, userId, details, cancellationToken);
+    }
 }
