@@ -80,9 +80,16 @@ public sealed class JournalRepository : IJournalRepository
         return Convert.ToString(value, CultureInfo.InvariantCulture)!;
     }
 
+    public Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(
+        Guid companyId,
+        string documentNumber,
+        CancellationToken cancellationToken = default)
+        => FindByDocumentNumberAsync(companyId, documentNumber, null, cancellationToken);
+
     public async Task<JournalEntrySnapshot?> FindByDocumentNumberAsync(
         Guid companyId,
         string documentNumber,
+        DateOnly? entryDate,
         CancellationToken cancellationToken = default)
     {
         if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
@@ -90,6 +97,24 @@ public sealed class JournalRepository : IJournalRepository
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        string? lookupPeriodId = null;
+        if (documentNumber.Trim().StartsWith("JRN-", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!entryDate.HasValue)
+                throw new InvalidOperationException("A fiscal-period date is required when looking up a central JRN number.");
+            object lookupDate = _provider == "PostgreSQL"
+                ? entryDate.Value
+                : entryDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            await using var periodLookup = connection.CreateCommand();
+            periodLookup.CommandText = "SELECT fiscal_period_id FROM fiscal_periods WHERE company_id = @company AND @date BETWEEN start_date AND end_date";
+            Add(periodLookup, "@company", FormatGuid(companyId));
+            Add(periodLookup, "@date", lookupDate);
+            var periodValue = await periodLookup.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            if (periodValue is null or DBNull)
+                return null;
+            lookupPeriodId = Convert.ToString(periodValue, CultureInfo.InvariantCulture);
+        }
 
         Guid journalId;
         DateOnly entryDate;
@@ -111,10 +136,14 @@ public sealed class JournalRepository : IJournalRepository
                 SELECT journal_entry_id, company_id, entry_date, description, status,
                        reference_number, currency_code, exchange_rate, document_number
                 FROM journal_entries
-                WHERE company_id = @company AND (document_number = @documentNumber OR source_doc_no = @documentNumber) AND {notDeleted}
+                WHERE company_id = @company AND (document_number = @documentNumber OR source_doc_no = @documentNumber)
+                  AND (@period IS NULL OR fiscal_period_id = @period) AND {notDeleted}
                 """;
             Add(header, "@company", FormatGuid(companyId));
             Add(header, "@documentNumber", documentNumber.Trim());
+            Add(header, "@period", lookupPeriodId is null
+                ? DBNull.Value
+                : _provider == "PostgreSQL" ? (object)Guid.Parse(lookupPeriodId) : lookupPeriodId);
 
             await using var reader = await header.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
