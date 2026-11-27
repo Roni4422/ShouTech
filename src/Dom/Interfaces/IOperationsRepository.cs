@@ -80,10 +80,10 @@ public interface IOperationsRepository
     Task<IReadOnlyList<JournalAuditRow>> GetJournalAuditAsync(string companyId, DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default);
 
     // ------------------------------------------------------------ Maintenance
-    /// <summary>SQLite only: VACUUM + ANALYZE. Throws NotSupportedException on PostgreSQL.</summary>
+    /// <summary>Provider-aware maintenance: SQLite VACUUM + ANALYZE; PostgreSQL VACUUM (ANALYZE). Requires database maintenance privileges.</summary>
     Task VacuumAnalyzeAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Provider integrity summary (SQLite PRAGMA integrity_check, or PostgreSQL version + table count).</summary>
+    /// <summary>Read-only provider integrity audit: SQLite integrity_check + foreign_key_check; PostgreSQL invalid-index and unvalidated-constraint catalog checks. PostgreSQL does not expose a built-in full page-level equivalent to SQLite integrity_check.</summary>
     Task<string> GetIntegritySummaryAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Read-only trial-balance integrity audit (B5): per-period posted Dr=Cr totals,
