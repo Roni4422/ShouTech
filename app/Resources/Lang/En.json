@@ -3313,6 +3313,9 @@
     "ChecksCompleted": "Maintenance checks completed.",
     "ChecksCompletedWithErrors": "Checks completed with {0} issue(s).",
     "ChecksClose": "Close",
+    "ChecksCancel": "Cancel operation",
+    "ChecksCancelPending": "Cancellation requested. The current check will finish safely before stopping.",
+    "ChecksCancelled": "The maintenance run was safely stopped after the current check.",
     "BackupVerifyFailed": "The backup file failed its integrity validation. Maintenance checks were not started.",
     "BackupVerified": "Backup created and integrity-verified."
   },

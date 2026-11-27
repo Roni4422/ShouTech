@@ -16,9 +16,13 @@ internal sealed class MaintenanceChecksWin : BaseWin
     private readonly StackPanel _rows = new() { Orientation = Orientation.Vertical };
     private readonly TextBlock _summary = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly Button _closeButton = new();
+    private readonly Button _cancelButton = new();
     private readonly List<CheckRow> _items = new();
     private bool _started;
     private bool _finished;
+    private bool _cancelRequested;
+
+    public bool WasCancelled => _cancelRequested;
 
     public int FailedCount { get; private set; }
 
@@ -35,16 +39,25 @@ internal sealed class MaintenanceChecksWin : BaseWin
         MinHeight = 380;
         BuildUi();
         Loaded += async (_, _) => await ExecuteChecksAsync();
-        Closing += (_, e) => { if (_started && !_finished) e.Cancel = true; };
+        Closing += (_, e) =>
+        {
+            if (_started && !_finished)
+            {
+                e.Cancel = true;
+                RequestCancel();
+            }
+        };
     }
 
     private void BuildUi()
     {
         var root = new DockPanel { Margin = new Thickness(12) };
         F2Ui.StyleButton(_closeButton, "Maintenance.ChecksClose");
+        F2Ui.StyleButton(_cancelButton, "Maintenance.ChecksCancel");
         _closeButton.IsEnabled = false;
         _closeButton.Click += (_, _) => Close();
-        var bottom = F2Ui.BottomBar(_closeButton);
+        _cancelButton.Click += (_, _) => RequestCancel();
+        var bottom = F2Ui.BottomBar(_cancelButton, _closeButton);
         DockPanel.SetDock(bottom, Dock.Bottom);
         root.Children.Add(bottom);
 
@@ -88,9 +101,19 @@ internal sealed class MaintenanceChecksWin : BaseWin
     {
         Title = T("Maintenance.ChecksWindowTitle");
         F2Ui.ApplyTexts(new List<(TextBlock Label, string Key)>(),
-            new List<(DataGridColumn, string)>(), new[] { _closeButton }, T);
+            new List<(DataGridColumn, string)>(), new[] { _cancelButton, _closeButton }, T);
         foreach (var item in _items)
             item.Label.Text = T(item.LabelKey);
+    }
+
+    private void RequestCancel()
+    {
+        if (_finished || _cancelRequested)
+            return;
+
+        _cancelRequested = true;
+        _cancelButton.IsEnabled = false;
+        _summary.Text = T("Maintenance.ChecksCancelPending");
     }
 
     private async Task ExecuteChecksAsync()
@@ -102,6 +125,9 @@ internal sealed class MaintenanceChecksWin : BaseWin
 
         foreach (var item in _items)
         {
+            if (_cancelRequested)
+                break;
+
             item.Label.Foreground = Brushes.DodgerBlue;
             item.State.Text = T("Maintenance.CheckRunning");
             item.State.Foreground = Brushes.DodgerBlue;
@@ -128,10 +154,15 @@ internal sealed class MaintenanceChecksWin : BaseWin
             }
         }
 
-        _summary.Text = FailedCount == 0
-            ? T("Maintenance.ChecksCompleted")
-            : Tf("Maintenance.ChecksCompletedWithErrors", FailedCount);
+        _summary.Text = _cancelRequested
+            ? T("Maintenance.ChecksCancelled")
+            : FailedCount == 0
+                ? T("Maintenance.ChecksCompleted")
+                : Tf("Maintenance.ChecksCompletedWithErrors", FailedCount);
         _finished = true;
+        _cancelButton.IsEnabled = false;
         _closeButton.IsEnabled = true;
+        if (_cancelRequested)
+            Close();
     }
 }

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using ShouTech.App.Services;
 using ShouTech.Application.Services;
@@ -16,7 +17,7 @@ public sealed class MaintenanceWin : BaseWin
 
     private static readonly string[] IntegrityMetrics = { "foreign_key_violations", "invalid_indexes", "unvalidated_constraints" };
     private readonly OperationsService? _service;
-    private readonly ListBox _checks = new();
+    private readonly UniformGrid _checks = new() { Columns = 2 };
     private readonly TextBlock _statusBar = new();
     private readonly TextBlock _checksTitle = new();
     private readonly Button _runButton = new();
@@ -27,10 +28,10 @@ public sealed class MaintenanceWin : BaseWin
     public MaintenanceWin()
     {
         _service = AppHost.Operations;
-        Width = 760;
-        Height = 500;
-        MinWidth = 620;
-        MinHeight = 380;
+        Width = 900;
+        Height = 560;
+        MinWidth = 720;
+        MinHeight = 440;
         BuildUi();
         Loaded += OnLoaded;
     }
@@ -89,7 +90,7 @@ public sealed class MaintenanceWin : BaseWin
     {
         Title = T("Maintenance.Title");
         _checksTitle.Text = T("Maintenance.CheckListTitle");
-        if (_checks.Items.Count > 0)
+        if (_checks.Children.Count > 0)
             PopulateCheckCatalog();
         F2Ui.ApplyTexts(new List<(TextBlock Label, string Key)>(),
             new List<(DataGridColumn, string)>(), new[] { _runButton }, T);
@@ -98,11 +99,24 @@ public sealed class MaintenanceWin : BaseWin
 
     private void PopulateCheckCatalog()
     {
-        _checks.Items.Clear();
-        _checks.Items.Add(T("Maintenance.CheckDatabaseConnection"));
-        _checks.Items.Add(T("Maintenance.CheckDatabaseIntegrity"));
-        _checks.Items.Add(T("Maintenance.CheckMigrationLedger"));
-        _checks.Items.Add(T("Maintenance.CheckTrialBalance"));
+        _checks.Children.Clear();
+        foreach (var key in new[]
+        {
+            "Maintenance.CheckDatabaseConnection",
+            "Maintenance.CheckDatabaseIntegrity",
+            "Maintenance.CheckMigrationLedger",
+            "Maintenance.CheckTrialBalance"
+        })
+        {
+            _checks.Children.Add(new TextBlock
+            {
+                Text = T(key),
+                Margin = new Thickness(8, 8, 16, 8),
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Brushes.Black
+            });
+        }
     }
 
     private async Task ConfirmBackupAndRunAsync()
