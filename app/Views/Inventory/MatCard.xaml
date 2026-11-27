@@ -797,6 +797,16 @@
                                     Style="{StaticResource FootBtn}"
                                     MinWidth="28"/>
 
+                            <Button x:Name="BtnNavPrevTen"
+                                    Content="◀◀"
+                                    Width="{StaticResource ControlHeight}"
+                                    Height="{StaticResource ControlHeight}"
+                                    Margin="1"
+                                    Click="NavPrevTen_Click"
+                                    Cursor="Hand"
+                                    Style="{StaticResource FootBtn}"
+                                    MinWidth="28"/>
+
                             <Button x:Name="BtnNavPrev"
                                     Content="◀"
                                     Width="{StaticResource ControlHeight}"
@@ -829,6 +839,16 @@
                                     Height="{StaticResource ControlHeight}"
                                     Margin="1"
                                     Click="NavNext_Click"
+                                    Cursor="Hand"
+                                    Style="{StaticResource FootBtn}"
+                                    MinWidth="28"/>
+
+                            <Button x:Name="BtnNavNextTen"
+                                    Content="▶▶"
+                                    Width="{StaticResource ControlHeight}"
+                                    Height="{StaticResource ControlHeight}"
+                                    Margin="1"
+                                    Click="NavNextTen_Click"
                                     Cursor="Hand"
                                     Style="{StaticResource FootBtn}"
                                     MinWidth="28"/>
