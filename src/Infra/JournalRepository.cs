@@ -245,6 +245,75 @@ public sealed class JournalRepository : IJournalRepository
             linesResult.AsReadOnly());
     }
 
+    public async Task<string?> FindAdjacentDocumentNumberAsync(
+        Guid companyId,
+        string currentDocumentNumber,
+        string seriesPrefix,
+        int offset,
+        CancellationToken cancellationToken = default)
+    {
+        if (companyId == Guid.Empty) throw new ArgumentException("Company is required.", nameof(companyId));
+        var prefix = (seriesPrefix ?? string.Empty).Trim().ToUpperInvariant();
+        if (prefix.Length is < 2 or > 8 || prefix.Any(ch => !char.IsAsciiLetterOrDigit(ch)))
+            throw new ArgumentException("A valid document series prefix is required.", nameof(seriesPrefix));
+        if (offset is not (int.MinValue or int.MaxValue or -10 or -1 or 1 or 10))
+            throw new ArgumentOutOfRangeException(nameof(offset), "Navigation must be first, last, -10, -1, 1, or 10.");
+
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        var notDeleted = _provider == "PostgreSQL" ? "is_deleted = FALSE" : "is_deleted = 0";
+        command.CommandText = $"""
+            SELECT DISTINCT CASE
+                WHEN source_doc_no LIKE @pattern THEN source_doc_no
+                ELSE document_number
+            END
+            FROM journal_entries
+            WHERE company_id = @company AND {notDeleted}
+              AND (source_doc_no LIKE @pattern OR document_number LIKE @pattern)
+            """;
+        Add(command, "@company", FormatGuid(companyId));
+        Add(command, "@pattern", prefix + "-%");
+
+        var marker = prefix + "-";
+        var numbers = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var number = Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture);
+                if (string.IsNullOrWhiteSpace(number) ||
+                    !number.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                numbers.Add(number.Trim());
+            }
+        }
+
+        var ordered = numbers
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(number =>
+                long.TryParse(number.AsSpan(marker.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+                    ? value : long.MaxValue)
+            .ThenBy(number => number, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (ordered.Count == 0) return null;
+
+        if (offset == int.MinValue) return ordered[0];
+        if (offset == int.MaxValue) return ordered[^1];
+
+        var currentIndex = ordered.FindIndex(number =>
+            string.Equals(number, currentDocumentNumber?.Trim(), StringComparison.OrdinalIgnoreCase));
+        var targetIndex = offset switch
+        {
+            -10 => Math.Max(0, (currentIndex < 0 ? ordered.Count : currentIndex) - 10),
+            -1 => Math.Max(0, (currentIndex < 0 ? ordered.Count : currentIndex) - 1),
+            1 => Math.Min(ordered.Count - 1, (currentIndex < 0 ? -1 : currentIndex) + 1),
+            10 => Math.Min(ordered.Count - 1, (currentIndex < 0 ? -1 : currentIndex) + 10),
+            _ => currentIndex < 0 ? 0 : currentIndex
+        };
+        return ordered[targetIndex];
+    }
+
     public async Task SaveDraftAsync(Guid companyId, JournalEntry entry, string userId, CancellationToken cancellationToken = default, VoucherPartyLinkRequest? partyLink = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
