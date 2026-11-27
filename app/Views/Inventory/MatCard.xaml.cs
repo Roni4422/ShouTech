@@ -474,7 +474,9 @@ public partial class MatCard : BaseWin, IInfoContextProvider
         var rtl = IsRtl;
         BtnNavFirst.Content = rtl ? "\u25B6|" : "|\u25C0";
         BtnNavPrev.Content  = rtl ? "\u25B6"  : "\u25C0";
+        BtnNavPrevTen.Content = rtl ? "▶▶" : "◀◀";
         BtnNavNext.Content  = rtl ? "\u25C0"  : "\u25B6";
+        BtnNavNextTen.Content = rtl ? "◀◀" : "▶▶";
         BtnNavLast.Content  = rtl ? "|\u25C0" : "\u25B6|";
 
     }
