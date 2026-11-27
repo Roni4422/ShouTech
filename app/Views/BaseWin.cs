@@ -412,11 +412,15 @@ public abstract class BaseWin : Window
             return button;
         }
 
-        bar.Children.Add(MakeButton("≫", "RecordNavigation.NextTen", 10, navigate));
-        bar.Children.Add(MakeButton("›", "RecordNavigation.NextOne", 1, navigate));
-        bar.Children.Add(numberBox);
-        bar.Children.Add(MakeButton("‹", "RecordNavigation.PreviousOne", -1, navigate));
+        // Each window owns its own numbering source and sequence.
+        // Sentinels navigate to the first/last record; +/-1 and +/-10 are relative.
+        bar.Children.Add(MakeButton("⇤", "RecordNavigation.First", int.MinValue, navigate));
         bar.Children.Add(MakeButton("≪", "RecordNavigation.PreviousTen", -10, navigate));
+        bar.Children.Add(MakeButton("‹", "RecordNavigation.PreviousOne", -1, navigate));
+        bar.Children.Add(numberBox);
+        bar.Children.Add(MakeButton("›", "RecordNavigation.NextOne", 1, navigate));
+        bar.Children.Add(MakeButton("≫", "RecordNavigation.NextTen", 10, navigate));
+        bar.Children.Add(MakeButton("⇥", "RecordNavigation.Last", int.MaxValue, navigate));
         return bar;
     }
 
