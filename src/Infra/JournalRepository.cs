@@ -370,10 +370,29 @@ public sealed class JournalRepository : IJournalRepository
                     throw new InvalidOperationException($"Account '{line.AccountId}' is missing, inactive, deleted, or not postable for this company.");
             }
 
+            // Allocate the source voucher number only when the draft is
+            // actually saved. Opening/resetting a window uses a read-only
+            // preview and never reserves a sequence value.
+            var sourceSeries = partyLink?.DocKind ?? "JV";
+            var sourceDocumentNumber = entry.DocumentNumber;
+            if (string.IsNullOrWhiteSpace(sourceDocumentNumber))
+            {
+                await using var companyCodeCommand = CreateCommand(connection, transaction,
+                    "SELECT company_code FROM companies WHERE CAST(company_id AS TEXT) = @company");
+                Add(companyCodeCommand, "@company", FormatGuid(companyId));
+                var companyCode = Convert.ToString(
+                    await companyCodeCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture);
+                if (string.IsNullOrWhiteSpace(companyCode))
+                    throw new InvalidOperationException("The company code is required to allocate the source voucher number.");
+                sourceDocumentNumber = SequenceAllocator.AllocateSeriesNumber(
+                    connection, transaction, _provider == "PostgreSQL", companyCode, sourceSeries);
+            }
+
             // Step 7 (J-5): resolve the effective rate ONCE (the entry's
             // own rate is explicit here — JournalEntry requires > 0 —
             // base-currency entries resolve to 1) and write every line's
-            // base-currency amounts alongside its transaction amounts.
+            // base-currency amounts alongside their transaction amounts.
             var fx = FxRates.Resolve(connection, transaction, _provider, companyId,
                 entry.CurrencyCode, entry.EntryDate, entry.ExchangeRate);
             var hasLineBase = PartyLedger.ColumnExists(connection, transaction, _provider, "journal_entry_lines", "base_debit");
@@ -394,7 +413,7 @@ public sealed class JournalRepository : IJournalRepository
                 Add(command, "@reference", (object?)entry.ReferenceNumber ?? DBNull.Value);
                 Add(command, "@currency", entry.CurrencyCode);
                 Add(command, "@rate", fx.Rate);
-                Add(command, "@documentNumber", (object?)entry.DocumentNumber ?? DBNull.Value);
+                Add(command, "@documentNumber", (object?)sourceDocumentNumber ?? DBNull.Value);
                 if (hasHeaderBase)
                     Add(command, "@baseCurrency", (object?)fx.BaseCurrency ?? DBNull.Value);
                 await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -450,7 +469,7 @@ public sealed class JournalRepository : IJournalRepository
                 Add(link, "@party", partyLink.PartyId);
                 Add(link, "@code", partyLink.PartyCode.Trim());
                 Add(link, "@docKind", partyLink.DocKind);
-                Add(link, "@docNo", partyLink.DocNo.Trim());
+                Add(link, "@docNo", sourceDocumentNumber.Trim());
                 Add(link, "@amount", partyLink.Amount);
                 Add(link, "@currency", string.IsNullOrWhiteSpace(partyLink.CurrencyCode) ? "SAR" : partyLink.CurrencyCode.Trim());
                 Add(link, "@user", userId.Trim());
