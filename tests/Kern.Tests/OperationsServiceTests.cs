@@ -38,6 +38,37 @@ public class OperationsServiceTests : IDisposable
             File.Delete(_path);
     }
 
+    [Fact]
+    public async Task Maintenance_IntegrityCheck_ReportsCleanSqliteDatabase()
+    {
+        var summary = await _service.GetIntegritySummaryAsync();
+
+        Assert.Contains("SQLite integrity_check: ok", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("foreign_key_violations: 0", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Maintenance_IntegrityCheck_DetectsSqliteForeignKeyViolations()
+    {
+        await using (var connection = new SqliteConnection($"Data Source={_path}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                PRAGMA foreign_keys = OFF;
+                CREATE TABLE maintenance_fk_parent (id INTEGER PRIMARY KEY);
+                CREATE TABLE maintenance_fk_child (parent_id INTEGER REFERENCES maintenance_fk_parent(id));
+                INSERT INTO maintenance_fk_child (parent_id) VALUES (42);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var summary = await _service.GetIntegritySummaryAsync();
+
+        Assert.Contains("SQLite integrity_check: ok", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("foreign_key_violations: 1", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ------------------------------------------------------------ Bank rec
 
     [Fact]
