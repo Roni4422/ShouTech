@@ -174,12 +174,16 @@
                 <!-- Card number badge -->
                 <StackPanel Grid.Column="0"
                             Orientation="Horizontal"
-                            VerticalAlignment="Center">
+                            VerticalAlignment="Center"
+                            Tag="RecordNavigationBar">
                     <TextBlock Text="Card No."
                                loc:LocProps.Key="CatWin.AutoNo"
                                Style="{StaticResource FieldLabel}"
                                VerticalAlignment="Center"
                                Margin="0,0,8,0"/>
+                    <Button x:Name="BtnNavFirst" Content="|◀" Width="28" MinWidth="28" Height="28" Padding="0" Margin="0,0,2,0" Style="{StaticResource FooterButton}" Click="NavFirst_Click" loc:LocProps.ToolTipKey="Common.First"/>
+                    <Button x:Name="BtnNavPrevTen" Content="≪" Width="28" MinWidth="28" Height="28" Padding="0" Margin="0,0,2,0" Style="{StaticResource FooterButton}" Click="NavPrevTen_Click" loc:LocProps.ToolTipKey="RecordNavigation.PreviousTen"/>
+                    <Button x:Name="BtnNavPrev" Content="‹" Width="28" MinWidth="28" Height="28" Padding="0" Margin="0,0,4,0" Style="{StaticResource FooterButton}" Click="NavPrev_Click" loc:LocProps.ToolTipKey="Common.Prev"/>
                     <Border Background="{DynamicResource SurfaceBrush}"
                             BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1"
@@ -193,6 +197,9 @@
                                    MinWidth="50"
                                    TextAlignment="Center"/>
                     </Border>
+                    <Button x:Name="BtnNavNext" Content="›" Width="28" MinWidth="28" Height="28" Padding="0" Margin="4,0,2,0" Style="{StaticResource FooterButton}" Click="NavNext_Click" loc:LocProps.ToolTipKey="Common.Next"/>
+                    <Button x:Name="BtnNavNextTen" Content="≫" Width="28" MinWidth="28" Height="28" Padding="0" Margin="0,0,2,0" Style="{StaticResource FooterButton}" Click="NavNextTen_Click" loc:LocProps.ToolTipKey="RecordNavigation.NextTen"/>
+                    <Button x:Name="BtnNavLast" Content="▶|" Width="28" MinWidth="28" Height="28" Padding="0" Margin="0" Style="{StaticResource FooterButton}" Click="NavLast_Click" loc:LocProps.ToolTipKey="Common.Last"/>
                 </StackPanel>
 
                 <!-- Search box -->
