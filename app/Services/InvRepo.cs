@@ -35,27 +35,49 @@ public static class InvRepo
             using var transaction = connection is SqliteConnection sqliteConnection
                 ? sqliteConnection.BeginTransaction(deferred: false)
                 : connection.BeginTransaction();
-            var number = AllocateDocNo(connection, transaction, kind);
+            var number = ResolveDocNo(connection, transaction, kind, allocate: true);
             transaction.Commit();
             return number;
         }
         catch (AppError)
         {
-            throw; // cataloged numbering errors (NUM-83xx) surface as-is
+            throw;
         }
         catch (Exception ex)
         {
             AppHost.Errors.Report(ErrorCodes.InventoryOperationFailed, ex, "InvRepo.NextDocNo");
             throw new InvalidOperationException(
-                "A new document number could not be allocated. Check the database connection and retry.",
+                "A new document number could not be allocated. Check the database connection and numbering configuration, then retry.",
                 ex);
         }
+    }
+
+    /// <summary>Returns the next display value without advancing the counter.</summary>
+    public static string PreviewDocNo(InvDocKind kind)
+    {
+        DocSchema.Ensure();
+        var cs = DatabaseRuntime.GetConnectionString();
+        if (string.IsNullOrWhiteSpace(cs))
+            throw new InvalidOperationException("A company database must be connected before previewing a document number.");
+        using var connection = Open(cs);
+        using var transaction = connection is SqliteConnection sqliteConnection
+            ? sqliteConnection.BeginTransaction(deferred: false)
+            : connection.BeginTransaction();
+        var number = ResolveDocNo(connection, transaction, kind, allocate: false);
+        transaction.Commit();
+        return number;
     }
 
     private static string AllocateDocNo(
         DbConnection connection,
         DbTransaction transaction,
-        InvDocKind kind)
+        InvDocKind kind) => ResolveDocNo(connection, transaction, kind, allocate: true);
+
+    private static string ResolveDocNo(
+        DbConnection connection,
+        DbTransaction transaction,
+        InvDocKind kind,
+        bool allocate)
     {
         var table = kind.IsSales() ? "sales_documents" : "purchase_documents";
         var prefix = kind switch
@@ -109,10 +131,15 @@ public static class InvRepo
             }
         }
         maximum = Math.Max(maximum, SequenceAllocator.PeekMax(connection, transaction, Company, prefix));
-        var allocated = SequenceAllocator.Allocate(
-            connection, transaction, isPg, Company, prefix, segmentYear,
-            maximum, config.StartValue - 1);
-        return SequenceAllocator.Format(config, segmentYear, allocated);
+        var floor = Math.Max(maximum, SequenceAllocator.PeekMax(connection, transaction, Company, prefix));
+        var value = allocate
+            ? SequenceAllocator.Allocate(connection, transaction, isPg, Company, prefix, segmentYear,
+                maximum, config.StartValue - 1)
+            : checked(floor + 1);
+        if (value <= 0 || value > SequenceAllocator.MaxValue)
+            throw new AppError(ErrorCodes.NumberingLimitReached,
+                $"The '{prefix}' document sequence has reached its supported limit.");
+        return SequenceAllocator.Format(config, segmentYear, value);
     }
 
     /// <summary>
