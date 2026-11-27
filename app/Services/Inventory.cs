@@ -1920,6 +1920,25 @@ internal static class MatRepo
 	/// Returns the next system-generated numeric warehouse code for the current
 	/// company. Numbers are contiguous and start at 1 (no zero-padding).
 	/// </summary>
+	public static long NextWarehouseCardNo()
+	{
+		var cs = DatabaseRuntime.GetConnectionString();
+		if (string.IsNullOrWhiteSpace(cs))
+			throw new InvalidOperationException("WHS-004: Current company database connection is unavailable.");
+		var company = RequireCurrentCompanyCode();
+		using var conn = Open(cs);
+		EnsureWarehouseSchema(conn);
+		using var tx = conn.BeginTransaction();
+		using var cmd = conn.CreateCommand();
+		cmd.Transaction = tx;
+		cmd.CommandText = "SELECT COALESCE(MAX(card_no), 0) FROM warehouses WHERE company_id = $co;";
+		Add(cmd, "$co", company);
+		var maximum = Convert.ToInt64(cmd.ExecuteScalar() ?? 0L, CultureInfo.InvariantCulture);
+		var reserved = SequenceAllocator.PeekMax(conn, tx, company, "WH-CARD");
+		tx.Commit();
+		return checked(Math.Max(maximum, reserved) + 1);
+	}
+
 	public static long NextWarehouseCode()
 	{
 		var cs = DatabaseRuntime.GetConnectionString();
@@ -2000,6 +2019,22 @@ internal static class MatRepo
 
 			try
 			{
+				if (isNew)
+				{
+					// CardNo is a lifetime warehouse-card identity. The form shows
+					// a non-consuming preview; reserve it only inside this insert
+					// transaction so concurrent creators receive distinct numbers.
+					using var maxCard = conn.CreateCommand();
+					maxCard.Transaction = tx;
+					maxCard.CommandText = "SELECT COALESCE(MAX(card_no), 0) FROM warehouses WHERE company_id = $co;";
+					Add(maxCard, "$co", company);
+					var maximum = Convert.ToInt64(maxCard.ExecuteScalar() ?? 0L, CultureInfo.InvariantCulture);
+					var reserved = SequenceAllocator.PeekMax(conn, tx, company, "WH-CARD");
+					var preview = checked(Math.Max(maximum, reserved) + 1);
+					if (rec.CardNo == preview)
+						rec.CardNo = SequenceAllocator.Allocate(conn, tx, DatabaseRuntime.IsPostgreSql(),
+							company, "WH-CARD", 0, Math.Max(maximum, reserved));
+				}
 				EnsureCardNoIsUnique(conn, tx, company, rec, isNew);
 
 				if (rec.IsDefault)
@@ -2045,7 +2080,7 @@ internal static class MatRepo
 
 		chk.CommandText = isNew
 			? @"SELECT COUNT(1) FROM warehouses
-				WHERE company_id = $co AND card_no = $card AND is_deleted = 0;"
+				WHERE company_id = $co AND card_no = $card;"
 			: @"SELECT COUNT(1) FROM warehouses
 				WHERE company_id = $co AND card_no = $card
 				  AND is_deleted = 0 AND warehouse_id <> $id;";
