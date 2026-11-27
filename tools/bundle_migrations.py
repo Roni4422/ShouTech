@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROVIDERS = ("sqlite", "postgresql")
+# Bundle membership is functional; the migration reader sorts original IDs globally.
 BUNDLES = ("sys", "card", "inv", "acc", "vch", "pur", "sal_crm", "mfg", "hr", "pos_tax")
 MARKER = re.compile(
     rb"^-- @shoutech-migration (?P<id>[A-Za-z0-9_.-]+) "
