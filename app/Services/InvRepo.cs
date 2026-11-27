@@ -74,9 +74,8 @@ public static class InvRepo
             _ => "DOC"
         };
         var isPg = DatabaseRuntime.IsPostgreSql();
-        // Series key = the kind code; the printed prefix/padding/yearly
-        // segmentation come from number_series_config when configured
-        // (NUMBERING_STUDY §3.4), else the built-in defaults.
+        // Series key = the kind code. The prefix and start floor remain
+        // configurable; document numbering is continuous and unpadded.
         var config = SequenceAllocator.ReadConfig(
             connection, transaction, isPg, Company, prefix,
             SequenceAllocator.DefaultConfig(prefix));
