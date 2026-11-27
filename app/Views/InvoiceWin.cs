@@ -866,7 +866,11 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 8, 8)
+            // Keep the label-to-field gap on the inner edge in both
+            // directions: label is column 0, editor is column 1.
+            Margin = FlowDirection == FlowDirection.RightToLeft
+                ? new Thickness(8, 0, 0, 8)
+                : new Thickness(0, 0, 8, 8)
         };
         labelBlock.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
         Grid.SetRow(labelBlock, row);
