@@ -189,6 +189,7 @@ public sealed class JrnWin : BaseWin
         // 3. Center Body
         var body = new Grid();
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         // Header = one shared column grid (4 pairs), side labels, edges
@@ -204,7 +205,10 @@ public sealed class JrnWin : BaseWin
         AddFormField(headerForm, 1, 1, "Vouchers.CostCenter", _txtCc);
         AddFormField(headerForm, 1, 2, "Vouchers.Memo", _txtMemo, spanPairs: 2);
 
-        Grid.SetRow(headerForm, 0);
+        var recordBar = CreateRecordNumberBar(_txtDocNo, offset => { _ = NavigateJournalsAsync(offset); });
+        Grid.SetRow(recordBar, 0);
+        body.Children.Add(recordBar);
+        Grid.SetRow(headerForm, 1);
         body.Children.Add(headerForm);
 
         // Setup DataGrid
@@ -257,7 +261,7 @@ public sealed class JrnWin : BaseWin
         gridHost.Children.Add(chooserStrip);
         gridHost.Children.Add(_grid);
 
-        Grid.SetRow(gridHost, 1);
+        Grid.SetRow(gridHost, 2);
         body.Children.Add(gridHost);
 
         root.Children.Add(body);
@@ -363,7 +367,34 @@ public sealed class JrnWin : BaseWin
         RefreshBalances();
     }
 
-    private async Task LoadVoucherAsync()
+    private async Task NavigateJournalsAsync(int offset)
+    {
+        try
+        {
+            if (_loadedDraft && MessageBox.Show(this, T("RecordNavigation.DiscardChanges"),
+                T("RecordNavigation.Title"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+
+            var companyCode = AppState.CurrentCompanyCode ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(companyCode) ||
+                AppHost.JournalStore is not { } store ||
+                AppHost.Journal is not { } journal)
+                throw new InvalidOperationException(T("CashVoucher.ServiceUnavailable"));
+
+            var companyId = await store.ResolveCompanyIdAsync(companyCode);
+            var target = await journal.FindAdjacentDocumentNumberAsync(
+                companyId, _txtDocNo.Text, "JV", offset);
+            if (string.IsNullOrWhiteSpace(target)) return;
+            _txtDocNo.Text = target;
+            await LoadVoucherAsync(showSuccess: false);
+        }
+        catch (Exception ex)
+        {
+            ReportPersistenceFailure("Navigate", ex);
+        }
+    }
+
+    private async Task LoadVoucherAsync(bool showSuccess = true)
     {
         var documentNumber = _txtDocNo.Text.Trim();
         if (string.IsNullOrWhiteSpace(documentNumber))
@@ -435,12 +466,15 @@ public sealed class JrnWin : BaseWin
             SetVoucherReadOnly(!isDraft);
             RefreshBalances();
 
-            MessageBox.Show(
-                this,
-                FormatLocalized(T("Vouchers.EntryLoaded"), snapshot.Status, snapshot.Id.ToString("D")),
-                T("Vouchers.EntryLoadedTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            if (showSuccess)
+            {
+                MessageBox.Show(
+                    this,
+                    FormatLocalized(T("Vouchers.EntryLoaded"), snapshot.Status, snapshot.Id.ToString("D")),
+                    T("Vouchers.EntryLoadedTitle"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
         }
         catch (Exception ex)
         {
