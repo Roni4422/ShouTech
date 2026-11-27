@@ -1,4 +1,5 @@
 using System.Data.Common;
+using ShouTech.Domain;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
