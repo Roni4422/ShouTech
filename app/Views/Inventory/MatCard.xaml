@@ -785,9 +785,12 @@
                         <StackPanel Grid.Column="1"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Top"
+                                    HorizontalAlignment="Left"
+                                    Tag="RecordNavigationBar"
                                     Margin="9,1,0,0">
 
                             <Button x:Name="BtnNavFirst"
+                                    Tag="Common.First"
                                     Content="|◀"
                                     Width="{StaticResource ControlHeight}"
                                     Height="{StaticResource ControlHeight}"
@@ -798,6 +801,7 @@
                                     MinWidth="28"/>
 
                             <Button x:Name="BtnNavPrevTen"
+                                    Tag="RecordNavigation.PreviousTen"
                                     Content="◀◀"
                                     Width="{StaticResource ControlHeight}"
                                     Height="{StaticResource ControlHeight}"
@@ -808,6 +812,7 @@
                                     MinWidth="28"/>
 
                             <Button x:Name="BtnNavPrev"
+                                    Tag="RecordNavigation.PreviousOne"
                                     Content="◀"
                                     Width="{StaticResource ControlHeight}"
                                     Height="{StaticResource ControlHeight}"
@@ -834,6 +839,7 @@
                                      loc:LocProps.ToolTipKey="MatCard.ItemNo"/>
 
                             <Button x:Name="BtnNavNext"
+                                    Tag="RecordNavigation.NextOne"
                                     Content="▶"
                                     Width="{StaticResource ControlHeight}"
                                     Height="{StaticResource ControlHeight}"
@@ -844,6 +850,7 @@
                                     MinWidth="28"/>
 
                             <Button x:Name="BtnNavNextTen"
+                                    Tag="RecordNavigation.NextTen"
                                     Content="▶▶"
                                     Width="{StaticResource ControlHeight}"
                                     Height="{StaticResource ControlHeight}"
@@ -854,6 +861,7 @@
                                     MinWidth="28"/>
 
                             <Button x:Name="BtnNavLast"
+                                    Tag="Common.Last"
                                     Content="▶|"
                                     Width="{StaticResource ControlHeight}"
                                     Height="{StaticResource ControlHeight}"
