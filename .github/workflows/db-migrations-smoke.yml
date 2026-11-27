@@ -10,6 +10,8 @@ on:
       - 'src/Infra/OperationsRepository.cs'
       - 'src/Dom/Interfaces/IOperationsRepository.cs'
       - 'tests/Kern.Tests/OperationsServiceTests.cs'
+      - 'tests/Kern.Tests/Kern.Tests.csproj'
+      - 'ShouTech.ERP.csproj'
       - '.github/workflows/db-migrations-smoke.yml'
   pull_request:
     branches: [main, reduce-2-upgrade]
@@ -20,6 +22,8 @@ on:
       - 'src/Infra/OperationsRepository.cs'
       - 'src/Dom/Interfaces/IOperationsRepository.cs'
       - 'tests/Kern.Tests/OperationsServiceTests.cs'
+      - 'tests/Kern.Tests/Kern.Tests.csproj'
+      - 'ShouTech.ERP.csproj'
       - '.github/workflows/db-migrations-smoke.yml'
   workflow_dispatch:
 
