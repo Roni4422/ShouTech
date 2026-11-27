@@ -230,14 +230,9 @@ public static class SequenceAllocator
         var start = prefix.Length + 1;
         var suffix = isPg ? "SUBSTRING(document_number FROM @start)" : "SUBSTR(document_number, @start)";
         var numeric = isPg
-            ? $"{suffix} ~ '^[0-9]+    /// year segment, PREFIX-DDDD without one.</summary>
-    public static string Format(SeriesConfig config, int segmentYear, long value) =>
-        segmentYear > 0
-            ? $"{config.Prefix}-{segmentYear}-{value.ToString($"D{config.Padding}", CultureInfo.InvariantCulture)}"
-            : $"{config.Prefix}-{value.ToString($"D{config.Padding}", CultureInfo.InvariantCulture)}";
-}
-"
+            ? $"{suffix} ~ '^[0-9]+$'"
             : $"{suffix} GLOB '[0-9]*' AND {suffix} NOT GLOB '*[^0-9]*'";
+
         using var max = connection.CreateCommand();
         max.Transaction = transaction;
         max.CommandText = $"""
