@@ -1197,7 +1197,7 @@ public sealed partial class JournalRepository : IJournalRepository
         ? new SqliteConnection(_connectionString)
         : new NpgsqlConnection(_connectionString);
 
-    private static DbCommand CreateCommand(DbConnection connection, DbTransaction transaction, string sql)
+    private static DbCommand CreateCommand(DbConnection connection, DbTransaction? transaction, string sql)
     {
         var command = connection.CreateCommand();
         command.Transaction = transaction;
