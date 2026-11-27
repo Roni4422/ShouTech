@@ -398,7 +398,7 @@ public static class DataExportSvc
         }).ToArray();
         var rows = new List<IReadOnlyDictionary<string, object?>>();
 
-        var categoryCards = IsMaterialsTable(option.TableName) ? LoadCategoryCards() : new List<MatRepo.MatGroupRec>();
+        var categoryCards = IsMaterialsTable(option.TableName) ? LoadCategoryCards() : new List<MatRepo.ProductCategoryRec>();
         var categoryColumnKey = IsMaterialsTable(option.TableName)
             ? Enumerable.Range(0, fields.Count)
                 .Where(i => fields[i].Name.Equals("category", StringComparison.OrdinalIgnoreCase))
@@ -783,7 +783,7 @@ public static class DataExportSvc
 
         var notNullColumns = await GetNotNullColumnNamesAsync(connection, option.TableName, ct);
         var isMaterialsImport = IsMaterialsTable(option.TableName);
-        var importCategoryCards = isMaterialsImport ? LoadCategoryCards() : new List<MatRepo.MatGroupRec>();
+        var importCategoryCards = isMaterialsImport ? LoadCategoryCards() : new List<MatRepo.ProductCategoryRec>();
         var companyId = await FindCompanyIdAsync(connection, companyCode, ct);
         var companyColumn = columns.FirstOrDefault(x =>
             x.Equals("company_id", StringComparison.OrdinalIgnoreCase) ||
