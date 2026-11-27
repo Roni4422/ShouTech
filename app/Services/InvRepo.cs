@@ -108,6 +108,7 @@ public static class InvRepo
                     maximum = Math.Max(maximum, suffix);
             }
         }
+        maximum = Math.Max(maximum, SequenceAllocator.PeekMax(connection, transaction, Company, prefix));
         var allocated = SequenceAllocator.Allocate(
             connection, transaction, isPg, Company, prefix, segmentYear,
             maximum, config.StartValue - 1);
