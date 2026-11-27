@@ -2362,7 +2362,9 @@ internal static class MatRepo
 		cmd.CommandText = $@"
 			SELECT category_id, category_code, name
 			FROM product_categories
-			WHERE company_id = $company
+			WHERE company_id = (
+				SELECT company_id FROM companies WHERE company_code = $company LIMIT 1
+			  )
 			  AND is_active = {activeValue}
 			  AND is_deleted = {notDeletedValue}
 			ORDER BY category_code;";
