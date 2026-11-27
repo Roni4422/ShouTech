@@ -376,6 +376,9 @@ public static class DataExportSvc
             .Select(i => new { Index = i, Name = reader.GetName(i), Type = reader.GetFieldType(i) })
             .ToList();
         var fieldsByName = fields.ToDictionary(field => field.Name, StringComparer.OrdinalIgnoreCase);
+        if (IsMaterialsTable(option.TableName) && !fieldsByName.ContainsKey("name"))
+            throw new InvalidOperationException(
+                "Material cards cannot be exported because the active materials table is missing its required language-neutral name column. Recreate or migrate the company database before exporting.");
         fields = GetMaterialCardExportFieldNames(option.TableName, fieldsByName.Keys)
             .Select(name => fieldsByName[name])
             .ToList();
