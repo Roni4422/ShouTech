@@ -854,7 +854,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
     /// edges align down the whole group (Phenix rule — labels beside the
     /// field, never above it).
     /// </summary>
-    private static void AddLabeledCell(Grid host, int row, string label, FrameworkElement control)
+    private void AddLabeledCell(Grid host, int row, string label, FrameworkElement control)
     {
         if (host.ColumnDefinitions.Count == 0)
         {
@@ -868,7 +868,7 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
             TextWrapping = TextWrapping.Wrap,
             // Keep the label-to-field gap on the inner edge in both
             // directions: label is column 0, editor is column 1.
-            Margin = host.FlowDirection == FlowDirection.RightToLeft
+            Margin = this.FlowDirection == FlowDirection.RightToLeft
                 ? new Thickness(8, 0, 0, 8)
                 : new Thickness(0, 0, 8, 8)
         };
