@@ -3315,7 +3315,8 @@
     "ChecksClose": "Close",
     "BackupVerifyFailed": "The backup file failed its integrity validation. Maintenance checks were not started.",
     "BackupVerified": "Backup created and integrity-verified."
-  },  "Rollover": {
+  },
+  "Rollover": {
     "Title": "Fiscal Year Roll-over",
     "PermissionDenied": "You do not have permission to roll fiscal years forward.",
     "ServiceUnavailable": "Operations service is unavailable (database not configured).",

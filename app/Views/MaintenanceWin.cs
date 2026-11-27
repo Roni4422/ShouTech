@@ -284,6 +284,7 @@ internal sealed class MaintenanceBackupPromptWin : BaseWin
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         BuildUi();
+        Closing += (_, e) => { if (DialogResult is null) e.Cancel = true; };
     }
 
     private void BuildUi()
