@@ -173,11 +173,18 @@ public sealed class MaintenanceWin : BaseWin
         {
             var window = new MaintenanceChecksWin(checks, progress) { Owner = this };
             window.ShowDialog();
-            _statusBar.Text = window.FailedCount == 0
-                ? T("Maintenance.ChecksCompleted")
-                : Tf("Maintenance.ChecksCompletedWithErrors", window.FailedCount);
-            _progress.Value = 100;
-            _progressText.Text = Tf("Maintenance.ChecksProgress", 100);
+            if (window.WasCancelled)
+            {
+                _statusBar.Text = T("Maintenance.ChecksCancelled");
+            }
+            else
+            {
+                _statusBar.Text = window.FailedCount == 0
+                    ? T("Maintenance.ChecksCompleted")
+                    : Tf("Maintenance.ChecksCompletedWithErrors", window.FailedCount);
+                _progress.Value = 100;
+                _progressText.Text = Tf("Maintenance.ChecksProgress", 100);
+            }
         }
         finally
         {
