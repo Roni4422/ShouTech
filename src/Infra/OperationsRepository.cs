@@ -944,7 +944,7 @@ public sealed class OperationsRepository : IOperationsRepository
         var hasPeriods = await TableExistsAsync(connection, "fiscal_periods").ConfigureAwait(false);
         var periodExpr = hasPeriodCol && hasPeriods ? "COALESCE(fp.period_name, '')" : "''";
         var periodJoin = hasPeriodCol && hasPeriods
-            ? "LEFT JOIN fiscal_periods fp ON fp.fiscal_period_id = e.fiscal_period_id"
+            ? "LEFT JOIN fiscal_periods fp ON CAST(fp.fiscal_period_id AS TEXT) = CAST(e.fiscal_period_id AS TEXT)"
             : string.Empty;
 
         var result = new TrialBalanceIntegrityResult();
