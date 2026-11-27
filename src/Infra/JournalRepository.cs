@@ -111,7 +111,7 @@ public sealed class JournalRepository : IJournalRepository
                 SELECT journal_entry_id, company_id, entry_date, description, status,
                        reference_number, currency_code, exchange_rate, document_number
                 FROM journal_entries
-                WHERE company_id = @company AND document_number = @documentNumber AND {notDeleted}
+                WHERE company_id = @company AND (document_number = @documentNumber OR source_doc_no = @documentNumber) AND {notDeleted}
                 """;
             Add(header, "@company", FormatGuid(companyId));
             Add(header, "@documentNumber", documentNumber.Trim());
@@ -615,9 +615,44 @@ public sealed class JournalRepository : IJournalRepository
             budgetWarnings = BudgetGuard.Check(connection, transaction, _provider,
                 companyId, journalEntryId, userId, budgetBlocked);
 
-            await using (var update = CreateCommand(connection, transaction,
-                "UPDATE journal_entries SET status = @posted, posted_by = @actor, posted_at = CURRENT_TIMESTAMP WHERE journal_entry_id = @id AND status = @draft"))
+            // The JV/RCV/PAY source number remains traceable, while the
+            // immutable central JRN number is assigned only at posting.
+            // Both the number and status transition share this transaction.
+            string? sourceDocumentNumber = null;
+            string? sourceSeries = null;
+            await using (var source = CreateCommand(connection, transaction,
+                "SELECT document_number FROM journal_entries WHERE journal_entry_id = @id"))
             {
+                Add(source, "@id", FormatGuid(journalEntryId));
+                sourceDocumentNumber = Convert.ToString(
+                    await source.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                    CultureInfo.InvariantCulture);
+            }
+            if (!string.IsNullOrWhiteSpace(sourceDocumentNumber))
+            {
+                var dash = sourceDocumentNumber.IndexOf('-');
+                sourceSeries = dash > 0 ? sourceDocumentNumber[..dash] : null;
+            }
+            if (sourceSeries is not ("JV" or "RCV" or "PAY"))
+                throw new InvalidOperationException("A manual journal or cash voucher must have a valid JV, RCV, or PAY source number before posting.");
+            var centralNumber = SequenceAllocator.AllocateJournalNumber(
+                connection, transaction, _provider == "PostgreSQL", companyId, storedPeriodId);
+            await using (var update = CreateCommand(connection, transaction, """
+                UPDATE journal_entries
+                SET document_number = @centralNumber,
+                    source_doc_type = @sourceType,
+                    source_doc_id = @sourceId,
+                    source_doc_no = @sourceNumber,
+                    status = @posted,
+                    posted_by = @actor,
+                    posted_at = CURRENT_TIMESTAMP
+                WHERE journal_entry_id = @id AND status = @draft
+                """))
+            {
+                Add(update, "@centralNumber", centralNumber);
+                Add(update, "@sourceType", sourceSeries);
+                Add(update, "@sourceId", FormatGuid(journalEntryId));
+                Add(update, "@sourceNumber", sourceDocumentNumber);
                 Add(update, "@posted", (int)JournalEntryStatus.Posted);
                 Add(update, "@actor", userId.Trim());
                 Add(update, "@id", FormatGuid(journalEntryId));
@@ -948,9 +983,9 @@ public sealed class JournalRepository : IJournalRepository
         using var transaction = connection.BeginTransaction();
         try
         {
-            var number = string.Equals(normalizedSeries, "JRN", StringComparison.Ordinal)
-                ? SequenceAllocator.AllocateJournalNumber(connection, transaction, isPg, companyId)
-                : SequenceAllocator.AllocateSeriesNumber(connection, transaction, isPg, companyCode, normalizedSeries);
+            if (string.Equals(normalizedSeries, "JRN", StringComparison.Ordinal))
+                throw new InvalidOperationException("JRN numbers are allocated only by the posting transaction and cannot be reserved from a window.");
+            var number = SequenceAllocator.AllocateSeriesNumber(connection, transaction, isPg, companyCode, normalizedSeries);
             transaction.Commit();
             return number;
         }
