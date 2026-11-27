@@ -927,7 +927,10 @@ public sealed class JournalRepository : IJournalRepository
     {
         if (string.IsNullOrWhiteSpace(companyCode))
             throw new ArgumentException("Company code is required.", nameof(companyCode));
+        if (string.IsNullOrWhiteSpace(seriesKey))
+            throw new ArgumentException("Document series is required.", nameof(seriesKey));
 
+        var normalizedSeries = seriesKey.Trim().ToUpperInvariant();
         var isPg = _provider == "PostgreSQL";
         using var connection = CreateConnection();
         connection.Open();
@@ -945,9 +948,9 @@ public sealed class JournalRepository : IJournalRepository
         using var transaction = connection.BeginTransaction();
         try
         {
-            var number = string.Equals(seriesKey?.Trim(), "JRN", StringComparison.OrdinalIgnoreCase)
+            var number = string.Equals(normalizedSeries, "JRN", StringComparison.Ordinal)
                 ? SequenceAllocator.AllocateJournalNumber(connection, transaction, isPg, companyId)
-                : SequenceAllocator.AllocateSeriesNumber(connection, transaction, isPg, companyCode, seriesKey);
+                : SequenceAllocator.AllocateSeriesNumber(connection, transaction, isPg, companyCode, normalizedSeries);
             transaction.Commit();
             return number;
         }
