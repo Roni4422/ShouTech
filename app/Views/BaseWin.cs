@@ -378,9 +378,11 @@ public abstract class BaseWin : Window
         {
             Orientation = Orientation.Horizontal,
             FlowDirection = FlowDirection.LeftToRight,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = FlowDirection == FlowDirection.RightToLeft
+                ? HorizontalAlignment.Right : HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 2, 2, 6)
+            Margin = new Thickness(2, 2, 2, 6),
+            Tag = "RecordNavigationBar"
         };
 
         var label = new TextBlock
@@ -434,6 +436,26 @@ public abstract class BaseWin : Window
         // check would silently override the service for any other RTL
         // language.
         ShellContext.ApplyToWindow(this);
+
+        // Navigation strips belong to the form edge opposite the active
+        // reading direction; do not leave them stranded at the physical left
+        // when the window switches to an RTL language.
+        var pending = new Stack<DependencyObject>();
+        pending.Push(this);
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            if (current is StackPanel panel &&
+                string.Equals(panel.Tag as string, "RecordNavigationBar", StringComparison.Ordinal))
+            {
+                panel.HorizontalAlignment = FlowDirection == FlowDirection.RightToLeft
+                    ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+            }
+
+            var count = VisualTreeHelper.GetChildrenCount(current);
+            for (var index = count - 1; index >= 0; index--)
+                pending.Push(VisualTreeHelper.GetChild(current, index));
+        }
     }
 
     /// <summary>
