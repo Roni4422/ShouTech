@@ -282,7 +282,9 @@ public partial class AccCard : BaseWin, IInfoContextProvider
 
     private void First_Click(object sender, RoutedEventArgs e) => NavigateTo(0);
     private void Previous_Click(object sender, RoutedEventArgs e) => NavigateTo(-1);
+    private void PreviousTen_Click(object sender, RoutedEventArgs e) => NavigateTo(-10);
     private void Next_Click(object sender, RoutedEventArgs e) => NavigateTo(1);
+    private void NextTen_Click(object sender, RoutedEventArgs e) => NavigateTo(10);
     private void Last_Click(object sender, RoutedEventArgs e) => NavigateTo(int.MaxValue);
 
     private void NavigateTo(int offset)
@@ -291,7 +293,16 @@ public partial class AccCard : BaseWin, IInfoContextProvider
         if (rows.Count == 0) return;
         var index = _current is null ? 0 : rows.FindIndex(x => x.Id == _current.Id);
         if (index < 0) index = 0;
-        index = offset switch { 0 => 0, int.MaxValue => rows.Count - 1, -1 => Math.Max(0, index - 1), 1 => Math.Min(rows.Count - 1, index + 1), _ => index };
+        index = offset switch
+        {
+            0 => 0,
+            int.MaxValue => rows.Count - 1,
+            -10 => Math.Max(0, index - 10),
+            -1 => Math.Max(0, index - 1),
+            1 => Math.Min(rows.Count - 1, index + 1),
+            10 => Math.Min(rows.Count - 1, index + 10),
+            _ => index
+        };
         _current = rows[index];
         _isNew = false;
         _isEditing = false;
@@ -308,7 +319,9 @@ public partial class AccCard : BaseWin, IInfoContextProvider
         {
             BtnFirst.IsEnabled = false;
             BtnPrevious.IsEnabled = false;
+            BtnPreviousTen.IsEnabled = false;
             BtnNext.IsEnabled = false;
+            BtnNextTen.IsEnabled = false;
             BtnLast.IsEnabled = false;
             return;
         }
@@ -318,7 +331,9 @@ public partial class AccCard : BaseWin, IInfoContextProvider
 
         BtnFirst.IsEnabled = index > 0;
         BtnPrevious.IsEnabled = index > 0;
+        BtnPreviousTen.IsEnabled = index > 0;
         BtnNext.IsEnabled = index < rows.Count - 1;
+        BtnNextTen.IsEnabled = index < rows.Count - 1;
         BtnLast.IsEnabled = index < rows.Count - 1;
     }
 
