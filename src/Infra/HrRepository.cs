@@ -235,53 +235,72 @@ public sealed class HrRepository : IHrRepository
         return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? ReadEmployee(reader) : null;
     }
 
-    /// <summary>Allocates the next employee code (EMP series) through
-    /// the central SequenceAllocator (NUMBERING_STUDY §3): seeded from
-    /// the highest existing numeric suffix INCLUDING soft-deleted
-    /// employees, advanced inside its own transaction. The card
-    /// pre-fills it for a new employee; it stays editable before first
-    /// save (uniqueness is enforced at save).</summary>
+    /// <summary>Previews the next employee code without consuming it;
+    /// SaveEmployeeAsync reserves the final value inside the employee insert transaction.</summary>
     public async Task<string> NextEmployeeCodeAsync(string companyId, CancellationToken cancellationToken = default)
     {
         RequireCompany(companyId);
-        var isPg = _provider == "PostgreSQL";
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg, companyId.Trim(), "EMP",
-                SequenceAllocator.DefaultConfig("EMP", yearlyByDefault: false), cancellationToken).ConfigureAwait(false);
-            long seed = 0;
-            foreach (var prefix in new[] { config.Prefix, "EMP" }.Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                var documentPrefix = prefix + "-";
-                var suffixStart = documentPrefix.Length + 1;
-                var substr = isPg ? "SUBSTRING(employee_code FROM @start)" : "SUBSTR(employee_code, @start)";
-                var predicate = isPg
-                    ? $"{substr} ~ '^[0-9]+$'"
-                    : $"{substr} GLOB '[0-9]*' AND {substr} NOT GLOB '*[^0-9]*'";
-                await using var maxCommand = CreateCommand(connection, transaction, $"""
-                    SELECT COALESCE(MAX(CAST({substr} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
-                    FROM hr_employees
-                    WHERE company_id = @company AND employee_code LIKE @pattern AND {predicate}
-                    """);
-                Add(maxCommand, "@company", companyId.Trim());
-                Add(maxCommand, "@pattern", $"{documentPrefix}%");
-                Add(maxCommand, "@start", suffixStart);
-                var value = Convert.ToInt64(await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
-                if (value > seed) seed = value;
-            }
-            var allocated = await SequenceAllocator.AllocateAsync(connection, transaction, isPg, companyId.Trim(), "EMP",
-                0, seed, config.StartValue - 1, cancellationToken).ConfigureAwait(false);
+            var preview = await ResolveEmployeeCodeAsync(connection, transaction, companyId,
+                allocate: false, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return SequenceAllocator.Format(config, 0, allocated);
+            return preview;
         }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async Task<string> ResolveEmployeeCodeAsync(
+        DbConnection connection, DbTransaction transaction, string companyId,
+        bool allocate, CancellationToken cancellationToken)
+    {
+        var isPg = _provider == "PostgreSQL";
+        var config = await SequenceAllocator.ReadConfigAsync(connection, transaction, isPg,
+            companyId.Trim(), "EMP", SequenceAllocator.DefaultConfig("EMP", yearlyByDefault: false),
+            cancellationToken).ConfigureAwait(false);
+        long seed = 0;
+        foreach (var prefix in new[] { config.Prefix, "EMP" }.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var documentPrefix = prefix + "-";
+            var suffixStart = documentPrefix.Length + 1;
+            var substr = isPg ? "SUBSTRING(employee_code FROM @start)" : "SUBSTR(employee_code, @start)";
+            var predicate = isPg
+                ? $"{substr} ~ '^[0-9]+$'"
+                : $"{substr} GLOB '[0-9]*' AND {substr} NOT GLOB '*[^0-9]*'";
+            await using var maxCommand = CreateCommand(connection, transaction, $"""
+                SELECT COALESCE(MAX(CAST({substr} AS {(isPg ? "BIGINT" : "INTEGER")})), 0)
+                FROM hr_employees
+                WHERE company_id = @company AND employee_code LIKE @pattern AND {predicate}
+                """);
+            Add(maxCommand, "@company", companyId.Trim());
+            Add(maxCommand, "@pattern", $"{documentPrefix}%");
+            Add(maxCommand, "@start", suffixStart);
+            var value = Convert.ToInt64(
+                await maxCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false),
+                CultureInfo.InvariantCulture);
+            seed = Math.Max(seed, value);
+        }
+
+        if (allocate)
+        {
+            var value = await SequenceAllocator.AllocateAsync(connection, transaction, isPg,
+                companyId.Trim(), "EMP", 0, seed, config.StartValue - 1, cancellationToken)
+                .ConfigureAwait(false);
+            return SequenceAllocator.Format(config, 0, value);
+        }
+
+        var current = SequenceAllocator.PeekMax(connection, transaction, companyId.Trim(), "EMP");
+        var next = checked(Math.Max(Math.Max(seed, current), config.StartValue - 1) + 1);
+        if (next > SequenceAllocator.MaxValue)
+            throw new AppError(ErrorCodes.NumberingLimitReached, "The EMP employee sequence has reached its supported limit.");
+        return SequenceAllocator.Format(config, 0, next);
     }
 
     public async Task SaveEmployeeAsync(string companyId, HrEmployee employee, string userId, CancellationToken cancellationToken = default)
@@ -293,6 +312,17 @@ public sealed class HrRepository : IHrRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            var existingCount = await CountAsync(connection, transaction,
+                $"SELECT COUNT(*) FROM hr_employees WHERE company_id = @company AND id = @id",
+                ("@company", companyId.Trim()), ("@id", FormatGuid(employee.Id))).ConfigureAwait(false);
+            if (existingCount == 0)
+            {
+                var preview = await ResolveEmployeeCodeAsync(connection, transaction, companyId,
+                    allocate: false, cancellationToken).ConfigureAwait(false);
+                if (string.Equals(employee.EmployeeCode.Trim(), preview, StringComparison.OrdinalIgnoreCase))
+                    employee.EmployeeCode = await ResolveEmployeeCodeAsync(connection, transaction, companyId,
+                        allocate: true, cancellationToken).ConfigureAwait(false);
+            }
             if (await CountAsync(connection, transaction,
                     $"SELECT COUNT(*) FROM hr_employees WHERE company_id = @company AND employee_code = @code AND id <> @id AND {NotDeleted}",
                     ("@company", companyId.Trim()), ("@code", employee.EmployeeCode.Trim()), ("@id", FormatGuid(employee.Id))).ConfigureAwait(false) > 0)
