@@ -48,7 +48,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Assets",
+        "ar": "الأصول",
         "en": "Assets"
       }
     },
@@ -84,7 +84,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Current Assets",
+        "ar": "الأصول المتداولة",
         "en": "Current Assets"
       }
     },
@@ -102,7 +102,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Cash and Cash Equivalents",
+        "ar": "النقدية وما في حكمها",
         "en": "Cash and Cash Equivalents"
       }
     },
@@ -120,7 +120,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Liabilities and Equity",
+        "ar": "الالتزامات وحقوق الملكية",
         "en": "Liabilities and Equity"
       }
     },
@@ -138,7 +138,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Equity",
+        "ar": "حقوق الملكية",
         "en": "Equity"
       }
     },
@@ -156,7 +156,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Current Liabilities",
+        "ar": "الالتزامات المتداولة",
         "en": "Current Liabilities"
       }
     },
@@ -174,7 +174,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Non-current Liabilities",
+        "ar": "الالتزامات غير المتداولة",
         "en": "Non-current Liabilities"
       }
     },
@@ -246,7 +246,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Closing Accounts",
+        "ar": "الحسابات الختامية",
         "en": "Closing Accounts"
       }
     },
@@ -264,7 +264,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Recoverable Input Taxes",
+        "ar": "ضرائب مدخلات قابلة للاسترداد",
         "en": "Recoverable Input Taxes"
       }
     },
@@ -282,7 +282,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "بضاعة مسلّمة غير مفوترة",
+        "ar": "بضاعة مسلمة غير مفوترة",
         "en": "Stock Delivered But Not Billed"
       }
     },
@@ -300,7 +300,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Sales Taxes Payable",
+        "ar": "ضرائب مبيعات مستحقة",
         "en": "Sales Taxes Payable"
       }
     }
