@@ -405,6 +405,17 @@ public sealed class JrnWin : BaseWin
         }
     }
 
+    /// <summary>Loads a specific journal entry for report drill-through.</summary>
+    public async Task OpenDocumentAsync(string documentNumber, DateTime entryDate)
+    {
+        if (string.IsNullOrWhiteSpace(documentNumber))
+            throw new ArgumentException("A journal document number is required.", nameof(documentNumber));
+
+        _txtDocNo.Text = documentNumber.Trim();
+        _dtDate.SelectedDate = entryDate.Date;
+        await LoadVoucherAsync(showSuccess: false);
+    }
+
     private async Task LoadVoucherAsync(bool showSuccess = true)
     {
         var documentNumber = _txtDocNo.Text.Trim();
