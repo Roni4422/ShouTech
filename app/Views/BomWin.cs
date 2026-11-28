@@ -374,9 +374,9 @@ public sealed class BomWin : BaseWin
         _lines.Clear();
         _expenses.Clear();
         _outputs.Clear();
+        _sectionsTabs.SelectedIndex = 0;
         AddLine();
         _outputs.Add(new BomOutputVm { MaterialCode = _material.Text, Kind = "MAIN", Qty = 1m, Unit = "PCS" });
-        _sectionsTabs.SelectedIndex = 0;
         _explosionGrid.ItemsSource = null;
     }
 
