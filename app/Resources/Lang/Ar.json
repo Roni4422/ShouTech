@@ -1375,6 +1375,7 @@
     "DisableTitle": "تعطيل الحساب",
     "EnglishName": "الاسم الإنجليزي",
     "ForeignCurrency": "عملة أجنبية",
+    "CashBook": "إظهار حركات الحساب في يومية الصندوق",
     "Ledger": "الأستاذ العام",
     "MissingDataTitle": "بيانات ناقصة",
     "MsgCannotDelete": "لا يمكن حذف الحساب لأنه ليس فارغاً تماماً:\n\n{0}",
