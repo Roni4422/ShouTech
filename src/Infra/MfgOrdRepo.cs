@@ -220,6 +220,8 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
             if (order.Status != MfgOrderStatuses.Draft)
                 throw new InvalidOperationException($"Only a draft manufacturing order can be posted (current status: '{order.Status}').");
+            if (order.BomId.HasValue)
+                throw new InvalidOperationException("Template-based manufacturing orders must use the staged production workflow.");
             if (order.Lines.Count == 0)
                 throw new InvalidOperationException("A manufacturing order requires at least one raw-material line.");
 
