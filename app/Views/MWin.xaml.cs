@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Ribbon;
@@ -23,6 +25,9 @@ namespace ShouTech.App.Views
     public partial class MWin : RibbonWindow
     {
         private string _currentTab = string.Empty;
+
+        private static readonly ConcurrentDictionary<string, CompositeFormat> CompositeFormats =
+            new(StringComparer.Ordinal);
 
         private CoaWin? _coaWindow;
         private DatWin? _datWindow;
@@ -549,6 +554,21 @@ namespace ShouTech.App.Views
             }
         }
 
+        private static string FormatLocalized(string pattern, params object?[] args)
+        {
+            if (string.IsNullOrEmpty(pattern))
+                return string.Empty;
+
+            var compositeFormat = CompositeFormats.GetOrAdd(
+                pattern,
+                static value => CompositeFormat.Parse(value));
+
+            return string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                compositeFormat,
+                args);
+        }
+
         private async Task RefreshRecycleBinBadgeAsync()
         {
             try
@@ -557,8 +577,7 @@ namespace ShouTech.App.Views
                 var count = await RecycleBinSvc.CountAsync(company).ConfigureAwait(true);
 
                 var tooltip = count > 0
-                    ? string.Format(
-                        System.Globalization.CultureInfo.CurrentCulture,
+                    ? FormatLocalized(
                         Loc.Get("RecycleBin.ItemCount", "{0:N0} item(s) in the recycle bin for company {1}."),
                         count,
                         company)
