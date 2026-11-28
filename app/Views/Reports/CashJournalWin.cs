@@ -54,7 +54,7 @@ public sealed class CashJournalWin : RptBase
 
         foreach (var item in mapped)
         {
-            var row = new Dictionary<string, object?>(item, StringComparer.Ordinal);
+            var row = item.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             if (string.Equals(Convert.ToString(row.GetValueOrDefault("DocNo")), "OPENING", StringComparison.Ordinal))
             {
                 row["Description"] = T("Reports.OpeningBalance");
