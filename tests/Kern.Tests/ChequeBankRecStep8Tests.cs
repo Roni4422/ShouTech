@@ -186,6 +186,9 @@ public class ChequeBankRecStep8Tests
             ClosingBalance = 1050m // the bank shows 50 the books lack
         };
         await ops.SaveBankStatementAsync(CompanyCode, statement, Actor);
+        var repository = new OperationsRepository("SQLite", db.ConnectionString);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repository.CloseBankStatementAsync(CompanyCode, statement.Id, Actor));
         foreach (var amount in new[] { 600m, 400m, 50m })
         {
             await ops.AddBankStatementLineAsync(CompanyCode, new BankStatementLine

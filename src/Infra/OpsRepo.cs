@@ -609,15 +609,75 @@ public sealed class OperationsRepository : IOperationsRepository
         RequireCompany(companyId);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var cmd = CreateCommand(connection, null, """
-            UPDATE bank_statements SET status = 'Closed', updated_by = @user, updated_at = CURRENT_TIMESTAMP
-            WHERE company_id = @company AND id = @id AND status = 'Open' AND is_deleted = 0
-            """);
-        Add(cmd, "@company", companyId.Trim());
-        Add(cmd, "@id", FormatGuid(statementId));
-        Add(cmd, "@user", userId);
-        if (await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
-            throw new InvalidOperationException("Statement was not found or is already closed.");
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            decimal opening;
+            decimal closing;
+            await using (var statement = CreateCommand(connection, transaction, """
+                SELECT opening_balance, closing_balance
+                FROM bank_statements
+                WHERE company_id = @company AND id = @id AND status = 'Open' AND is_deleted = 0
+                """))
+            {
+                Add(statement, "@company", companyId.Trim());
+                Add(statement, "@id", FormatGuid(statementId));
+                await using var reader = await statement.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("Statement was not found or is already closed.");
+                opening = ReadDecimal(reader, 0);
+                closing = ReadDecimal(reader, 1);
+            }
+
+            // Enforce reconciliation at the persistence boundary as well
+            // as in the application service. This prevents direct callers
+            // from closing an unreconciled statement and keeps the check
+            // in the same transaction as the state transition.
+            await using (var unmatched = CreateCommand(connection, transaction, """
+                SELECT COUNT(*)
+                FROM bank_statement_lines
+                WHERE company_id = @company AND statement_id = @statement
+                  AND is_deleted = 0 AND matched_journal_line_key IS NULL
+                """))
+            {
+                Add(unmatched, "@company", companyId.Trim());
+                Add(unmatched, "@statement", FormatGuid(statementId));
+                if (Convert.ToInt64(await unmatched.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) != 0)
+                    throw new InvalidOperationException("Statement cannot be closed while unmatched bank lines remain.");
+            }
+
+            decimal matchedMovement;
+            await using (var matched = CreateCommand(connection, transaction, """
+                SELECT COALESCE(SUM(amount), 0)
+                FROM bank_statement_lines
+                WHERE company_id = @company AND statement_id = @statement
+                  AND is_deleted = 0 AND matched_journal_line_key IS NOT NULL
+                """))
+            {
+                Add(matched, "@company", companyId.Trim());
+                Add(matched, "@statement", FormatGuid(statementId));
+                matchedMovement = Convert.ToDecimal(await matched.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            }
+
+            if (closing - opening != matchedMovement)
+                throw new InvalidOperationException("Statement cannot be closed until its bank movement fully reconciles.");
+
+            await using var update = CreateCommand(connection, transaction, """
+                UPDATE bank_statements SET status = 'Closed', updated_by = @user, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = @company AND id = @id AND status = 'Open' AND is_deleted = 0
+                """);
+            Add(update, "@company", companyId.Trim());
+            Add(update, "@id", FormatGuid(statementId));
+            Add(update, "@user", userId);
+            if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException("Statement was changed while closing; refresh and retry.");
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
     }
 
     private async Task EnsureStatementOpenAsync(DbConnection connection, DbTransaction transaction, string companyId, Guid statementId, CancellationToken ct)
