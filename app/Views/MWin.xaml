@@ -904,19 +904,19 @@
                        Height="26">
                 <StatusBarItem>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Company: " Opacity="0.78" Margin="0,0,3,0"/>
+                        <TextBlock loc:LocProps.Key="StatusCompany" Opacity="0.78" Margin="0,0,3,0"/><TextBlock Text=": " Opacity="0.78"/>
                         <TextBlock Text="{Binding CompanyName}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StatusBarItem>
                 <StatusBarItem>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="User: " Opacity="0.78" Margin="0,0,3,0"/>
+                        <TextBlock loc:LocProps.Key="StatusUser" Opacity="0.78" Margin="0,0,3,0"/><TextBlock Text=": " Opacity="0.78"/>
                         <TextBlock Text="{Binding CurrentUser}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StatusBarItem>
                 <StatusBarItem>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Database: " Opacity="0.78" Margin="0,0,3,0"/>
+                        <TextBlock loc:LocProps.Key="StatusDatabase" Opacity="0.78" Margin="0,0,3,0"/><TextBlock Text=": " Opacity="0.78"/>
                         <TextBlock Text="{Binding CurrentDatabase}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StatusBarItem>
@@ -933,7 +933,7 @@
                     SizeChanged="RecycleBinLayer_SizeChanged">
                 <Button x:Name="RecycleBinCornerButton"
                         Style="{StaticResource RecycleBinIconButtonStyle}"
-                        ToolTip="Archive bin"
+                        loc:LocProps.ToolTipKey="RecycleBin.Title"
                         Width="120"
                         Height="130"
                         Canvas.Left="24"

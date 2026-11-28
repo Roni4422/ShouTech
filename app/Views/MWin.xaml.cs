@@ -562,9 +562,10 @@ namespace ShouTech.App.Views
                 var tooltip = count > 0
                     ? string.Format(
                         System.Globalization.CultureInfo.CurrentCulture,
-                        "Recycle bin — {0} item(s). Click to restore or permanently delete.",
-                        count)
-                    : "Recycle bin — empty. Soft-deleted master data appears here.";
+                        Loc.Get("RecycleBin.ItemCount", "{0:N0} item(s) in the recycle bin for company {1}."),
+                        count,
+                        company)
+                    : Loc.Get("RecycleBin.Empty", "The recycle bin is empty for this company.");
 
                 if (RecycleBinCornerButton != null)
                     RecycleBinCornerButton.ToolTip = tooltip;
