@@ -63,7 +63,11 @@ public sealed class BomRepository : IBomRepository
                 result.Add(ReadBom(reader));
         }
         foreach (var bom in result)
+        {
             bom.Lines = await ReadLinesAsync(connection, bom.Id, cancellationToken).ConfigureAwait(false);
+            bom.Expenses = await ReadExpensesAsync(connection, bom.Id, cancellationToken).ConfigureAwait(false);
+            bom.Outputs = await ReadOutputsAsync(connection, bom.Id, cancellationToken).ConfigureAwait(false);
+        }
         return result;
     }
 
