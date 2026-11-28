@@ -878,25 +878,28 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 {
                     new(wipAccount, overheadShare, 0m, NullIfBlank(order.CostCenter))
                 };
-                var allocatedExpense = 0m;
                 var costLines = order.Lines.Where(l => l.LineKind == MfgLineKinds.Cost && l.Amount > 0m).ToList();
+                var headerAllocation = completesOrder
+                    ? decimal.Round(order.OverheadAmount - order.OverheadAmount * order.ProducedQty / order.Qty, 2, MidpointRounding.AwayFromZero)
+                    : decimal.Round(order.OverheadAmount * finishedQty / order.Qty, 2, MidpointRounding.AwayFromZero);
+                var expenseAllocationTarget = decimal.Round(overheadShare - headerAllocation, 2, MidpointRounding.AwayFromZero);
+                var allocatedExpense = 0m;
                 for (var index = 0; index < costLines.Count; index++)
                 {
                     var expense = costLines[index];
-                    var amount = completesOrder
-                        ? decimal.Round(expense.Amount - expense.Amount * order.ProducedQty / order.Qty, 2, MidpointRounding.AwayFromZero)
-                        : decimal.Round(expense.Amount * finishedQty / order.Qty, 2, MidpointRounding.AwayFromZero);
-                    if (index == costLines.Count - 1 && order.OverheadAmount <= 0m)
-                        amount = overheadShare - allocatedExpense;
+                    var amount = index == costLines.Count - 1
+                        ? expenseAllocationTarget - allocatedExpense
+                        : completesOrder
+                            ? decimal.Round(expense.Amount - expense.Amount * order.ProducedQty / order.Qty, 2, MidpointRounding.AwayFromZero)
+                            : decimal.Round(expense.Amount * finishedQty / order.Qty, 2, MidpointRounding.AwayFromZero);
                     if (amount <= 0m) continue;
                     allocatedExpense += amount;
                     var account = NullIfBlank(expense.DebitAccountCode) ?? overheadAccount;
                     absorptionLines.Add(new GlLineRequest(account, 0m, amount,
                         NullIfBlank(expense.CostCenter) ?? NullIfBlank(order.CostCenter), expense.ItemName));
                 }
-                var remainingOverhead = decimal.Round(overheadShare - allocatedExpense, 2, MidpointRounding.AwayFromZero);
-                if (remainingOverhead > 0m)
-                    absorptionLines.Add(new GlLineRequest(overheadAccount, 0m, remainingOverhead, NullIfBlank(order.CostCenter)));
+                if (headerAllocation > 0m)
+                    absorptionLines.Add(new GlLineRequest(overheadAccount, 0m, headerAllocation, NullIfBlank(order.CostCenter)));
                 var posted = GlPosting.PostInTransaction(connection, transaction, _provider,
                     new GlDocumentRequest(companyGuid, order.DocDate,
                         $"MFG overhead {finishDocNo}", "MFG-OVHD", order.Id.ToString("D") + "#" + seq, finishDocNo,
