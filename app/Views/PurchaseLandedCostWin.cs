@@ -13,7 +13,7 @@ namespace ShouTech.App.Views;
 /// <summary>Creates, posts and reverses supplier landed-cost vouchers.
 /// Completion (migration 108): receipts are picked from the posted-receipt
 /// list (several receipts per voucher, per-line inclusion), and each charge
-/// carries a payee and a credit mode (Payable / AlreadyBooked).</summary>
+/// carries a payee and a credit mode (Payable / Linked).</summary>
 public sealed class PurchaseLandedCostWin : BaseWin
 {
     protected override string? ScheduleTintName => "Mallow";
@@ -126,6 +126,10 @@ public sealed class PurchaseLandedCostWin : BaseWin
             _linkableOptions[0].Name = T("PurchaseLandedCost.NoLinkedDocument");
         var chargeKeys = new[] { "PurchaseLandedCost.ChargeCode", "PurchaseLandedCost.Description", "PurchaseLandedCost.Amount", "PurchaseLandedCost.Basis", "PurchaseLandedCost.ManualAmounts", "PurchaseLandedCost.ExpenseAccount", "PurchaseLandedCost.Payee", "PurchaseLandedCost.CreditMode", "PurchaseLandedCost.LinkedDocument" };
         for (var i = 0; i < chargeKeys.Length && i < _grid.Columns.Count; i++) _grid.Columns[i].Header = T(chargeKeys[i]);
+        if (_grid.Columns.Count > 7 && _grid.Columns[3] is DataGridComboBoxColumn basisColumn)
+            basisColumn.ItemsSource = BasisChoices();
+        if (_grid.Columns.Count > 7 && _grid.Columns[7] is DataGridComboBoxColumn creditColumn)
+            creditColumn.ItemsSource = CreditModeChoices();
         var lineKeys = new[] { "PurchaseLandedCost.ColInclude", "PurchaseLandedCost.ColReceipt", "PurchaseLandedCost.ColLineId", "PurchaseLandedCost.ColLineNo", "PurchaseLandedCost.ColMaterial", "PurchaseLandedCost.ColQty", "PurchaseLandedCost.ColGoodsAmount" };
         for (var i = 0; i < lineKeys.Length && i < _linesGrid.Columns.Count; i++) _linesGrid.Columns[i].Header = T(lineKeys[i]);
         var historyKeys = new[] { "PurchaseLandedCost.ColNumber", "PurchaseLandedCost.ColReceipt", "PurchaseLandedCost.ColDate", "PurchaseLandedCost.ColAmount", "PurchaseLandedCost.ColStatus" };
@@ -245,8 +249,10 @@ public sealed class PurchaseLandedCostWin : BaseWin
         var basisColumn = new DataGridComboBoxColumn
         {
             Header = T("PurchaseLandedCost.Basis"),
-            ItemsSource = new[] { "Value", "Quantity", "Weight", "Volume", "Manual" },
-            SelectedItemBinding = new Binding(nameof(ChargeRow.Basis)),
+            ItemsSource = BasisChoices(),
+            DisplayMemberPath = nameof(ChoiceOption.Label),
+            SelectedValuePath = nameof(ChoiceOption.Value),
+            SelectedValueBinding = new Binding(nameof(ChargeRow.Basis)),
             Width = 110
         };
         _grid.Columns.Add(basisColumn);
@@ -274,9 +280,11 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _grid.Columns.Add(new DataGridComboBoxColumn
         {
             Header = T("PurchaseLandedCost.CreditMode"),
-            ItemsSource = new[] { LandedCostCreditModes.Payable, LandedCostCreditModes.Linked },
-            SelectedItemBinding = new Binding(nameof(ChargeRow.CreditMode)),
-            Width = 110
+            ItemsSource = CreditModeChoices(),
+            DisplayMemberPath = nameof(ChoiceOption.Label),
+            SelectedValuePath = nameof(ChoiceOption.Value),
+            SelectedValueBinding = new Binding(nameof(ChargeRow.CreditMode)),
+            Width = 150
         });
         _grid.Columns.Add(new DataGridComboBoxColumn
         {
@@ -495,6 +503,23 @@ public sealed class PurchaseLandedCostWin : BaseWin
             MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
+
+    private static ChoiceOption[] BasisChoices() =>
+    [
+        new("Value", T("PurchaseLandedCost.BasisValue")),
+        new("Quantity", T("PurchaseLandedCost.BasisQuantity")),
+        new("Weight", T("PurchaseLandedCost.BasisWeight")),
+        new("Volume", T("PurchaseLandedCost.BasisVolume")),
+        new("Manual", T("PurchaseLandedCost.BasisManual"))
+    ];
+
+    private static ChoiceOption[] CreditModeChoices() =>
+    [
+        new(LandedCostCreditModes.Payable, T("PurchaseLandedCost.CreditPayable")),
+        new(LandedCostCreditModes.Linked, T("PurchaseLandedCost.CreditLinked"))
+    ];
+
+    private sealed record ChoiceOption(string Value, string Label);
 
     private static void StyleButton(Button button, string key)
     {
