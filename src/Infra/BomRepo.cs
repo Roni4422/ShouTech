@@ -96,6 +96,16 @@ public sealed class BomRepository : IBomRepository
             throw new InvalidOperationException("The BOM output quantity must be greater than zero.");
         if (bom.Lines.Count == 0)
             throw new InvalidOperationException("A bill of materials requires at least one component line.");
+        if (bom.Outputs.Count == 0)
+            bom.Outputs.Add(new BomOutput { BomId = bom.Id, MaterialCode = bom.MaterialCode, MaterialName = bom.MaterialName, OutputKind = "MAIN", Qty = bom.OutputQty, UnitCode = bom.OutputUnit });
+        if (bom.Outputs.Count(o => string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase)) != 1)
+            throw new InvalidOperationException("A manufacturing template must contain exactly one MAIN output.");
+        if (bom.Outputs.Any(o => o.Qty <= 0 || string.IsNullOrWhiteSpace(o.MaterialCode)))
+            throw new InvalidOperationException("Every output requires a material and a quantity greater than zero.");
+        if (bom.Outputs.Any(o => o.CostSharePct is < 0 or > 100) || bom.Outputs.Sum(o => o.CostSharePct) > 100m)
+            throw new InvalidOperationException("Output cost-share percentages must be between 0 and 100 and cannot exceed 100 in total.");
+        if (bom.Expenses.Any(e => e.Amount < 0 || string.IsNullOrWhiteSpace(e.ExpenseCode)))
+            throw new InvalidOperationException("Each production expense requires a code and a non-negative amount.");
         foreach (var line in bom.Lines)
         {
             if (string.IsNullOrWhiteSpace(line.ComponentCode))
@@ -118,6 +128,8 @@ public sealed class BomRepository : IBomRepository
             _ = await ResolveMaterialIdAsync(connection, transaction, companyId, bom.MaterialCode, cancellationToken).ConfigureAwait(false);
             foreach (var line in bom.Lines)
                 _ = await ResolveMaterialIdAsync(connection, transaction, companyId, line.ComponentCode, cancellationToken).ConfigureAwait(false);
+            foreach (var output in bom.Outputs)
+                _ = await ResolveMaterialIdAsync(connection, transaction, companyId, output.MaterialCode, cancellationToken).ConfigureAwait(false);
 
             // Transitive cycle check against the CURRENT default-BOM
             // graph with this BOM applied: expanding the finished
@@ -166,10 +178,12 @@ public sealed class BomRepository : IBomRepository
                 BindBom(update, companyId, bom, userId);
                 if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("Bill of materials could not be updated (missing or deleted).");
-                await using var deleteLines = CreateCommand(connection, transaction,
-                    "DELETE FROM mfg_bom_lines WHERE bom_id = @id");
-                Add(deleteLines, "@id", FormatGuid(bom.Id));
-                await deleteLines.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                foreach (var table in new[] { "mfg_bom_lines", "mfg_bom_expenses", "mfg_bom_outputs" })
+                {
+                    await using var deleteChild = CreateCommand(connection, transaction, $"DELETE FROM {table} WHERE bom_id = @id");
+                    Add(deleteChild, "@id", FormatGuid(bom.Id));
+                    await deleteChild.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
 
             var lineNo = 0;
@@ -191,6 +205,47 @@ public sealed class BomRepository : IBomRepository
                 Add(insertLine, "@warehouse", (object?)NullIfBlank(line.WarehouseCode) ?? DBNull.Value);
                 Add(insertLine, "@std", line.StandardUnitCost);
                 await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var expenseNo = 0;
+            foreach (var expense in bom.Expenses)
+            {
+                expense.BomId = bom.Id;
+                expense.LineNo = ++expenseNo;
+                if (expense.Id == Guid.Empty) expense.Id = Guid.NewGuid();
+                await using var insertExpense = CreateCommand(connection, transaction,
+                    "INSERT INTO mfg_bom_expenses (id, bom_id, line_no, expense_code, description, amount, debit_account_code, credit_account_code, cost_center) VALUES (@id, @bom, @lineNo, @code, @description, @amount, @debit, @credit, @costCenter)");
+                Add(insertExpense, "@id", FormatGuid(expense.Id));
+                Add(insertExpense, "@bom", FormatGuid(bom.Id));
+                Add(insertExpense, "@lineNo", expense.LineNo);
+                Add(insertExpense, "@code", expense.ExpenseCode.Trim());
+                Add(insertExpense, "@description", (object?)NullIfBlank(expense.Description) ?? DBNull.Value);
+                Add(insertExpense, "@amount", expense.Amount);
+                Add(insertExpense, "@debit", (object?)NullIfBlank(expense.DebitAccountCode) ?? DBNull.Value);
+                Add(insertExpense, "@credit", (object?)NullIfBlank(expense.CreditAccountCode) ?? DBNull.Value);
+                Add(insertExpense, "@costCenter", (object?)NullIfBlank(expense.CostCenter) ?? DBNull.Value);
+                await insertExpense.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var outputNo = 0;
+            foreach (var output in bom.Outputs)
+            {
+                output.BomId = bom.Id;
+                output.LineNo = ++outputNo;
+                if (output.Id == Guid.Empty) output.Id = Guid.NewGuid();
+                await using var insertOutput = CreateCommand(connection, transaction,
+                    "INSERT INTO mfg_bom_outputs (id, bom_id, line_no, material_code, material_name, output_kind, qty, unit_code, warehouse_code, cost_share_pct) VALUES (@id, @bom, @lineNo, @material, @materialName, @kind, @qty, @unit, @warehouse, @share)");
+                Add(insertOutput, "@id", FormatGuid(output.Id));
+                Add(insertOutput, "@bom", FormatGuid(bom.Id));
+                Add(insertOutput, "@lineNo", output.LineNo);
+                Add(insertOutput, "@material", output.MaterialCode.Trim());
+                Add(insertOutput, "@materialName", (object?)NullIfBlank(output.MaterialName) ?? DBNull.Value);
+                Add(insertOutput, "@kind", string.IsNullOrWhiteSpace(output.OutputKind) ? "MAIN" : output.OutputKind.Trim().ToUpperInvariant());
+                Add(insertOutput, "@qty", output.Qty);
+                Add(insertOutput, "@unit", (object?)NullIfBlank(output.UnitCode) ?? DBNull.Value);
+                Add(insertOutput, "@warehouse", (object?)NullIfBlank(output.WarehouseCode) ?? DBNull.Value);
+                Add(insertOutput, "@share", output.CostSharePct);
+                await insertOutput.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -377,7 +432,11 @@ public sealed class BomRepository : IBomRepository
                 bom = ReadBom(reader);
         }
         if (bom is not null)
+        {
             bom.Lines = await ReadLinesAsync(connection, bom.Id, cancellationToken, transaction).ConfigureAwait(false);
+            bom.Expenses = await ReadExpensesAsync(connection, bom.Id, cancellationToken, transaction).ConfigureAwait(false);
+            bom.Outputs = await ReadOutputsAsync(connection, bom.Id, cancellationToken, transaction).ConfigureAwait(false);
+        }
         return bom;
     }
 
@@ -419,6 +478,45 @@ public sealed class BomRepository : IBomRepository
                 StandardUnitCost = ReadDecimal(reader, 9)
             });
         }
+        return result;
+    }
+
+    private async Task<List<BomExpense>> ReadExpensesAsync(DbConnection connection, Guid bomId, CancellationToken cancellationToken, DbTransaction? transaction = null)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT id, bom_id, line_no, expense_code, description, amount, debit_account_code, credit_account_code, cost_center FROM mfg_bom_expenses WHERE bom_id = @bom ORDER BY line_no");
+        Add(command, "@bom", FormatGuid(bomId));
+        var result = new List<BomExpense>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            result.Add(new BomExpense
+            {
+                Id = ReadGuid(reader, 0), BomId = ReadGuid(reader, 1),
+                LineNo = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture),
+                ExpenseCode = ReadString(reader, 3) ?? string.Empty, Description = ReadString(reader, 4),
+                Amount = ReadDecimal(reader, 5), DebitAccountCode = ReadString(reader, 6),
+                CreditAccountCode = ReadString(reader, 7), CostCenter = ReadString(reader, 8)
+            });
+        return result;
+    }
+
+    private async Task<List<BomOutput>> ReadOutputsAsync(DbConnection connection, Guid bomId, CancellationToken cancellationToken, DbTransaction? transaction = null)
+    {
+        await using var command = CreateCommand(connection, transaction,
+            "SELECT id, bom_id, line_no, material_code, material_name, output_kind, qty, unit_code, warehouse_code, cost_share_pct FROM mfg_bom_outputs WHERE bom_id = @bom ORDER BY line_no");
+        Add(command, "@bom", FormatGuid(bomId));
+        var result = new List<BomOutput>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            result.Add(new BomOutput
+            {
+                Id = ReadGuid(reader, 0), BomId = ReadGuid(reader, 1),
+                LineNo = Convert.ToInt32(reader.GetValue(2), CultureInfo.InvariantCulture),
+                MaterialCode = ReadString(reader, 3) ?? string.Empty, MaterialName = ReadString(reader, 4),
+                OutputKind = ReadString(reader, 5) ?? "MAIN", Qty = ReadDecimal(reader, 6),
+                UnitCode = ReadString(reader, 7), WarehouseCode = ReadString(reader, 8),
+                CostSharePct = ReadDecimal(reader, 9)
+            });
         return result;
     }
 
