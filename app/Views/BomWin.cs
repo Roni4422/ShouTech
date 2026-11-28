@@ -40,10 +40,15 @@ public sealed class BomWin : BaseWin
     private readonly List<(DataGridColumn Column, string Key)> _headers = new();
     private readonly List<(DataGridColumn Column, string Key)> _lineHeaders = new();
     private readonly List<(DataGridColumn Column, string Key)> _explosionHeaders = new();
+    private readonly List<(DataGridColumn Column, string Key)> _expenseHeaders = new();
+    private readonly List<(DataGridColumn Column, string Key)> _outputHeaders = new();
 
     private readonly DataGrid _grid = new();
     private readonly DataGrid _linesGrid = new();
     private readonly DataGrid _explosionGrid = new();
+    private readonly DataGrid _expensesGrid = new();
+    private readonly DataGrid _outputsGrid = new();
+    private readonly TabControl _sectionsTabs = new();
     private readonly TextBlock _statusBar = new();
     private readonly ComboBox _material = new() { IsEditable = true };
     private readonly TextBox _materialName = new() { IsReadOnly = true };
@@ -64,6 +69,8 @@ public sealed class BomWin : BaseWin
     private readonly Button _closeButton = new();
 
     private readonly ObservableCollection<BomLineVm> _lines = new();
+    private readonly ObservableCollection<BomExpenseVm> _expenses = new();
+    private readonly ObservableCollection<BomOutputVm> _outputs = new();
     private Guid? _selectedId;
     private List<MfgMaterialOption> _materialOptions = new();
 
@@ -194,8 +201,37 @@ public sealed class BomWin : BaseWin
         _linesGrid.Columns.Add(TextCol(_lineHeaders, "Invoice.Warehouse", nameof(BomLineVm.Warehouse), 90));
         _linesGrid.Columns.Add(TextCol(_lineHeaders, "Bom.Col.StandardUnitCost", nameof(BomLineVm.StandardCostText), 100, readOnly: true));
         _linesGrid.ItemsSource = _lines;
-        Grid.SetRow(_linesGrid, 1);
-        right.Children.Add(_linesGrid);
+
+        ConfigureGrid(_expensesGrid, readOnly: false);
+        _expensesGrid.Columns.Add(TextCol(_expenseHeaders, "Bom.ExpenseCode", nameof(BomExpenseVm.Code), 100));
+        _expensesGrid.Columns.Add(TextCol(_expenseHeaders, "Invoice.Col.Description", nameof(BomExpenseVm.Description), 150));
+        _expensesGrid.Columns.Add(TextCol(_expenseHeaders, "MfgOrder.Amount", nameof(BomExpenseVm.AmountText), 90));
+        _expensesGrid.Columns.Add(TextCol(_expenseHeaders, "Bom.DebitAccount", nameof(BomExpenseVm.DebitAccount), 110));
+        _expensesGrid.Columns.Add(TextCol(_expenseHeaders, "Bom.CreditAccount", nameof(BomExpenseVm.CreditAccount), 110));
+        _expensesGrid.Columns.Add(TextCol(_expenseHeaders, "MfgOrder.CostCenter", nameof(BomExpenseVm.CostCenter), 100));
+        _expensesGrid.ItemsSource = _expenses;
+
+        ConfigureGrid(_outputsGrid, readOnly: false);
+        _outputsGrid.Columns.Add(TextCol(_outputHeaders, "Invoice.Col.Code", nameof(BomOutputVm.MaterialCode), 100));
+        _outputsGrid.Columns.Add(TextCol(_outputHeaders, "Invoice.Col.Description", nameof(BomOutputVm.MaterialName), 140));
+        _outputsGrid.Columns.Add(TextCol(_outputHeaders, "Bom.OutputKind", nameof(BomOutputVm.Kind), 95));
+        _outputsGrid.Columns.Add(TextCol(_outputHeaders, "MfgOrder.Quantity", nameof(BomOutputVm.QtyText), 80));
+        _outputsGrid.Columns.Add(TextCol(_outputHeaders, "MfgOrder.Unit", nameof(BomOutputVm.Unit), 60));
+        _outputsGrid.Columns.Add(TextCol(_outputHeaders, "Invoice.Warehouse", nameof(BomOutputVm.Warehouse), 90));
+        _outputsGrid.Columns.Add(TextCol(_outputHeaders, "MfgOrder.Col.CostShare", nameof(BomOutputVm.ShareText), 90));
+        _outputsGrid.ItemsSource = _outputs;
+
+        _sectionsTabs.Items.Add(new TabItem { Header = T("Bom.Inputs"), Content = _linesGrid, Tag = "Bom.Inputs" });
+        _sectionsTabs.Items.Add(new TabItem { Header = T("Bom.Expenses"), Content = _expensesGrid, Tag = "Bom.Expenses" });
+        _sectionsTabs.Items.Add(new TabItem { Header = T("Bom.Outputs"), Content = _outputsGrid, Tag = "Bom.Outputs" });
+        _sectionsTabs.SelectedIndex = 0;
+        _sectionsTabs.SelectionChanged += (_, _) =>
+        {
+            _addLineButton.Content = T("Invoice.AddLine");
+            _removeLineButton.Content = T("Invoice.RemoveLine");
+        };
+        Grid.SetRow(_sectionsTabs, 1);
+        right.Children.Add(_sectionsTabs);
 
         var explosionPanel = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
         var explodeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
@@ -228,8 +264,10 @@ public sealed class BomWin : BaseWin
         _isDefault.Content = T("Bom.Col.Default");
         foreach (var (label, key) in _labels)
             label.Text = T(key);
-        foreach (var (column, key) in _headers.Concat(_lineHeaders).Concat(_explosionHeaders))
+        foreach (var (column, key) in _headers.Concat(_lineHeaders).Concat(_explosionHeaders).Concat(_expenseHeaders).Concat(_outputHeaders))
             column.Header = T(key);
+        foreach (var tab in _sectionsTabs.Items.OfType<TabItem>())
+            if (tab.Tag is string tabKey) tab.Header = T(tabKey);
         foreach (var b in new[] { _newButton, _saveButton, _deleteButton, _addLineButton, _removeLineButton, _explodeButton, _refreshButton, _closeButton })
             if (b.Tag is string key)
                 b.Content = T(key);
@@ -285,6 +323,14 @@ public sealed class BomWin : BaseWin
         _lines.Clear();
         foreach (var line in bom.Lines)
             _lines.Add(BomLineVm.From(line));
+        _expenses.Clear();
+        foreach (var expense in bom.Expenses)
+            _expenses.Add(BomExpenseVm.From(expense));
+        _outputs.Clear();
+        foreach (var output in bom.Outputs)
+            _outputs.Add(BomOutputVm.From(output));
+        if (_outputs.Count == 0)
+            _outputs.Add(new BomOutputVm { MaterialCode = bom.MaterialCode, MaterialName = bom.MaterialName ?? string.Empty, Kind = "MAIN", Qty = bom.OutputQty, Unit = bom.OutputUnit });
         _explosionGrid.ItemsSource = null;
     }
 
@@ -301,7 +347,11 @@ public sealed class BomWin : BaseWin
         _isDefault.IsChecked = false;
         _notes.Text = string.Empty;
         _lines.Clear();
+        _expenses.Clear();
+        _outputs.Clear();
         AddLine();
+        _outputs.Add(new BomOutputVm { MaterialCode = _material.Text, Kind = "MAIN", Qty = 1m, Unit = "PCS" });
+        _sectionsTabs.SelectedIndex = 0;
         _explosionGrid.ItemsSource = null;
     }
 
@@ -315,16 +365,38 @@ public sealed class BomWin : BaseWin
 
     private void AddLine()
     {
-        _lines.Add(new BomLineVm { Qty = 1, Unit = "KG" });
-        Renumber();
+        switch (_sectionsTabs.SelectedIndex)
+        {
+            case 1:
+                _expenses.Add(new BomExpenseVm());
+                break;
+            case 2:
+                _outputs.Add(new BomOutputVm { Qty = 1m, Unit = "PCS", Kind = "BY_PRODUCT" });
+                break;
+            default:
+                _lines.Add(new BomLineVm { Qty = 1, Unit = "KG" });
+                Renumber();
+                break;
+        }
     }
 
     private void RemoveLine()
     {
-        if (_linesGrid.SelectedItem is BomLineVm selected && _lines.Count > 1)
+        switch (_sectionsTabs.SelectedIndex)
         {
-            _lines.Remove(selected);
-            Renumber();
+            case 1:
+                if (_expensesGrid.SelectedItem is BomExpenseVm expense) _expenses.Remove(expense);
+                break;
+            case 2:
+                if (_outputsGrid.SelectedItem is BomOutputVm output && _outputs.Count > 1) _outputs.Remove(output);
+                break;
+            default:
+                if (_linesGrid.SelectedItem is BomLineVm selected && _lines.Count > 1)
+                {
+                    _lines.Remove(selected);
+                    Renumber();
+                }
+                break;
         }
     }
 
@@ -342,8 +414,11 @@ public sealed class BomWin : BaseWin
                 throw new InvalidOperationException(T("Bom.ServiceUnavailable"));
             if (!AppHost.Permissions.Has(PermCat.Manufacturing.BomManage))
                 throw new InvalidOperationException(T("Bom.PermissionDenied"));
-            _linesGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-            _linesGrid.CommitEdit(DataGridEditingUnit.Row, true);
+            foreach (var grid in new[] { _linesGrid, _expensesGrid, _outputsGrid })
+            {
+                grid.CommitEdit(DataGridEditingUnit.Cell, true);
+                grid.CommitEdit(DataGridEditingUnit.Row, true);
+            }
             SyncMaterialName();
             var existing = _selectedId is Guid id ? _boms.FirstOrDefault(b => b.Id == id) : null;
             var bom = existing ?? new Bom();
@@ -370,6 +445,19 @@ public sealed class BomWin : BaseWin
                     StandardUnitCost = vm.StandardUnitCost
                 });
             }
+            bom.Expenses = _expenses.Where(e => !string.IsNullOrWhiteSpace(e.Code)).Select(e => new BomExpense
+            {
+                BomId = bom.Id, ExpenseCode = e.Code.Trim(), Description = NullIfBlank(e.Description),
+                Amount = e.Amount, DebitAccountCode = NullIfBlank(e.DebitAccount),
+                CreditAccountCode = NullIfBlank(e.CreditAccount), CostCenter = NullIfBlank(e.CostCenter)
+            }).ToList();
+            bom.Outputs = _outputs.Where(o => !string.IsNullOrWhiteSpace(o.MaterialCode)).Select(o => new BomOutput
+            {
+                BomId = bom.Id, MaterialCode = o.MaterialCode.Trim(), MaterialName = NullIfBlank(o.MaterialName),
+                OutputKind = string.IsNullOrWhiteSpace(o.Kind) ? "MAIN" : o.Kind.Trim().ToUpperInvariant(),
+                Qty = o.Qty, UnitCode = NullIfBlank(o.Unit), WarehouseCode = NullIfBlank(o.Warehouse),
+                CostSharePct = o.CostSharePct
+            }).ToList();
             await _service.SaveAsync(CurrentCompanyCode, bom, CurrentUserId);
             _selectedId = bom.Id;
             _statusBar.Text = T("Bom.Saved");
@@ -471,6 +559,40 @@ public sealed class BomWin : BaseWin
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed class BomExpenseVm
+    {
+        public string Code { get; set; } = "";
+        public string Description { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string AmountText { get => Amount.ToString("0.00", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) Amount = v; } }
+        public string DebitAccount { get; set; } = "";
+        public string CreditAccount { get; set; } = "";
+        public string CostCenter { get; set; } = "";
+        public static BomExpenseVm From(BomExpense e) => new()
+        {
+            Code = e.ExpenseCode, Description = e.Description ?? "", Amount = e.Amount,
+            DebitAccount = e.DebitAccountCode ?? "", CreditAccount = e.CreditAccountCode ?? "", CostCenter = e.CostCenter ?? ""
+        };
+    }
+
+    private sealed class BomOutputVm
+    {
+        public string MaterialCode { get; set; } = "";
+        public string MaterialName { get; set; } = "";
+        public string Kind { get; set; } = "MAIN";
+        public decimal Qty { get; set; } = 1m;
+        public string QtyText { get => Qty.ToString("0.###", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) Qty = v; } }
+        public string Unit { get; set; } = "PCS";
+        public string Warehouse { get; set; } = "";
+        public decimal CostSharePct { get; set; }
+        public string ShareText { get => CostSharePct.ToString("0.##", CultureInfo.InvariantCulture); set { if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) CostSharePct = v; } }
+        public static BomOutputVm From(BomOutput o) => new()
+        {
+            MaterialCode = o.MaterialCode, MaterialName = o.MaterialName ?? "", Kind = o.OutputKind,
+            Qty = o.Qty, Unit = o.UnitCode ?? "", Warehouse = o.WarehouseCode ?? "", CostSharePct = o.CostSharePct
+        };
+    }
 
     private sealed class BomLineVm : INotifyPropertyChanged
     {
