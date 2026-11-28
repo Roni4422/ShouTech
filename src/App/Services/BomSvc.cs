@@ -91,6 +91,18 @@ public sealed class BomService
                 throw new InvalidOperationException($"Scrap percentage for '{line.ComponentCode}' must be between 0 and 100.");
             line.ComponentCode = line.ComponentCode.Trim();
         }
+        if (bom.Outputs is null) bom.Outputs = new List<BomOutput>();
+        if (bom.Expenses is null) bom.Expenses = new List<BomExpense>();
+        if (bom.Outputs.Count == 0)
+            bom.Outputs.Add(new BomOutput { BomId = bom.Id, MaterialCode = bom.MaterialCode.Trim(), MaterialName = bom.MaterialName, OutputKind = "MAIN", Qty = bom.OutputQty, UnitCode = bom.OutputUnit });
+        if (bom.Outputs.Count(o => string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase)) != 1)
+            throw new InvalidOperationException("A manufacturing template must contain exactly one MAIN output.");
+        if (bom.Outputs.Any(o => string.IsNullOrWhiteSpace(o.MaterialCode) || o.Qty <= 0))
+            throw new InvalidOperationException("Every output requires a material code and a positive quantity.");
+        if (bom.Outputs.Any(o => o.CostSharePct is < 0 or > 100) || bom.Outputs.Sum(o => o.CostSharePct) > 100m)
+            throw new InvalidOperationException("Output cost-share percentages must total no more than 100.");
+        if (bom.Expenses.Any(e => string.IsNullOrWhiteSpace(e.ExpenseCode) || e.Amount < 0))
+            throw new InvalidOperationException("Each expense requires a code and a non-negative amount.");
         bom.MaterialCode = bom.MaterialCode.Trim();
         if (string.IsNullOrWhiteSpace(bom.OutputUnit)) bom.OutputUnit = "PCS";
     }
