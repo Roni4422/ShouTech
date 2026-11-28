@@ -723,9 +723,25 @@ public sealed class JrnWin : BaseWin
 
     private void OpenOriginal()
     {
+        var sourceType = _sourceDocType?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (sourceType.StartsWith("MFG-", StringComparison.Ordinal))
+        {
+            var number = _sourceDocNo?.Trim() ?? string.Empty;
+            if (number.StartsWith("MO-", StringComparison.OrdinalIgnoreCase))
+            {
+                var separator = number.IndexOf('-', 3);
+                if (separator > 3 && int.TryParse(number.AsSpan(3, separator - 3), NumberStyles.Integer, CultureInfo.InvariantCulture, out var orderNo))
+                {
+                    var manufacturing = new MfgWin { Owner = this };
+                    manufacturing.Show();
+                    manufacturing.LoadOrder(orderNo);
+                    return;
+                }
+            }
+        }
         if (!long.TryParse(_sourceDocId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sourceId) || sourceId <= 0)
             return;
-        var kind = _sourceDocType?.Trim().ToUpperInvariant() switch
+        var kind = sourceType switch
         {
             "SAL" => ShouTech.App.Reporting.Invoices.InvDocKind.SalesInvoice,
             "SRT" => ShouTech.App.Reporting.Invoices.InvDocKind.SalesReturn,
