@@ -48,6 +48,25 @@ public sealed class PurchaseReturnWin : BaseWin
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         BuildUi();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (AppHost.Permissions.Has(PermCat.Purchasing.ReturnView)) return;
+        var denied = new UnauthorizedAccessException($"Permission {PermCat.Purchasing.ReturnView} is required to open this window.");
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, "PurchaseReturnWin.OnLoaded");
+        MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        Close();
+    }
+
+    private bool EnsurePermission(string permission, string operation)
+    {
+        if (AppHost.Permissions.Has(permission)) return true;
+        var denied = new UnauthorizedAccessException($"Permission {permission} is required for {operation}.");
+        AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, $"PurchaseReturnWin.{operation}");
+        MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        return false;
     }
 
     private void BuildUi()
@@ -187,6 +206,8 @@ public sealed class PurchaseReturnWin : BaseWin
 
     private void PostReturn()
     {
+        if (!EnsurePermission(PermCat.Purchasing.ReturnCreate, "CreateReturn") ||
+            !EnsurePermission(PermCat.Purchasing.ReturnPost, "PostReturn")) return;
         try
         {
             if (_original is null)

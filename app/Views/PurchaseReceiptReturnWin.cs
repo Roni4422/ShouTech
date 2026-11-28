@@ -67,8 +67,10 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (!AppHost.Permissions.Has(PermCat.Purchasing.OrderCreate))
+        if (!AppHost.Permissions.Has(PermCat.Purchasing.ReturnView))
         {
+            var denied = new UnauthorizedAccessException($"Permission {PermCat.Purchasing.ReturnView} is required to open this window.");
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, "PurchaseReceiptReturnWin.OnLoaded");
             MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             Close();
             return;
@@ -246,6 +248,14 @@ public sealed class PurchaseReceiptReturnWin : BaseWin
 
     private async Task PostReturnAsync()
     {
+        if (!AppHost.Permissions.Has(PermCat.Purchasing.ReturnCreate) ||
+            !AppHost.Permissions.Has(PermCat.Purchasing.ReturnPost))
+        {
+            var denied = new UnauthorizedAccessException("Purchase receipt return create and post permissions are required.");
+            AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, denied, "PurchaseReceiptReturnWin.PostReturnAsync");
+            MessageBox.Show(this, T("OrderDoc.PermissionDenied"), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         if (_busy || _receiptId is not long receiptId || AppHost.Orders is null) return;
         _grid.CommitEdit(DataGridEditingUnit.Cell, true);
         _grid.CommitEdit(DataGridEditingUnit.Row, true);
