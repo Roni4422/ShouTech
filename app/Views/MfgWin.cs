@@ -315,7 +315,20 @@ public sealed class MfgWin : BaseWin
         AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtNotes);
         AddFormField(headerForm, 2, 2, "MfgOrder.ScrapWarehouse", _txtScrapWhs);
         AddFormField(headerForm, 2, 3, "MfgOrder.FinishQty", _txtFinishQty);
-        AddFormField(headerForm, 3, 0, "MfgOrder.Bom", _cmbBom);
+        var bomPicker = new DockPanel { LastChildFill = true };
+        var btnFindBom = new Button
+        {
+            Content = "…",
+            Width = 34,
+            MinWidth = 34,
+            Margin = new Thickness(4, 0, 0, 0),
+            ToolTip = T("Common.Search")
+        };
+        btnFindBom.Click += (_, _) => ShowBomPicker();
+        DockPanel.SetDock(btnFindBom, Dock.Right);
+        bomPicker.Children.Add(btnFindBom);
+        bomPicker.Children.Add(_cmbBom);
+        AddFormField(headerForm, 3, 0, "MfgOrder.Bom", bomPicker);
         AddFormField(headerForm, 3, 1, "MfgOrder.PlannedStart", _dtPlannedStart);
         AddFormField(headerForm, 3, 2, "MfgOrder.PlannedEnd", _dtPlannedEnd);
         AddFormField(headerForm, 3, 3, "MfgOrder.SalesOrder", _txtSalesOrder);
@@ -323,7 +336,7 @@ public sealed class MfgWin : BaseWin
         AddFormField(headerForm, 4, 1, "MfgOrder.SourceWarehouse", _txtSourceWhs);
         AddFormField(headerForm, 4, 2, "MfgOrder.WipWarehouse", _txtWipWhs);
         AddFormField(headerForm, 4, 3, "MfgOrder.TargetWarehouse", _txtTargetWhs);
-        _cmbBom.SelectionChanged += (_, _) => OnBomSelectionChanged();
+        _cmbBom.IsReadOnly = true;
         _txtItem.SelectionChanged += (_, _) => SyncFinishedItemName();
         Grid.SetRow(headerForm, 0);
         body.Children.Add(headerForm);
@@ -366,6 +379,95 @@ public sealed class MfgWin : BaseWin
 
         root.Children.Add(body);
         Content = root;
+    }
+
+    private void ShowBomPicker()
+    {
+        if (_bomOptions.Count == 0)
+        {
+            MessageBox.Show(this, T("MfgOrders.NoBomOptions"), Title,
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new Window
+        {
+            Title = T("MfgOrder.Bom"),
+            Owner = this,
+            Width = 560,
+            Height = 460,
+            MinWidth = 420,
+            MinHeight = 320,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.CanResize
+        };
+
+        var layout = new DockPanel { Margin = new Thickness(12) };
+        var search = new TextBox { Margin = new Thickness(0, 0, 0, 8), MinHeight = 30 };
+        search.ToolTip = T("Common.Search");
+        DockPanel.SetDock(search, Dock.Top);
+        layout.Children.Add(search);
+
+        var list = new ListBox
+        {
+            DisplayMemberPath = nameof(Bom.MaterialCode),
+            ItemsSource = _bomOptions.Where(x => x.IsActive)
+                .OrderBy(x => x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(x => x.Version).ToList()
+        };
+        search.TextChanged += (_, _) =>
+        {
+            var term = search.Text.Trim();
+            list.ItemsSource = _bomOptions.Where(x => x.IsActive &&
+                    (string.IsNullOrWhiteSpace(term) ||
+                     x.MaterialCode.Contains(term, StringComparison.CurrentCultureIgnoreCase) ||
+                     (x.MaterialName?.Contains(term, StringComparison.CurrentCultureIgnoreCase) ?? false) ||
+                     x.Version.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.Ordinal)))
+                .OrderBy(x => x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(x => x.Version).ToList();
+        };
+        list.MouseDoubleClick += (_, _) =>
+        {
+            if (list.SelectedItem is Bom selected)
+            {
+                SelectBom(selected);
+                dialog.DialogResult = true;
+            }
+        };
+        layout.Children.Add(list);
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        var choose = new Button { Content = T("Common.Select"), MinWidth = 90, Margin = new Thickness(4, 0, 0, 0) };
+        choose.Click += (_, _) =>
+        {
+            if (list.SelectedItem is not Bom selected)
+                return;
+            SelectBom(selected);
+            dialog.DialogResult = true;
+        };
+        var close = new Button { Content = T("Common.Close"), MinWidth = 90, Margin = new Thickness(4, 0, 0, 0) };
+        close.Click += (_, _) => dialog.DialogResult = false;
+        actions.Children.Add(choose);
+        actions.Children.Add(close);
+        DockPanel.SetDock(actions, Dock.Bottom);
+        layout.Children.Add(actions);
+        dialog.Content = layout;
+        dialog.ShowDialog();
+    }
+
+    private void SelectBom(Bom selected)
+    {
+        _bomId = selected.Id;
+        _bomVersion = selected.Version;
+        _cmbBom.Text = $"{selected.MaterialCode} v{selected.Version}";
+        _txtItem.Text = selected.MaterialCode;
+        _txtItemName.Text = selected.MaterialName ?? string.Empty;
+        OnBomSelectionChanged();
     }
 
     private void Renumber()
