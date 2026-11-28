@@ -1358,8 +1358,7 @@ public static class RptQuery
     // Chunk E: English account name contains cash / bank / box.
     private const string CashAccountSql =
         "(LOWER(COALESCE(a.account_name, '')) LIKE '%cash%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%bank%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%box%')";
-    private const string CashBoxAccountSql =
-        "(LOWER(COALESCE(a.account_name, '')) LIKE '%cash%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%box%')";
+    private const string CashBoxAccountSql = "a.cash_book = 1";
     private const string BankAccountSql =
         "(LOWER(COALESCE(a.account_name, '')) LIKE '%bank%')";
 
@@ -2119,10 +2118,10 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure();
-        // The cash journal is a report over posted GL cash-box lines, not a
-        // second posting stream. One row represents one cash-account line;
-        // debit is a receipt and credit is a payment. Bank accounts remain
-        // in the separate bank reports.
+        // Cash movements come from posted GL lines only. Each cash-book
+        // account has its own opening and running balance. A partial cash
+        // settlement appears only for the amount actually posted to that
+        // cash account; the remaining receivable/payable is not cash.
         var sql = PgBoolFix($"""
             WITH cash_accounts AS (
                 SELECT a.account_id, a.account_code, a.account_name
@@ -2130,20 +2129,30 @@ public static class RptQuery
                 INNER JOIN companies co ON co.company_id = a.company_id
                 WHERE co.company_code = $company
                   AND a.is_deleted = 0
+                  AND a.is_postable = 1
                   AND {CashBoxAccountSql}
             ),
             opening AS (
-                SELECT COALESCE(SUM(COALESCE(l.base_debit, l.debit, 0)
-                                  - COALESCE(l.base_credit, l.credit, 0)), 0) AS amount
-                FROM journal_entry_lines l
-                INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
-                INNER JOIN cash_accounts ca ON ca.account_id = l.account_id
-                WHERE j.status = 1 AND j.entry_date < $from
+                SELECT ca.account_id,
+                       ca.account_code,
+                       ca.account_name,
+                       COALESCE(b.amount, 0) AS amount
+                FROM cash_accounts ca
+                LEFT JOIN (
+                    SELECT l.account_id,
+                           SUM(COALESCE(l.base_debit, l.debit, 0)
+                             - COALESCE(l.base_credit, l.credit, 0)) AS amount
+                    FROM journal_entry_lines l
+                    INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                    WHERE j.status = 1 AND j.entry_date < $from
+                    GROUP BY l.account_id
+                ) b ON b.account_id = ca.account_id
             ),
             movements AS (
                 SELECT j.entry_date,
                        j.journal_entry_id,
                        l.line_number,
+                       ca.account_id AS cash_account_id,
                        COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS doc_no,
                        j.description,
                        j.reference_number,
@@ -2176,30 +2185,31 @@ public static class RptQuery
                 SELECT m.*,
                        o.amount AS opening_balance,
                        o.amount + SUM(m.receipt - m.payment) OVER (
+                           PARTITION BY m.cash_account_id
                            ORDER BY m.entry_date, m.journal_entry_id, m.line_number
                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                        ) AS running_balance
                 FROM movements m
-                CROSS JOIN opening o
+                INNER JOIN opening o ON o.account_id = m.cash_account_id
             )
             SELECT NULL AS EntryDate,
                    NULL AS JournalDate,
                    NULL AS JournalDocNo,
                    'OPENING' AS DocNo,
-                   '' AS CashAccountCode,
-                   '' AS CashAccountName,
+                   o.account_code AS CashAccountCode,
+                   o.account_name AS CashAccountName,
                    '' AS CounterAccount,
                    '' AS Description,
                    '' AS Reference,
                    '' AS CreatedBy,
-                   opening.amount AS OpeningBalance,
+                   o.amount AS OpeningBalance,
                    0 AS Receipt,
                    0 AS Payment,
-                   opening.amount AS Balance,
+                   o.amount AS Balance,
                    0 AS RowOrder,
                    CAST('' AS TEXT) AS JournalEntryId,
                    0 AS LineNo
-            FROM opening
+            FROM opening o
             UNION ALL
             SELECT d.entry_date AS EntryDate,
                    d.entry_date AS JournalDate,
