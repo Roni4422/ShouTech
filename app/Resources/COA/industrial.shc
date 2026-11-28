@@ -354,7 +354,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Recoverable Input VAT",
+        "ar": "ضريبة قيمة مضافة مدخلات قابلة للاسترداد",
         "en": "Recoverable Input VAT"
       }
     },
@@ -786,7 +786,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "VAT Payable",
+        "ar": "ضريبة القيمة المضافة المستحقة",
         "en": "VAT Payable"
       }
     },
@@ -1560,7 +1560,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Zakat Payable",
+        "ar": "الزكاة المستحقة",
         "en": "Zakat Payable"
       }
     },
@@ -1578,7 +1578,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Zakat Expense",
+        "ar": "مصروف الزكاة",
         "en": "Zakat Expense"
       }
     },
@@ -1668,7 +1668,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "Raw Materials Inventory",
+        "ar": "مخزون المواد الخام",
         "en": "Raw Materials Inventory"
       }
     },
@@ -1686,7 +1686,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "Work in Progress Inventory",
+        "ar": "مخزون الإنتاج تحت التشغيل",
         "en": "Work in Progress Inventory"
       }
     },
@@ -1740,7 +1740,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Direct Materials Consumed",
+        "ar": "مواد مباشرة مستهلكة",
         "en": "Direct Materials Consumed"
       }
     },
