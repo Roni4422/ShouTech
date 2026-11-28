@@ -108,8 +108,9 @@ public sealed class BomRepository : IBomRepository
             throw new InvalidOperationException("Every output requires a material and a quantity greater than zero.");
         if (bom.Outputs.Any(o => o.CostSharePct is < 0 or > 100) || bom.Outputs.Sum(o => o.CostSharePct) > 100m)
             throw new InvalidOperationException("Output cost-share percentages must be between 0 and 100 and cannot exceed 100 in total.");
-        if (bom.Expenses.Any(e => e.Amount < 0 || string.IsNullOrWhiteSpace(e.ExpenseCode)))
-            throw new InvalidOperationException("Each production expense requires a code and a non-negative amount.");
+        if (bom.Expenses.Any(e => e.Amount < 0 || string.IsNullOrWhiteSpace(e.ExpenseCode) ||
+            string.IsNullOrWhiteSpace(e.DebitAccountCode) || string.IsNullOrWhiteSpace(e.CreditAccountCode)))
+            throw new InvalidOperationException("Each production expense requires a code, a non-negative amount, and debit and credit accounts.");
         foreach (var line in bom.Lines)
         {
             if (string.IsNullOrWhiteSpace(line.ComponentCode))
