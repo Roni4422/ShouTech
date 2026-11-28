@@ -270,7 +270,8 @@ internal static class AccRepo
         decimal EstimatedBudget = 0,
         string? CurrencyCode = null,
         decimal ExchangeParity = 1,
-        string? ReconciliationDate = null);
+        string? ReconciliationDate = null,
+        bool CashBook = false);
 
     internal sealed record AccountGuard(bool CanDelete, bool CanDisable, IReadOnlyList<string> Reasons);
 
@@ -366,7 +367,7 @@ internal static class AccRepo
 
     private static string SelectColumnsSql() => $"""
         SELECT CAST(a.account_id AS TEXT), a.account_code, p.account_code,
-               COALESCE(a.name_ar, a.account_name), a.account_name,
+               a.account_name, a.account_name,
                CASE WHEN a.is_postable THEN 'Postable' ELSE 'Summary' END,
                CASE WHEN a.is_active THEN 'Active' ELSE 'Disabled' END,
                a.risk, a.cost_center_mode, a.allow_reconcile,
@@ -377,7 +378,7 @@ internal static class AccRepo
                COALESCE(a.warning_side, 'NONE'), COALESCE(a.account_side, 'BOTH'),
                COALESCE(a.estimated_budget, 0), a.currency_code,
                COALESCE(a.exchange_parity, 1),
-               CAST(a.reconciliation_date AS TEXT)
+               CAST(a.reconciliation_date AS TEXT), a.cash_book
         FROM chart_of_accounts a
         LEFT JOIN chart_of_accounts p ON p.account_id = a.parent_account_id
         LEFT JOIN chart_of_accounts cl ON cl.account_id = a.closing_account_id
@@ -996,9 +997,9 @@ internal static class AccRepo
         INSERT INTO chart_of_accounts(account_id,company_id,account_code,account_name,name_ar,account_type,
             parent_account_id,is_postable,is_active,is_deleted,risk,cost_center_mode,
             allow_reconcile,taxable,foreign_currency,cost_required,budget,is_default,tax_rate,description,
-            closing_account_id,warning_side,account_side,estimated_budget,currency_code,exchange_parity,reconciliation_date)
+            closing_account_id,warning_side,account_side,estimated_budget,currency_code,exchange_parity,reconciliation_date,cash_book)
         VALUES($id,$company,$code,$en,$ar,$type,$parent,$postable,$active,{FalseLiteral},$risk,$cc,$reconcile,$taxable,$foreign,$costreq,$budget,$default,$tax,$desc,
-            $closing,$warnside,$accside,$estbudget,$currency,$parity,$recdate);
+            $closing,$warnside,$accside,$estbudget,$currency,$parity,$recdate,$cashbook);
         """;
 
     private static string UpdateSql() => $"""
@@ -1007,7 +1008,7 @@ internal static class AccRepo
             allow_reconcile=$reconcile,taxable=$taxable,foreign_currency=$foreign,cost_required=$costreq,
             budget=$budget,is_default=$default,tax_rate=$tax,description=$desc,
             closing_account_id=$closing,warning_side=$warnside,account_side=$accside,estimated_budget=$estbudget,
-            currency_code=$currency,exchange_parity=$parity,reconciliation_date=$recdate,updated_at=CURRENT_TIMESTAMP
+            currency_code=$currency,exchange_parity=$parity,reconciliation_date=$recdate,cash_book=$cashbook,updated_at=CURRENT_TIMESTAMP
         WHERE company_id=$company AND account_id=$id AND is_deleted={FalseLiteral};
         """;
 
@@ -1039,6 +1040,7 @@ internal static class AccRepo
         Add(command, "$currency", string.IsNullOrWhiteSpace(value.CurrencyCode) ? null : value.CurrencyCode);
         Add(command, "$parity", value.ExchangeParity <= 0 ? 1m : value.ExchangeParity);
         Add(command, "$recdate", string.IsNullOrWhiteSpace(value.ReconciliationDate) ? null : value.ReconciliationDate);
+        Add(command, "$cashbook", value.CashBook);
     }
 
     private static bool CodeExistsOnConnection(DbConnection connection, DbTransaction transaction, string companyGuid, string code, string? excludeId)
@@ -1076,7 +1078,8 @@ internal static class AccRepo
             Convert.ToDecimal(reader.GetValue(22), System.Globalization.CultureInfo.InvariantCulture),
             reader.IsDBNull(23) ? null : reader.GetString(23),
             Convert.ToDecimal(reader.GetValue(24), System.Globalization.CultureInfo.InvariantCulture),
-            reader.IsDBNull(25) ? null : Convert.ToString(reader.GetValue(25), System.Globalization.CultureInfo.InvariantCulture));
+            reader.IsDBNull(25) ? null : Convert.ToString(reader.GetValue(25), System.Globalization.CultureInfo.InvariantCulture),
+            Convert.ToBoolean(reader.GetValue(26), System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private static DbConnection Open(string connectionString)
