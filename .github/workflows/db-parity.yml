@@ -1,0 +1,46 @@
+name: Database Parity Check
+
+on:
+  pull_request:
+    branches: [ "main", "reduce" ]
+  push:
+    branches: [ "reduce" ]
+
+jobs:
+  test-parity:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        db-provider: ['sqlite', 'postgresql']
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET 10 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Start PostgreSQL (if matrix is postgresql)
+      if: matrix.db-provider == 'postgresql'
+      run: |
+        docker run -d --name shoutech-pg -e POSTGRES_USER=shoutech -e POSTGRES_PASSWORD=shoutech -e POSTGRES_DB=shoutech_test -p 5432:5432 postgres:15
+        sleep 10 # Wait for DB to be ready
+
+    - name: Set Environment Variables
+      run: |
+        if [ "${{ matrix.db-provider }}" == "postgresql" ]; then
+          echo "SHOUTECH_DB_PROVIDER=postgresql" >> $GITHUB_ENV
+          echo "SHOUTECH_DB_CONNECTION=Host=localhost;Port=5432;Database=shoutech_test;Username=shoutech;Password=shoutech" >> $GITHUB_ENV
+        else
+          echo "SHOUTECH_DB_PROVIDER=sqlite" >> $GITHUB_ENV
+          echo "SHOUTECH_DB_CONNECTION=Data Source=:memory:" >> $GITHUB_ENV
+        fi
+
+    - name: Restore and Build
+      run: |
+        dotnet restore build/ShouTech.sln
+        dotnet build build/ShouTech.sln --configuration Release --no-restore
+
+    - name: Run Tests
+      run: |
+        dotnet test tests/Kern.Tests/Kern.Tests.csproj --configuration Release --no-build --verbosity normal
