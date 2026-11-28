@@ -354,7 +354,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Deductible Input VAT",
+        "ar": "ضريبة القيمة المضافة القابلة للخصم",
         "en": "Deductible Input VAT"
       }
     },
