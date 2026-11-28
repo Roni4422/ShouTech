@@ -318,7 +318,7 @@ public sealed class CashJrnRpt : RptBase
         foreach (var item in mapped)
         {
             var row = item.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-            if (string.Equals(Convert.ToString(row.GetValueOrDefault("DocNo")), "OPENING", StringComparison.Ordinal))
+            if (string.Equals(Convert.ToString(row.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal))
             {
                 row["Description"] = T("Reports.OpeningBalance");
                 row["DocNo"] = string.Empty;
@@ -327,7 +327,7 @@ public sealed class CashJrnRpt : RptBase
         }
 
         var openingRow = raw.FirstOrDefault(r =>
-            string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo")), "OPENING", StringComparison.Ordinal));
+            string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal));
         var opening = RptWinUtil.Dec(openingRow?.GetValueOrDefault("Balance"));
         var movements = raw.Where(r =>
             !string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo")), "OPENING", StringComparison.Ordinal)).ToList();
