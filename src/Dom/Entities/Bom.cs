@@ -32,13 +32,25 @@ public sealed class Bom
     /// <summary>Rolled standard cost of one output batch at the lines'
     /// snapshot standard costs (qty x standard unit cost, scrap excluded —
     /// scrap is a quantity allowance, not a costed input).</summary>
-    public decimal StandardBatchCost => Lines.Sum(l => decimal.Round(l.Qty * l.StandardUnitCost, 2));
+    public decimal StandardBatchCost =>
+        Lines.Sum(l => decimal.Round(l.Qty * l.StandardUnitCost, 2)) +
+        Expenses.Sum(e => decimal.Round(e.Amount, 2));
 
-    /// <summary>Rolled standard cost per ONE finished unit (in the output
-    /// unit): batch cost / output quantity.</summary>
-    public decimal StandardUnitCost => OutputQty > 0
-        ? decimal.Round(StandardBatchCost / OutputQty, 4, MidpointRounding.AwayFromZero)
-        : 0m;
+    /// <summary>Standard cost allocated to the primary output. Secondary
+    /// outputs take their declared share; any unallocated balance remains
+    /// with the primary output.</summary>
+    public decimal StandardUnitCost
+    {
+        get
+        {
+            if (OutputQty <= 0) return 0m;
+            var main = Outputs.FirstOrDefault(o => string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase));
+            var secondaryShare = Outputs.Where(o => !string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase))
+                .Sum(o => o.CostSharePct);
+            var mainShare = main?.CostSharePct > 0m ? main.CostSharePct : Math.Max(0m, 100m - secondaryShare);
+            return decimal.Round(StandardBatchCost * mainShare / 100m / OutputQty, 4, MidpointRounding.AwayFromZero);
+        }
+    }
 }
 
 /// <summary>One component line of a BOM. Qty is expressed in the line's
