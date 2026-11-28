@@ -786,7 +786,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Taxes and Duties Payable",
+        "ar": "الضرائب والرسوم المستحقة",
         "en": "Taxes and Duties Payable"
       }
     },
@@ -1560,7 +1560,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Customs Duties Payable",
+        "ar": "رسوم جمركية مستحقة",
         "en": "Customs Duties Payable"
       }
     },
@@ -1578,7 +1578,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Taxes and Duties Expense",
+        "ar": "مصروف الضرائب والرسوم",
         "en": "Taxes and Duties Expense"
       }
     },
