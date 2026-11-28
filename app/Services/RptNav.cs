@@ -257,7 +257,7 @@ public static class RptNav
     public static void OpenInventoryCount(Window? owner = null) => Show(new InvoiceWin(InvDocKind.InventoryCount), owner);
     public static void OpenQuotation(Window? owner = null) => Show(new InvoiceWin(InvDocKind.Quotation), owner);
 
-    public static void OpenCashJournal(Window? owner = null) => Show(new CashJournalWin(), owner);
+    public static void OpenCashJournal(Window? owner = null) => Show(new CashJrnRpt(), owner);
     public static void OpenJournalVoucher(Window? owner = null) => Show(new JrnWin(), owner);
     public static void OpenReceiptVoucher(Window? owner = null) => Show(new CshWin(CshKind.Receipt), owner);
     public static void OpenPaymentVoucher(Window? owner = null) => Show(new CshWin(CshKind.Payment), owner);
