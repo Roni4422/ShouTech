@@ -1,5 +1,5 @@
 // ========================================================================
-// FILE: Views/Modules/ReportGridVw.xaml.cs
+// FILE: Views/RptGridVw.xaml.cs
 // PROJECT: SHOUTECH ERP — Excel-like report grid view
 // ========================================================================
 
