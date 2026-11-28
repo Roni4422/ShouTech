@@ -125,7 +125,7 @@ public sealed class MfgWin : BaseWin
             var bomList = await boms.GetAllAsync(CurrentCompanyCode);
             _bomOptions.Clear();
             _bomOptions.AddRange(bomList);
-            _cmbBom.ItemsSource = _bomOptions.Select(b => $"{b.MaterialCode} v{b.Version}").ToList();
+            _cmbBom.ItemsSource = _bomOptions.Select(b => b.PickerLabel).ToList();
         }
         catch (Exception ex)
         {
@@ -172,8 +172,8 @@ public sealed class MfgWin : BaseWin
             _txtNotes.Text = order.Notes ?? string.Empty;
             _bomId = order.BomId;
             _bomVersion = order.BomVersion;
-            _cmbBom.Text = order.BomId is Guid
-                ? $"{order.ItemCode} v{order.BomVersion}"
+            _cmbBom.Text = order.BomId is Guid selectedBomId
+                ? _bomOptions.FirstOrDefault(b => b.Id == selectedBomId)?.PickerLabel ?? $"{order.ItemCode} v{order.BomVersion}"
                 : string.Empty;
             _dtPlannedStart.SelectedDate = order.PlannedStartDate?.ToDateTime(TimeOnly.MinValue);
             _dtPlannedEnd.SelectedDate = order.PlannedEndDate?.ToDateTime(TimeOnly.MinValue);
@@ -303,18 +303,6 @@ public sealed class MfgWin : BaseWin
         // share its row instead of leaving two unused pairs below.
         var headerForm = CreateFormGrid(4);
         headerForm.Margin = new Thickness(0, 0, 0, 8);
-        AddFormField(headerForm, 0, 0, "MfgOrder.OrderNo", _txtDocNo);
-        AddFormField(headerForm, 0, 1, "MfgOrder.Date", _dtDate);
-        AddFormField(headerForm, 0, 2, "MfgOrder.TargetMaterial", _txtItem);
-        AddFormField(headerForm, 0, 3, "Invoice.Col.Description", _txtItemName);
-        AddFormField(headerForm, 1, 0, "MfgOrder.Quantity", _txtQty);
-        AddFormField(headerForm, 1, 1, "MfgOrder.Unit", _txtUnit);
-        AddFormField(headerForm, 1, 2, "Invoice.Warehouse", _txtWhs);
-        AddFormField(headerForm, 1, 3, "MfgOrder.ExtraCosts", _txtOverheads);
-        AddFormField(headerForm, 2, 0, "MfgOrders.StandardUnitCost", _txtStdCost);
-        AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtNotes);
-        AddFormField(headerForm, 2, 2, "MfgOrder.ScrapWarehouse", _txtScrapWhs);
-        AddFormField(headerForm, 2, 3, "MfgOrder.FinishQty", _txtFinishQty);
         var bomPicker = new DockPanel { LastChildFill = true };
         var btnFindBom = new Button
         {
@@ -328,7 +316,19 @@ public sealed class MfgWin : BaseWin
         DockPanel.SetDock(btnFindBom, Dock.Right);
         bomPicker.Children.Add(btnFindBom);
         bomPicker.Children.Add(_cmbBom);
-        AddFormField(headerForm, 3, 0, "MfgOrder.Bom", bomPicker);
+        AddFormField(headerForm, 0, 0, "MfgOrder.Bom", bomPicker);
+        AddFormField(headerForm, 0, 1, "MfgOrder.OrderNo", _txtDocNo);
+        AddFormField(headerForm, 0, 2, "MfgOrder.Date", _dtDate);
+        AddFormField(headerForm, 0, 3, "MfgOrder.TargetMaterial", _txtItem);
+        AddFormField(headerForm, 1, 0, "Invoice.Col.Description", _txtItemName);
+        AddFormField(headerForm, 1, 1, "MfgOrder.Quantity", _txtQty);
+        AddFormField(headerForm, 1, 2, "MfgOrder.Unit", _txtUnit);
+        AddFormField(headerForm, 1, 3, "Invoice.Warehouse", _txtWhs);
+        AddFormField(headerForm, 2, 0, "MfgOrder.ExtraCosts", _txtOverheads);
+        AddFormField(headerForm, 2, 1, "MfgOrders.StandardUnitCost", _txtStdCost);
+        AddFormField(headerForm, 2, 2, "Vouchers.Memo", _txtNotes);
+        AddFormField(headerForm, 2, 3, "MfgOrder.ScrapWarehouse", _txtScrapWhs);
+        AddFormField(headerForm, 3, 0, "MfgOrder.FinishQty", _txtFinishQty);
         AddFormField(headerForm, 3, 1, "MfgOrder.PlannedStart", _dtPlannedStart);
         AddFormField(headerForm, 3, 2, "MfgOrder.PlannedEnd", _dtPlannedEnd);
         AddFormField(headerForm, 3, 3, "MfgOrder.SalesOrder", _txtSalesOrder);
@@ -431,20 +431,20 @@ public sealed class MfgWin : BaseWin
 
         var list = new ListBox
         {
-            DisplayMemberPath = nameof(Bom.MaterialName),
-            ItemsSource = _bomOptions.Where(x => x.IsActive)
-                .OrderBy(x => x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
+            DisplayMemberPath = nameof(Bom.PickerLabel),
+            ItemsSource = _bomOptions
+                .OrderBy(x => x.MaterialName ?? x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(x => x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
                 .ThenBy(x => x.Version).ToList()
         };
         search.TextChanged += (_, _) =>
         {
             var term = search.Text.Trim();
-            list.ItemsSource = _bomOptions.Where(x => x.IsActive &&
-                    (string.IsNullOrWhiteSpace(term) ||
-                     x.MaterialCode.Contains(term, StringComparison.CurrentCultureIgnoreCase) ||
-                     (x.MaterialName?.Contains(term, StringComparison.CurrentCultureIgnoreCase) ?? false) ||
-                     x.Version.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.Ordinal)))
-                .OrderBy(x => x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
+            list.ItemsSource = _bomOptions.Where(x =>
+                    string.IsNullOrWhiteSpace(term) ||
+                    x.PickerLabel.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+                .OrderBy(x => x.MaterialName ?? x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(x => x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
                 .ThenBy(x => x.Version).ToList();
         };
         list.MouseDoubleClick += (_, _) =>
@@ -485,7 +485,7 @@ public sealed class MfgWin : BaseWin
     {
         _bomId = selected.Id;
         _bomVersion = selected.Version;
-        _cmbBom.Text = $"{selected.MaterialCode} v{selected.Version}";
+        _cmbBom.Text = selected.PickerLabel;
         _txtItem.Text = selected.MaterialCode;
         _txtItemName.Text = selected.MaterialName ?? string.Empty;
         OnBomSelectionChanged();
