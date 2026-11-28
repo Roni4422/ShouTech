@@ -2410,6 +2410,10 @@
     }
   },
   "Bom": {
+    "InputDocumentKind": "نوع مستند الإخراج",
+    "OutputDocumentKind": "نوع مستند الإدخال",
+    "InputWarehouse": "مستودع الإخراج",
+    "OutputWarehouse": "مستودع الإدخال",
     "Inputs": "المدخلات",
     "Expenses": "مصاريف الإنتاج",
     "Outputs": "المخرجات",
