@@ -561,8 +561,9 @@ public sealed class MfgWin : BaseWin
         var inProcess = string.Equals(_status, MfgOrderStatuses.InProcess, StringComparison.OrdinalIgnoreCase)
             || string.Equals(_status, MfgOrderStatuses.Confirmed, StringComparison.OrdinalIgnoreCase);
         _btnIssue.IsEnabled = inProcess;
-        _btnFinish.IsEnabled = inProcess;
-        _btnCloseOrder.IsEnabled = string.Equals(_status, MfgOrderStatuses.Completed, StringComparison.OrdinalIgnoreCase);
+        _btnFinish.IsEnabled = string.Equals(_status, MfgOrderStatuses.InProcess, StringComparison.OrdinalIgnoreCase);
+        _btnCloseOrder.IsEnabled = string.Equals(_status, MfgOrderStatuses.InProcess, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(_status, MfgOrderStatuses.Completed, StringComparison.OrdinalIgnoreCase);
         _btnCancelOrder.IsEnabled = _currentId.HasValue
             && !string.Equals(_status, MfgOrderStatuses.Cancelled, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(_status, MfgOrderStatuses.Closed, StringComparison.OrdinalIgnoreCase);
