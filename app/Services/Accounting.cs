@@ -467,9 +467,9 @@ internal static class AccRepo
             return false;
 
         return value.Any(character =>
-            (character >= '\\u0600' && character <= '\\u06FF') ||
-            (character >= '\\u0750' && character <= '\\u077F') ||
-            (character >= '\\u08A0' && character <= '\\u08FF'));
+            (character >= '\u0600' && character <= '\u06FF') ||
+            (character >= '\u0750' && character <= '\u077F') ||
+            (character >= '\u08A0' && character <= '\u08FF'));
     }
 
     public enum AccountMatchKind { None, Exact, UniquePartial, Ambiguous }
