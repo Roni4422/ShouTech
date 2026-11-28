@@ -348,10 +348,8 @@ public sealed class BomWin : BaseWin
         foreach (var expense in bom.Expenses)
             _expenses.Add(BomExpenseVm.From(expense));
         _outputs.Clear();
-        foreach (var output in bom.Outputs)
+        foreach (var output in bom.Outputs.Where(o => !string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase)))
             _outputs.Add(BomOutputVm.From(output));
-        if (_outputs.Count == 0)
-            _outputs.Add(new BomOutputVm { MaterialCode = bom.MaterialCode, MaterialName = bom.MaterialName ?? string.Empty, Kind = "MAIN", Qty = bom.OutputQty, Unit = bom.OutputUnit });
         _explosionGrid.ItemsSource = null;
     }
 
@@ -376,7 +374,6 @@ public sealed class BomWin : BaseWin
         _outputs.Clear();
         _sectionsTabs.SelectedIndex = 0;
         AddLine();
-        _outputs.Add(new BomOutputVm { MaterialCode = _material.Text, Kind = "MAIN", Qty = 1m, Unit = "PCS" });
         _explosionGrid.ItemsSource = null;
     }
 
@@ -423,7 +420,7 @@ public sealed class BomWin : BaseWin
                 if (_expensesGrid.SelectedItem is BomExpenseVm expense) _expenses.Remove(expense);
                 break;
             case 2:
-                if (_outputsGrid.SelectedItem is BomOutputVm output && _outputs.Count > 1) _outputs.Remove(output);
+                if (_outputsGrid.SelectedItem is BomOutputVm output) _outputs.Remove(output);
                 break;
             default:
                 if (_linesGrid.SelectedItem is BomLineVm selected && _lines.Count > 1)
