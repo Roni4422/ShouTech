@@ -1433,8 +1433,13 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     private static void ComputeTotals(MfgOrder order)
     {
         foreach (var line in order.Lines)
-            line.Amount = decimal.Round(line.Qty * line.UnitCost, 2);
-        order.TotalCost = decimal.Round(order.Lines.Sum(l => l.Amount) + order.OverheadAmount, 2);
+            if (line.LineKind is MfgLineKinds.Raw or MfgLineKinds.Cost)
+                line.Amount = decimal.Round(line.Qty * line.UnitCost, 2);
+            else
+                line.Amount = 0m;
+        order.TotalCost = decimal.Round(order.Lines
+            .Where(l => l.LineKind is MfgLineKinds.Raw or MfgLineKinds.Cost)
+            .Sum(l => l.Amount) + order.OverheadAmount, 2);
         order.UnitCost = order.Qty > 0 ? decimal.Round(order.TotalCost / order.Qty, 4) : 0m;
     }
 
