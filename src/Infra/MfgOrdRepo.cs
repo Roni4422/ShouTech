@@ -1000,9 +1000,10 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
                 var baseQty = qty * equivalent;
                 var isScrap = line.LineKind == MfgLineKinds.Scrap;
-                var warehouseId = isScrap
-                    ? await ResolveWarehouseIdAsync(connection, transaction, companyId, order.EffectiveScrapWarehouse, cancellationToken).ConfigureAwait(false)
-                    : targetWarehouseId;
+                var outputWarehouse = NullIfBlank(line.WarehouseCode) ??
+                    (isScrap ? order.EffectiveScrapWarehouse : order.EffectiveTargetWarehouse);
+                var warehouseId = await ResolveWarehouseIdAsync(connection, transaction, companyId,
+                    outputWarehouse, cancellationToken).ConfigureAwait(false);
                 var tracking = BatchSerialCapture.LoadTracking(connection, transaction, _provider, companyId.Trim(), materialId);
                 IReadOnlyList<BatchAllocationRequest>? batches = null;
                 IReadOnlyList<SerialSelection>? serials = null;
