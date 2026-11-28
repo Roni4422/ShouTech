@@ -2268,6 +2268,13 @@
     }
   },
   "Bom": {
+    "Inputs": "Inputs",
+    "Expenses": "Production Expenses",
+    "Outputs": "Production Outputs",
+    "ExpenseCode": "Expense Code",
+    "DebitAccount": "Debit Account",
+    "CreditAccount": "Credit Account",
+    "OutputKind": "Output Type",
     "Title": "Manufacturing Templates",
     "Explode": "Explode",
     "ExplodeQty": "Explosion Quantity",
