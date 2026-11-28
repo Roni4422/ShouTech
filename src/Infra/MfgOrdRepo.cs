@@ -879,19 +879,21 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     new(wipAccount, overheadShare, 0m, NullIfBlank(order.CostCenter))
                 };
                 var costLines = order.Lines.Where(l => l.LineKind == MfgLineKinds.Cost && l.Amount > 0m).ToList();
-                var headerAllocation = completesOrder
-                    ? decimal.Round(order.OverheadAmount - order.OverheadAmount * order.ProducedQty / order.Qty, 2, MidpointRounding.AwayFromZero)
-                    : decimal.Round(order.OverheadAmount * finishedQty / order.Qty, 2, MidpointRounding.AwayFromZero);
+                var headerAllocation = absorbable > 0m
+                    ? decimal.Round(overheadShare * order.OverheadAmount / absorbable, 2, MidpointRounding.AwayFromZero)
+                    : 0m;
+                headerAllocation = Math.Clamp(headerAllocation, 0m, overheadShare);
                 var expenseAllocationTarget = decimal.Round(overheadShare - headerAllocation, 2, MidpointRounding.AwayFromZero);
+                var expenseBase = costLines.Sum(l => l.Amount);
                 var allocatedExpense = 0m;
                 for (var index = 0; index < costLines.Count; index++)
                 {
                     var expense = costLines[index];
                     var amount = index == costLines.Count - 1
                         ? expenseAllocationTarget - allocatedExpense
-                        : completesOrder
-                            ? decimal.Round(expense.Amount - expense.Amount * order.ProducedQty / order.Qty, 2, MidpointRounding.AwayFromZero)
-                            : decimal.Round(expense.Amount * finishedQty / order.Qty, 2, MidpointRounding.AwayFromZero);
+                        : expenseBase > 0m
+                            ? decimal.Round(expenseAllocationTarget * expense.Amount / expenseBase, 2, MidpointRounding.AwayFromZero)
+                            : 0m;
                     if (amount <= 0m) continue;
                     allocatedExpense += amount;
                     var account = NullIfBlank(expense.DebitAccountCode) ?? overheadAccount;
