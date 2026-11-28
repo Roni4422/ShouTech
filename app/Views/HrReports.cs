@@ -326,16 +326,22 @@ public sealed class CashJrnRpt : RptBase
             rows.Add(row);
         }
 
-        var openingRow = raw.FirstOrDefault(r =>
-            string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal));
-        var opening = RptWinUtil.Dec(openingRow?.GetValueOrDefault("Balance"));
+        var openingRows = raw.Where(r =>
+            string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal)).ToList();
+        var opening = openingRows.Sum(r => RptWinUtil.Dec(r.GetValueOrDefault("Balance")));
         var movements = raw.Where(r =>
             !string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal)).ToList();
         var receipts = movements.Sum(r => RptWinUtil.Dec(r.GetValueOrDefault("Receipt")));
         var payments = movements.Sum(r => RptWinUtil.Dec(r.GetValueOrDefault("Payment")));
-        var closing = movements.Count == 0
-            ? opening
-            : RptWinUtil.Dec(movements[^1].GetValueOrDefault("Balance"));
+        var closing = raw
+            .GroupBy(r => Convert.ToString(r.GetValueOrDefault("CashAccountCode"), CultureInfo.InvariantCulture) ?? string.Empty, StringComparer.Ordinal)
+            .Sum(group =>
+            {
+                var lastMovement = group.LastOrDefault(r =>
+                    !string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal));
+                var lastRow = lastMovement ?? group.Last();
+                return RptWinUtil.Dec(lastRow.GetValueOrDefault("Balance"));
+            });
 
         return new RptData
         {
