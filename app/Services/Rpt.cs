@@ -2197,7 +2197,7 @@ public static class RptQuery
                    0 AS Payment,
                    opening.amount AS Balance,
                    0 AS RowOrder,
-                   0 AS JournalEntryId,
+                   CAST('' AS TEXT) AS JournalEntryId,
                    0 AS LineNo
             FROM opening
             UNION ALL
@@ -2216,7 +2216,7 @@ public static class RptQuery
                    d.payment AS Payment,
                    d.running_balance AS Balance,
                    1 AS RowOrder,
-                   d.journal_entry_id AS JournalEntryId,
+                   CAST(d.journal_entry_id AS TEXT) AS JournalEntryId,
                    d.line_number AS LineNo
             FROM details d
             ORDER BY RowOrder, EntryDate, JournalEntryId, LineNo;
