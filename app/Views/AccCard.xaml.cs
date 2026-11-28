@@ -150,6 +150,7 @@ public partial class AccCard : BaseWin, IInfoContextProvider
             ChkCostRequired.IsChecked = false;
             ChkBudget.IsChecked = false;
             ChkDefault.IsChecked = false;
+            ChkCashBook.IsChecked = false;
             SelectClosing(null);
             SelectValue(CmbWarningSide, "NONE");
             SelectValue(CmbAccountSide, "BOTH");
@@ -179,6 +180,7 @@ public partial class AccCard : BaseWin, IInfoContextProvider
         ChkCostRequired.IsChecked = _current.CostRequired;
         ChkBudget.IsChecked = _current.Budget;
         ChkDefault.IsChecked = _current.IsDefault;
+        ChkCashBook.IsChecked = _current.CashBook;
         TxtTaxRate.Text = _current.TaxRate.ToString(System.Globalization.CultureInfo.InvariantCulture);
         SelectClosing(_current.ClosingCode);
         SelectValue(CmbWarningSide, _current.WarningSide);
@@ -404,7 +406,8 @@ public partial class AccCard : BaseWin, IInfoContextProvider
             EstimatedBudget: estBudget,
             CurrencyCode: string.IsNullOrWhiteSpace(CmbCurrency.Text) ? null : CmbCurrency.Text.Trim(),
             ExchangeParity: parity,
-            ReconciliationDate: DtReconcile.SelectedDate?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+            ReconciliationDate: DtReconcile.SelectedDate?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+            CashBook: ChkCashBook.IsChecked == true);
 
         var codeChanged = _current != null && !string.Equals(_current.Code, code, StringComparison.OrdinalIgnoreCase);
         var renumber = false;
