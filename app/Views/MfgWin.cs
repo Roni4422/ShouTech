@@ -378,7 +378,9 @@ public sealed class MfgWin : BaseWin
         _grid.SetResourceReference(DataGrid.CellStyleProperty, "VisuDataGridCellStyle");
         _grid.SetResourceReference(DataGrid.RowBackgroundProperty, "TableSurfaceBrush");
         _grid.SetResourceReference(DataGrid.AlternatingRowBackgroundProperty, "TableAlternateRowBrush");
-        _grid.ItemsSource = _items;
+        var lineView = new ListCollectionView(_items);
+        lineView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(MfgItemVm.Section)));
+        _grid.ItemsSource = lineView;
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.LineNo), 45, readOnly: true));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.LineKind), 80));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.ItemCode), 120));
@@ -402,7 +404,11 @@ public sealed class MfgWin : BaseWin
             Width = 110,
             IsReadOnly = true
         });
-        _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(CalculateCost);
+        _grid.CellEditEnding += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            if (_grid.ItemsSource is ICollectionView view) view.Refresh();
+            CalculateCost();
+        });
         _txtQty.TextChanged += (_, _) => CalculateCost();
         _txtOverheads.TextChanged += (_, _) => CalculateCost();
         Grid.SetRow(_grid, 1);
@@ -1092,7 +1098,17 @@ public sealed class MfgWin : BaseWin
 
         public Guid Id { get; set; }
         public int LineNo { get => _lineNo; set { _lineNo = value; OnChanged(); } }
-        public string LineKind { get => _lineKind; set { _lineKind = value; OnChanged(); } }
+        public string LineKind
+        {
+            get => _lineKind;
+            set { _lineKind = value; OnChanged(); OnChanged(nameof(Section)); }
+        }
+        public string Section => _lineKind switch
+        {
+            MfgLineKinds.Raw => T("Bom.Inputs"),
+            MfgLineKinds.Cost => T("Bom.Expenses"),
+            _ => T("Bom.Outputs")
+        };
         public string ItemCode { get => _itemCode; set { _itemCode = value; OnChanged(); } }
         public string ItemName { get => _itemName; set { _itemName = value; OnChanged(); } }
         public string Unit { get => _unit; set { _unit = value; OnChanged(); } }
