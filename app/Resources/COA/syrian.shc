@@ -786,7 +786,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Indirect Taxes Payable",
+        "ar": "الضرائب غير المباشرة المستحقة",
         "en": "Indirect Taxes Payable"
       }
     },
@@ -1560,7 +1560,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Other Taxes and Duties Payable",
+        "ar": "ضرائب ورسوم أخرى مستحقة",
         "en": "Other Taxes and Duties Payable"
       }
     },
