@@ -354,7 +354,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Recoverable Input Sales Tax",
+        "ar": "ضريبة مبيعات مدخلات قابلة للاسترداد",
         "en": "Recoverable Input Sales Tax"
       }
     },
@@ -786,7 +786,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Sales Tax Payable",
+        "ar": "ضريبة المبيعات المستحقة",
         "en": "Sales Tax Payable"
       }
     },
@@ -1560,7 +1560,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Income Tax Payable",
+        "ar": "ضريبة الدخل المستحقة",
         "en": "Income Tax Payable"
       }
     },
