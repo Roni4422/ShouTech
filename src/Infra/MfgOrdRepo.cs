@@ -460,7 +460,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
                     var baseQty = line.ProducedQty * equivalent;
                     var byProductWarehouseId = await ResolveWarehouseIdAsync(connection, transaction, companyId,
-                        line.WarehouseCode ?? order.EffectiveTargetWarehouse, cancellationToken).ConfigureAwait(false);
+                        NullIfBlank(line.WarehouseCode) ?? order.EffectiveTargetWarehouse, cancellationToken).ConfigureAwait(false);
                     var onHand = await GetOnHandAsync(connection, transaction, companyId, byProductWarehouseId, materialId, cancellationToken).ConfigureAwait(false);
                     if (onHand < baseQty)
                         throw new InvalidOperationException(
