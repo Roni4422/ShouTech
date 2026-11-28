@@ -298,9 +298,9 @@ public sealed class MfgWin : BaseWin
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        // Header = one shared column grid (4 pairs), side labels, edges
-        // aligned across rows; the memo spans the last three pairs
-        // (Phenix rule).
+        // Compact shared header grid: every field row is occupied. The
+        // memo uses one pair so the scrap warehouse and finish quantity
+        // share its row instead of leaving two unused pairs below.
         var headerForm = CreateFormGrid(4);
         headerForm.Margin = new Thickness(0, 0, 0, 8);
         AddFormField(headerForm, 0, 0, "MfgOrder.OrderNo", _txtDocNo);
@@ -312,7 +312,9 @@ public sealed class MfgWin : BaseWin
         AddFormField(headerForm, 1, 2, "Invoice.Warehouse", _txtWhs);
         AddFormField(headerForm, 1, 3, "MfgOrder.ExtraCosts", _txtOverheads);
         AddFormField(headerForm, 2, 0, "MfgOrders.StandardUnitCost", _txtStdCost);
-        AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtNotes, spanPairs: 3);
+        AddFormField(headerForm, 2, 1, "Vouchers.Memo", _txtNotes);
+        AddFormField(headerForm, 2, 2, "MfgOrder.ScrapWarehouse", _txtScrapWhs);
+        AddFormField(headerForm, 2, 3, "MfgOrder.FinishQty", _txtFinishQty);
         AddFormField(headerForm, 3, 0, "MfgOrder.Bom", _cmbBom);
         AddFormField(headerForm, 3, 1, "MfgOrder.PlannedStart", _dtPlannedStart);
         AddFormField(headerForm, 3, 2, "MfgOrder.PlannedEnd", _dtPlannedEnd);
@@ -321,8 +323,6 @@ public sealed class MfgWin : BaseWin
         AddFormField(headerForm, 4, 1, "MfgOrder.SourceWarehouse", _txtSourceWhs);
         AddFormField(headerForm, 4, 2, "MfgOrder.WipWarehouse", _txtWipWhs);
         AddFormField(headerForm, 4, 3, "MfgOrder.TargetWarehouse", _txtTargetWhs);
-        AddFormField(headerForm, 5, 0, "MfgOrder.ScrapWarehouse", _txtScrapWhs);
-        AddFormField(headerForm, 5, 1, "MfgOrder.FinishQty", _txtFinishQty);
         _cmbBom.SelectionChanged += (_, _) => OnBomSelectionChanged();
         _txtItem.SelectionChanged += (_, _) => SyncFinishedItemName();
         Grid.SetRow(headerForm, 0);
