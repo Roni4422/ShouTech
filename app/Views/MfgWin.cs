@@ -778,8 +778,10 @@ public sealed class MfgWin : BaseWin
                 _txtStdCost.Text = bom.StandardUnitCost.ToString("0.00", CultureInfo.InvariantCulture);
                 _inputDocumentKind = bom.InputDocumentKind;
                 _outputDocumentKind = bom.OutputDocumentKind;
-                _txtSourceWhs.Text = bom.InputWarehouseCode ?? string.Empty;
-                _txtTargetWhs.Text = bom.OutputWarehouseCode ?? string.Empty;
+                _txtSourceWhs.Text = bom.InputWarehouseCode ??
+                    bom.Lines.Select(l => l.WarehouseCode).FirstOrDefault(w => !string.IsNullOrWhiteSpace(w)) ?? string.Empty;
+                var mainOutput = bom.Outputs.FirstOrDefault(o => string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase));
+                _txtTargetWhs.Text = bom.OutputWarehouseCode ?? mainOutput?.WarehouseCode ?? string.Empty;
                 var scale = qty / bom.OutputQty;
                 foreach (var expense in bom.Expenses)
                     _items.Add(new MfgItemVm
