@@ -663,6 +663,20 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             var wipAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.WorkInProgress, GlAccounts.Inventory);
             var overheadAccount = PickAccount(connection, transaction, companyGuid, GlAccounts.AppliedManufacturingOverhead, GlAccounts.Cogs);
 
+            // Validate aggregate quantities, not each request in isolation:
+            // a forged caller could otherwise repeat one line ID and split
+            // an over-issue across individually valid rows.
+            foreach (var group in issues.GroupBy(i => i.LineId))
+            {
+                var line = order.Lines.FirstOrDefault(l => l.Id == group.Key)
+                    ?? throw new InvalidOperationException("An issue line does not belong to this order.");
+                var requested = group.Sum(i => i.Qty);
+                if (requested > line.RemainingToIssue)
+                    throw new AppError(ErrorCodes.MfgIssueExceedsRequired,
+                        $"Issuing {requested} of '{line.ItemCode.Trim()}' exceeds the remaining required quantity {line.RemainingToIssue}.",
+                        line.ItemCode.Trim(), requested.ToString(CultureInfo.InvariantCulture));
+            }
+
             var stockCost = 0m;
             var serviceCost = 0m;
             var glLines = new List<GlLineRequest>();
@@ -773,6 +787,19 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 throw new AppError(ErrorCodes.MfgFinishExceedsPlanned,
                     $"Receiving {finishedQty} of '{order.ItemCode.Trim()}' exceeds the remaining planned quantity {remainingPlanned}.",
                     order.ItemCode.Trim(), finishedQty.ToString(CultureInfo.InvariantCulture));
+
+            // Apply the planned-quantity ceiling across the whole request;
+            // duplicate line IDs must not bypass it by passing individually.
+            foreach (var group in receipts.GroupBy(r => r.LineId))
+            {
+                var line = order.Lines.FirstOrDefault(l => l.Id == group.Key)
+                    ?? throw new InvalidOperationException("A receipt line does not belong to this order.");
+                var requested = group.Sum(r => r.Qty);
+                if (requested <= 0 || line.ProducedQty + requested > line.Qty)
+                    throw new AppError(ErrorCodes.MfgFinishExceedsPlanned,
+                        $"Receiving {requested} of '{line.ItemCode.Trim()}' exceeds the remaining planned quantity {line.Qty - line.ProducedQty}.",
+                        line.ItemCode.Trim(), requested.ToString(CultureInfo.InvariantCulture));
+            }
 
             var receiptLines = new List<(MfgOrderLine Line, decimal Qty)>();
             foreach (var receipt in receipts)
