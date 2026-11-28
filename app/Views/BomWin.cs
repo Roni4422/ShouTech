@@ -58,6 +58,10 @@ public sealed class BomWin : BaseWin
     private readonly CheckBox _isActive = new() { IsChecked = true };
     private readonly CheckBox _isDefault = new();
     private readonly TextBox _notes = new();
+    private readonly ComboBox _inputDocKind = new() { IsEditable = true };
+    private readonly ComboBox _outputDocKind = new() { IsEditable = true };
+    private readonly ComboBox _inputWarehouse = new() { IsEditable = true };
+    private readonly ComboBox _outputWarehouse = new() { IsEditable = true };
     private readonly TextBox _explodeQty = new() { Text = "1" };
     private readonly Button _newButton = new();
     private readonly Button _saveButton = new();
@@ -73,6 +77,7 @@ public sealed class BomWin : BaseWin
     private readonly ObservableCollection<BomOutputVm> _outputs = new();
     private Guid? _selectedId;
     private List<MfgMaterialOption> _materialOptions = new();
+    private List<MfgWarehouseOption> _warehouseOptions = new();
 
     public BomWin()
     {
@@ -173,6 +178,10 @@ public sealed class BomWin : BaseWin
         AddFormField(_labels, form, 2, 1, "Vouchers.Memo", _notes);
         AddFormElement(form, 3, 0, _isActive);
         AddFormElement(form, 3, 1, _isDefault);
+        AddFormField(_labels, form, 4, 0, "Bom.InputDocumentKind", _inputDocKind);
+        AddFormField(_labels, form, 4, 1, "Bom.OutputDocumentKind", _outputDocKind);
+        AddFormField(_labels, form, 5, 0, "Bom.InputWarehouse", _inputWarehouse);
+        AddFormField(_labels, form, 5, 1, "Bom.OutputWarehouse", _outputWarehouse);
 
         // Keep the template header compact and consistent with the production form.
         foreach (var element in form.Children.OfType<FrameworkElement>())
@@ -182,13 +191,18 @@ public sealed class BomWin : BaseWin
         }
         foreach (var control in new Control[]
         {
-            _material, _materialName, _version, _outputQty, _outputUnit, _notes
+            _material, _materialName, _version, _outputQty, _outputUnit, _notes,
+            _inputDocKind, _outputDocKind, _inputWarehouse, _outputWarehouse
         })
             control.Padding = new Thickness(1);
 
         _material.SelectionChanged += (_, _) => SyncMaterialName();
         _outputUnit.ItemsSource = new[] { "PCS", "KG", "G", "L", "M", "BOX" };
         _outputUnit.Text = "PCS";
+        _inputDocKind.ItemsSource = new[] { "MATERIAL_ISSUE", "STOCK_OUT" };
+        _outputDocKind.ItemsSource = new[] { "MATERIAL_RECEIPT", "STOCK_IN" };
+        _inputDocKind.Text = "MATERIAL_ISSUE";
+        _outputDocKind.Text = "MATERIAL_RECEIPT";
         Grid.SetRow(form, 0);
         right.Children.Add(form);
 
@@ -294,6 +308,9 @@ public sealed class BomWin : BaseWin
             }
             _materialOptions = (await _service.GetMaterialOptionsAsync(CurrentCompanyCode)).ToList();
             _material.ItemsSource = _materialOptions.Select(m => m.Code).ToList();
+            _warehouseOptions = (await _service.GetWarehouseOptionsAsync(CurrentCompanyCode)).ToList();
+            _inputWarehouse.ItemsSource = _warehouseOptions.Select(w => w.Code).ToList();
+            _outputWarehouse.ItemsSource = _warehouseOptions.Select(w => w.Code).ToList();
             var rows = await _service.GetAllAsync(CurrentCompanyCode, includeInactive: true);
             _boms.Clear();
             _boms.AddRange(rows);
@@ -320,6 +337,10 @@ public sealed class BomWin : BaseWin
         _isActive.IsChecked = bom.IsActive;
         _isDefault.IsChecked = bom.IsDefault;
         _notes.Text = bom.Notes ?? string.Empty;
+        _inputDocKind.Text = bom.InputDocumentKind;
+        _outputDocKind.Text = bom.OutputDocumentKind;
+        _inputWarehouse.Text = bom.InputWarehouseCode ?? string.Empty;
+        _outputWarehouse.Text = bom.OutputWarehouseCode ?? string.Empty;
         _lines.Clear();
         foreach (var line in bom.Lines)
             _lines.Add(BomLineVm.From(line));
@@ -346,6 +367,10 @@ public sealed class BomWin : BaseWin
         _isActive.IsChecked = true;
         _isDefault.IsChecked = false;
         _notes.Text = string.Empty;
+        _inputDocKind.Text = "MATERIAL_ISSUE";
+        _outputDocKind.Text = "MATERIAL_RECEIPT";
+        _inputWarehouse.Text = string.Empty;
+        _outputWarehouse.Text = string.Empty;
         _lines.Clear();
         _expenses.Clear();
         _outputs.Clear();
@@ -440,6 +465,10 @@ public sealed class BomWin : BaseWin
             bom.IsActive = _isActive.IsChecked == true;
             bom.IsDefault = _isDefault.IsChecked == true;
             bom.Notes = NullIfBlank(_notes.Text);
+            bom.InputDocumentKind = string.IsNullOrWhiteSpace(_inputDocKind.Text) ? "MATERIAL_ISSUE" : _inputDocKind.Text.Trim();
+            bom.OutputDocumentKind = string.IsNullOrWhiteSpace(_outputDocKind.Text) ? "MATERIAL_RECEIPT" : _outputDocKind.Text.Trim();
+            bom.InputWarehouseCode = NullIfBlank(_inputWarehouse.Text);
+            bom.OutputWarehouseCode = NullIfBlank(_outputWarehouse.Text);
             bom.Lines.Clear();
             foreach (var vm in _lines.Where(l => !string.IsNullOrWhiteSpace(l.ComponentCode)))
             {
