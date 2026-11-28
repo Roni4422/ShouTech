@@ -201,6 +201,9 @@ public sealed class MfgWin : BaseWin
                     UnitCost = line.UnitCost,
                     StandardUnitCost = line.StandardUnitCost,
                     Warehouse = line.WarehouseCode ?? string.Empty,
+                    DebitAccount = line.DebitAccountCode ?? string.Empty,
+                    CreditAccount = line.CreditAccountCode ?? string.Empty,
+                    CostCenter = line.CostCenter ?? string.Empty,
                     CostSharePct = line.CostSharePct
                 });
             RefreshStageButtons();
@@ -385,6 +388,9 @@ public sealed class MfgWin : BaseWin
         // property existed for releases with no column binding it).
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.StdCostText), 100));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.Warehouse), 90));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.DebitAccount), 110));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.CreditAccount), 110));
+        _grid.Columns.Add(TextCol(nameof(MfgItemVm.CostCenter), 100));
         _grid.Columns.Add(TextCol(nameof(MfgItemVm.ShareText), 70));
         _grid.Columns.Add(new DataGridTextColumn
         {
@@ -560,7 +566,7 @@ public sealed class MfgWin : BaseWin
         var overheads = ParseDecimal(_txtOverheads);
         var targetQty = ParseDecimal(_txtQty);
         if (targetQty <= 0) targetQty = 1;
-        var rawTotal = _items.Sum(i => i.TotalCost);
+        var rawTotal = _items.Where(i => i.LineKind is MfgLineKinds.Raw or MfgLineKinds.Cost).Sum(i => i.TotalCost);
         var grandTotal = rawTotal + overheads;
         var unitCost = grandTotal / targetQty;
         _lblTotCost.Text = $"{T("MfgOrder.TotalCost")}: {grandTotal:N2}";
@@ -608,6 +614,9 @@ public sealed class MfgWin : BaseWin
                 UnitCost = item.UnitCost,
                 StandardUnitCost = item.StandardUnitCost,
                 WarehouseCode = string.IsNullOrWhiteSpace(item.Warehouse) ? null : item.Warehouse.Trim(),
+                DebitAccountCode = string.IsNullOrWhiteSpace(item.DebitAccount) ? null : item.DebitAccount.Trim(),
+                CreditAccountCode = string.IsNullOrWhiteSpace(item.CreditAccount) ? null : item.CreditAccount.Trim(),
+                CostCenter = string.IsNullOrWhiteSpace(item.CostCenter) ? null : item.CostCenter.Trim(),
                 CostSharePct = item.CostSharePct
             });
         return order;
@@ -756,7 +765,37 @@ public sealed class MfgWin : BaseWin
             if (bom is not null)
             {
                 _txtItem.Text = bom.MaterialCode;
+                _txtItemName.Text = bom.MaterialName ?? string.Empty;
+                _txtUnit.Text = bom.OutputUnit;
                 _txtStdCost.Text = bom.StandardUnitCost.ToString("0.00", CultureInfo.InvariantCulture);
+                var scale = qty / bom.OutputQty;
+                foreach (var expense in bom.Expenses)
+                    _items.Add(new MfgItemVm
+                    {
+                        LineNo = ++lineNo,
+                        LineKind = MfgLineKinds.Cost,
+                        ItemCode = expense.ExpenseCode,
+                        ItemName = expense.Description ?? expense.ExpenseCode,
+                        Unit = "AMOUNT",
+                        Qty = 1m,
+                        UnitCost = decimal.Round(expense.Amount * scale, 2, MidpointRounding.AwayFromZero),
+                        DebitAccount = expense.DebitAccountCode ?? string.Empty,
+                        CreditAccount = expense.CreditAccountCode ?? string.Empty,
+                        CostCenter = expense.CostCenter ?? string.Empty
+                    });
+                foreach (var output in bom.Outputs.Where(o => !string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase)))
+                    _items.Add(new MfgItemVm
+                    {
+                        LineNo = ++lineNo,
+                        LineKind = string.Equals(output.OutputKind, "SCRAP", StringComparison.OrdinalIgnoreCase) ? MfgLineKinds.Scrap : MfgLineKinds.ByProduct,
+                        ItemCode = output.MaterialCode,
+                        ItemName = output.MaterialName ?? string.Empty,
+                        Unit = output.UnitCode ?? string.Empty,
+                        Qty = decimal.Round(output.Qty * scale, 4, MidpointRounding.AwayFromZero),
+                        Warehouse = output.WarehouseCode ?? string.Empty,
+                        CostSharePct = output.CostSharePct
+                    });
+                _txtOverheads.Text = "0.00";
             }
             CalculateCost();
             MessageBox.Show(this, Tf("MfgOrder.BomFetched", explosion.Requirements.Count), Title, MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1031,6 +1070,7 @@ public sealed class MfgWin : BaseWin
     {
         private int _lineNo;
         private string _itemCode = "", _itemName = "", _unit = "", _lineKind = MfgLineKinds.Raw, _warehouse = "";
+        private string _debitAccount = "", _creditAccount = "", _costCenter = "";
         private decimal _qty = 1, _cost, _stdCost, _consumed, _produced, _stageQty, _sharePct;
 
         public Guid Id { get; set; }
@@ -1040,6 +1080,9 @@ public sealed class MfgWin : BaseWin
         public string ItemName { get => _itemName; set { _itemName = value; OnChanged(); } }
         public string Unit { get => _unit; set { _unit = value; OnChanged(); } }
         public string Warehouse { get => _warehouse; set { _warehouse = value; OnChanged(); } }
+        public string DebitAccount { get => _debitAccount; set { _debitAccount = value; OnChanged(); } }
+        public string CreditAccount { get => _creditAccount; set { _creditAccount = value; OnChanged(); } }
+        public string CostCenter { get => _costCenter; set { _costCenter = value; OnChanged(); } }
 
         public decimal Qty { get => _qty; set { _qty = value; OnChanged(nameof(QtyText)); OnChanged(nameof(TotalCostText)); } }
         public decimal UnitCost { get => _cost; set { _cost = value; OnChanged(nameof(CostText)); OnChanged(nameof(TotalCostText)); } }
