@@ -631,6 +631,35 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             order.AccumulatedCost = 0m;
             order.WipBalance = 0m;
             order.ProducedQty = 0m;
+
+            var expenseLines = order.Lines.Where(l => l.LineKind == MfgLineKinds.Cost && l.Amount > 0m).ToList();
+            if (expenseLines.Count > 0)
+            {
+                foreach (var expense in expenseLines)
+                {
+                    if (string.IsNullOrWhiteSpace(expense.DebitAccountCode) || string.IsNullOrWhiteSpace(expense.CreditAccountCode))
+                        throw new InvalidOperationException($"Production expense '{expense.ItemCode}' requires both debit and credit account codes before confirmation.");
+                }
+                var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
+                var expenseJournalLines = new List<GlLineRequest>();
+                foreach (var expense in expenseLines)
+                {
+                    var amount = decimal.Round(expense.Amount, 2, MidpointRounding.AwayFromZero);
+                    if (amount <= 0m) continue;
+                    var costCenter = NullIfBlank(expense.CostCenter) ?? NullIfBlank(order.CostCenter);
+                    expenseJournalLines.Add(new GlLineRequest(expense.DebitAccountCode!.Trim(), amount, 0m, costCenter, expense.ItemName));
+                    expenseJournalLines.Add(new GlLineRequest(expense.CreditAccountCode!.Trim(), 0m, amount, costCenter, expense.ItemName));
+                }
+                if (expenseJournalLines.Count > 0)
+                {
+                    var expenseDocNo = $"MO-{order.DocNo}-EXP";
+                    GlPosting.PostInTransaction(connection, transaction, _provider,
+                        new GlDocumentRequest(companyGuid, order.DocDate, $"Manufacturing expenses {expenseDocNo}",
+                            "MFG-EXP", order.Id.ToString("D"), expenseDocNo, "SAR", 1m, expenseJournalLines),
+                        userId);
+                }
+            }
+
             await UpdateOrderStageAsync(connection, transaction, companyId, order, MfgOrderStatuses.Draft, MfgOrderStatuses.Confirmed, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Confirm", order.DocDate, 0m, 0m, null, null, userId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -846,14 +875,33 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             string? journalDocNo = null;
             if (overheadShare > 0)
             {
+                var absorptionLines = new List<GlLineRequest>
+                {
+                    new(wipAccount, overheadShare, 0m, NullIfBlank(order.CostCenter))
+                };
+                var allocatedExpense = 0m;
+                var costLines = order.Lines.Where(l => l.LineKind == MfgLineKinds.Cost && l.Amount > 0m).ToList();
+                for (var index = 0; index < costLines.Count; index++)
+                {
+                    var expense = costLines[index];
+                    var amount = completesOrder
+                        ? decimal.Round(expense.Amount - expense.Amount * order.ProducedQty / order.Qty, 2, MidpointRounding.AwayFromZero)
+                        : decimal.Round(expense.Amount * finishedQty / order.Qty, 2, MidpointRounding.AwayFromZero);
+                    if (index == costLines.Count - 1 && order.OverheadAmount <= 0m)
+                        amount = overheadShare - allocatedExpense;
+                    if (amount <= 0m) continue;
+                    allocatedExpense += amount;
+                    var account = NullIfBlank(expense.DebitAccountCode) ?? overheadAccount;
+                    absorptionLines.Add(new GlLineRequest(account, 0m, amount,
+                        NullIfBlank(expense.CostCenter) ?? NullIfBlank(order.CostCenter), expense.ItemName));
+                }
+                var remainingOverhead = decimal.Round(overheadShare - allocatedExpense, 2, MidpointRounding.AwayFromZero);
+                if (remainingOverhead > 0m)
+                    absorptionLines.Add(new GlLineRequest(overheadAccount, 0m, remainingOverhead, NullIfBlank(order.CostCenter)));
                 var posted = GlPosting.PostInTransaction(connection, transaction, _provider,
                     new GlDocumentRequest(companyGuid, order.DocDate,
                         $"MFG overhead {finishDocNo}", "MFG-OVHD", order.Id.ToString("D") + "#" + seq, finishDocNo,
-                        "SAR", 1m, new GlLineRequest[]
-                        {
-                            new(wipAccount, overheadShare, 0m, NullIfBlank(order.CostCenter)),
-                            new(overheadAccount, 0m, overheadShare)
-                        }),
+                        "SAR", 1m, absorptionLines),
                     userId);
                 journalDocNo = posted.DocumentNumber;
             }
