@@ -1082,6 +1082,8 @@ public sealed class MfgWin : BaseWin
         btn.SetResourceReference(StyleProperty, "VisuButtonStyle");
     }
 
+    private static string SectionLabel(string key) => T(key);
+
     private static DataGridTextColumn TextCol(string path, double width, bool readOnly = false)
         => new()
         {
@@ -1106,9 +1108,9 @@ public sealed class MfgWin : BaseWin
         }
         public string Section => _lineKind switch
         {
-            MfgLineKinds.Raw => $"1 - {T("Bom.Inputs")}",
-            MfgLineKinds.Cost => $"2 - {T("Bom.Expenses")}",
-            _ => $"3 - {T("Bom.Outputs")}"
+            MfgLineKinds.Raw => $"1 - {SectionLabel("Bom.Inputs")}",
+            MfgLineKinds.Cost => $"2 - {SectionLabel("Bom.Expenses")}",
+            _ => $"3 - {SectionLabel("Bom.Outputs")}"
         };
         public string ItemCode { get => _itemCode; set { _itemCode = value; OnChanged(); } }
         public string ItemName { get => _itemName; set { _itemName = value; OnChanged(); } }
