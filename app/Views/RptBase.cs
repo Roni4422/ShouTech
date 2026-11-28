@@ -196,6 +196,7 @@ public abstract class RptBase : BaseWin
         _grid.CanUserSortColumns = true;
         _grid.SelectionMode = DataGridSelectionMode.Single;
         _grid.SelectionUnit = DataGridSelectionUnit.FullRow;
+        _grid.MouseDoubleClick += async (_, _) => await OpenSelectedRowAsync();
         // Excel-like grids (owner spec item 1): numbered row
         // headers on every report grid — one central switch here
         // covers all 71 RptBase-derived report windows.
@@ -209,6 +210,45 @@ public abstract class RptBase : BaseWin
         _grid.SetResourceReference(DataGrid.BorderBrushProperty, "BorderBrush");
         _grid.EnableRowVirtualization = true;
         _grid.EnableColumnVirtualization = true;
+    }
+
+    /// <summary>
+    /// Opens the source entry represented by a report row. Report queries
+    /// keep navigation keys in their row data but do not expose them as columns.
+    /// </summary>
+    private async Task OpenSelectedRowAsync()
+    {
+        if (_grid.SelectedItem is not IReadOnlyDictionary<string, object?> row)
+            return;
+
+        var documentNumber = row.TryGetValue("JournalDocNo", out var numberValue)
+            ? Convert.ToString(numberValue, CultureInfo.InvariantCulture)?.Trim()
+            : null;
+        if (string.IsNullOrWhiteSpace(documentNumber))
+            return;
+
+        if (!row.TryGetValue("JournalDate", out var dateValue) || dateValue is null or DBNull)
+            return;
+
+        DateTime entryDate;
+        try
+        {
+            entryDate = dateValue is DateTime date
+                ? date
+                : Convert.ToDateTime(dateValue, CultureInfo.InvariantCulture);
+        }
+        catch (FormatException)
+        {
+            return;
+        }
+        catch (InvalidCastException)
+        {
+            return;
+        }
+
+        var entry = new JrnWin { Owner = this };
+        entry.Show();
+        await entry.OpenDocumentAsync(documentNumber, entryDate);
     }
 
     // ------------------------------------------------------------------
