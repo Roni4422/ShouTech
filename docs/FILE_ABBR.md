@@ -20,7 +20,6 @@ This document describes the names and locations that exist on the current reposi
 | `src/Dom/` | Domain | Entities, value types, enums, contracts and business rules |
 | `src/App/` | Application | Use cases and orchestration |
 | `src/Infra/` | Infrastructure | Persistence, repositories and external adapters |
-| `src/Inv/` | Inventory core | Inventory-specific library |
 | `dba/` | Database assets | Authoritative DDL, seeds and provider migrations |
 | `svc/` | Background service | Independent Windows worker |
 | `tools/` | Developer tools | Migration CLI and focused verification harnesses |
@@ -28,7 +27,6 @@ This document describes the names and locations that exist on the current reposi
 | `sec/` | Security | Native C++ security library and tests |
 | `cfg/` | Configuration | Non-secret application defaults |
 | `docs/` | Documentation | Architecture, engineering, product and user guides |
-| `archive/` | Archive | Historical and non-deployable reference material |
 
 The desktop startup is at the repository root: `ShouTech.ERP.csproj`, `App.xaml` and `App.xaml.cs`. There is no second WPF application definition under `app/`.
 
@@ -72,11 +70,11 @@ Abbreviations such as `Inv` and `Com` are context-sensitive. Do not infer a type
 |---|---|
 | `ShouTech.ERP.csproj` | Sole WPF desktop executable project |
 | `App.xaml`, `App.xaml.cs` | WPF application definition and lifecycle |
-| `ShouTech.sln` | Product and engineering solution |
+| `build/ShouTech.sln` | Product and engineering solution |
 | `src/Dom/Dom.csproj` | Domain library; preserves the `Domain` assembly identity |
 | `src/App/App.csproj` | Application use-case library |
 | `src/Infra/Infra.csproj` | Infrastructure library |
-| `src/Inv/Inv.csproj` | Inventory core library |
+
 | `docs/FILE_INDEX.md` | Generated complete path inventory |
 | `tools/gen_index.py` | File and folder index generator |
 
@@ -89,10 +87,10 @@ app/Views/MWin.xaml       + app/Views/MWin.xaml.cs
 app/Views/LogWin.xaml     + app/Views/LogWin.xaml.cs
 app/Views/ComWin.xaml     + app/Views/ComWin.xaml.cs
 app/Views/BinWin.xaml     + app/Views/BinWin.xaml.cs
-app/Views/Modules/ModuleWorkspaceView.xaml
-                          + app/Views/Modules/ModuleWorkspaceView.xaml.cs
-app/Views/Inventory/MatCard.xaml
-                          + app/Views/Inventory/MatCard.xaml.cs
+app/Views/ModuleWorkspaceView.xaml
+                          + app/Views/ModuleWorkspaceView.xaml.cs
+app/Views/MatCard.xaml
+                          + app/Views/MatCard.xaml.cs
 ```
 
 ## Maintenance

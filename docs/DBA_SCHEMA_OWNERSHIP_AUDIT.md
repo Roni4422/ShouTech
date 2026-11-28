@@ -1,4 +1,8 @@
-# Database Schema Ownership Audit (main)
+# Historical Database Schema Ownership Audit
+
+## Historical status
+
+This audit records a 2026-10-15 repository snapshot. Its legacy paths and file counts describe that historical tree, not the current `reduce-2-upgrade` layout. The current provider migration design and commands are documented in [DATABASE_MIGRATIONS.md](DATABASE_MIGRATIONS.md); the live file inventory is [FILE_INDEX.md](FILE_INDEX.md).
 
 ## Goal
 

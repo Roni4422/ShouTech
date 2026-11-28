@@ -17,6 +17,7 @@ PURPOSE = {
     "app/Navigation": "Window and module navigation",
     "app/Reporting": "Report presentation and document output",
     "app/Resources": "Localized resources, templates, icons and error catalogs",
+    "app/Reporting": "Report presentation and document output",
     "app/Services": "Desktop-facing application service adapters",
     "app/Themes": "Shared WPF styles, templates and visual themes",
     "app/ViewModels": "Presentation state and view models",
