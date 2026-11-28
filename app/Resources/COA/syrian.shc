@@ -1578,7 +1578,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Taxes and Duties Expense",
+        "ar": "مصروف الضرائب والرسوم",
         "en": "Taxes and Duties Expense"
       }
     },
