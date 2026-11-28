@@ -28,6 +28,12 @@ internal static class RptWinUtil
                 var v = r.GetValueOrDefault(c.Key);
                 d[c.Key] = IsNum(c.Type) ? Dec(v) : v;
             }
+            // Keep non-visible journal navigation keys in the row model.
+            // They are not rendered as columns, but RptBase uses them to
+            // open the exact posted journal entry on a double-click.
+            foreach (var key in new[] { "JournalDocNo", "JournalDate" })
+                if (r.TryGetValue(key, out var metadata))
+                    d[key] = metadata;
             list.Add(d);
         }
         return list;
