@@ -76,13 +76,15 @@ public sealed class BomService
             throw new InvalidOperationException("The BOM output quantity must be greater than zero.");
         if (bom.Lines is null || bom.Lines.Count == 0)
             throw new InvalidOperationException("A bill of materials requires at least one component line.");
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Repeated component codes are valid. Manufacturing recipes may
+        // intentionally consume the same material on separate operations,
+        // from different warehouses, or with different issue quantities.
+        // Keep each row distinct in the template; stock posting performs
+        // the appropriate quantity aggregation at its own boundary.
         foreach (var line in bom.Lines)
         {
             if (string.IsNullOrWhiteSpace(line.ComponentCode))
                 throw new InvalidOperationException("Every BOM line requires a component code.");
-            if (!seen.Add(line.ComponentCode.Trim()))
-                throw new InvalidOperationException($"Component '{line.ComponentCode}' appears more than once on this BOM.");
             if (line.Qty <= 0)
                 throw new InvalidOperationException($"Line quantity for '{line.ComponentCode}' must be greater than zero.");
             if (line.ScrapPct is < 0 or >= 100)
