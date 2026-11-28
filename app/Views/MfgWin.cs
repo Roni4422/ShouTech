@@ -122,7 +122,7 @@ public sealed class MfgWin : BaseWin
             _materialOptions.Clear();
             _materialOptions.AddRange(materials);
             _txtItem.ItemsSource = _materialOptions.Select(m => m.Code).ToList();
-            var bomList = await boms.GetAllAsync(CurrentCompanyCode);
+            var bomList = await boms.GetAllAsync(CurrentCompanyCode, includeInactive: true);
             _bomOptions.Clear();
             _bomOptions.AddRange(bomList);
             _cmbBom.ItemsSource = _bomOptions.Select(b => b.PickerLabel).ToList();
