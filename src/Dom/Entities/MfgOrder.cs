@@ -81,6 +81,8 @@ public sealed class MfgOrder
     public string? WipWarehouseCode { get; set; }
     public string? TargetWarehouseCode { get; set; }
     public string? ScrapWarehouseCode { get; set; }
+    public string InputDocumentKind { get; set; } = "MATERIAL_ISSUE";
+    public string OutputDocumentKind { get; set; } = "MATERIAL_RECEIPT";
     /// <summary>Finished quantity actually received so far (header unit).</summary>
     public decimal ProducedQty { get; set; }
     /// <summary>Total cost accumulated into the order (issues at engine
