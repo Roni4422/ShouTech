@@ -645,7 +645,7 @@
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.Permissions" Label="Permissions" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.PermissionTemplates" Label="Permission templates" Click="OnRibbonButtonClick"/>
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.CustomFields" Label="Custom fields" Click="OnRibbonButtonClick"/>
-                        <ribbon:RibbonButton loc:LocProps.Key="RestoreCompany.Restore" Label="Restore company" Click="OnRibbonButtonClick"/>
+                        <ribbon:RibbonButton loc:LocProps.Key="OtherTools.RestoreCompany.Restore" Label="Restore company" Click="OnRibbonButtonClick"/>
                     </ribbon:RibbonGroup>
                     <ribbon:RibbonGroup loc:LocProps.Key="RibbonGroups.OtherToolsDefinitions" Header="Definitions">
                         <ribbon:RibbonButton loc:LocProps.Key="OtherTools.UnitsOfMeasure" Label="Define units of measure" Click="OnRibbonButtonClick"/>
