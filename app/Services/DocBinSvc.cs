@@ -125,6 +125,16 @@ public static class DocBinSvc
             var doc = LoadDocument(connection, tx, table, docId, kindCode)
                 ?? throw NotFound();
             if (doc.IsDeleted) throw StateConflict();
+            using (var originGuard = connection.CreateCommand())
+            {
+                originGuard.Transaction = tx;
+                originGuard.CommandText = $"SELECT original_doc_id FROM {table} WHERE doc_id=@id AND doc_kind=@kind;";
+                Add(originGuard, "@id", docId);
+                Add(originGuard, "@kind", kindCode);
+                var originalId = originGuard.ExecuteScalar();
+                if (originalId is not null and not DBNull)
+                    throw new InvalidOperationException("A document generated from an original document cannot be deleted independently. Open the original document to manage it.");
+            }
             // A cancelled document was already neutralized by its own
             // cancel flow (compensating rows under other numbers);
             // binning it would un-net those compensations.
