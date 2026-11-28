@@ -1017,7 +1017,7 @@ public sealed class MfgWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("MfgOrder.Title");
-        if (_grid.Columns.Count >= 13)
+        if (_grid.Columns.Count >= 16)
         {
             _grid.Columns[0].Header = "#";
             _grid.Columns[1].Header = T("MfgOrder.Col.Kind");
@@ -1030,8 +1030,11 @@ public sealed class MfgWin : BaseWin
             _grid.Columns[8].Header = T("Invoice.Col.PurchasePrice");
             _grid.Columns[9].Header = T("MfgOrders.StandardUnitCost");
             _grid.Columns[10].Header = T("Invoice.Warehouse");
-            _grid.Columns[11].Header = T("MfgOrder.Col.CostShare");
-            _grid.Columns[12].Header = T("Invoice.Col.LineTotal");
+            _grid.Columns[11].Header = T("MfgOrder.Col.DebitAccount");
+            _grid.Columns[12].Header = T("MfgOrder.Col.CreditAccount");
+            _grid.Columns[13].Header = T("MfgOrder.Col.CostCenter");
+            _grid.Columns[14].Header = T("MfgOrder.Col.CostShare");
+            _grid.Columns[15].Header = T("Invoice.Col.LineTotal");
         }
         RefreshLocalizedContent(Content as DependencyObject);
         CalculateCost();
