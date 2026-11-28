@@ -2235,7 +2235,7 @@
     "Amount": "Amount",
     "Saved": "Manufacturing order saved successfully",
     "Posted": "Manufacturing order posted successfully",
-    "Bom": "Bill of Materials",
+    "Bom": "Manufacturing Template",
     "PlannedStart": "Planned Start",
     "PlannedEnd": "Planned End",
     "SalesOrder": "Sales Order",
@@ -2268,7 +2268,7 @@
     }
   },
   "Bom": {
-    "Title": "Bills of Materials",
+    "Title": "Manufacturing Templates",
     "Explode": "Explode",
     "ExplodeQty": "Explosion Quantity",
     "ExplodeQtyInvalid": "The explosion quantity must be greater than zero.",
