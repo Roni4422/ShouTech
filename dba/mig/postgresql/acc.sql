@@ -853,9 +853,21 @@ DROP INDEX IF EXISTS ux_journal_entries_company_document_number;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_journal_entries_company_period_document_number
     ON journal_entries(company_id, fiscal_period_id, document_number)
     WHERE document_number IS NOT NULL AND length(trim(document_number)) > 0;
--- @shoutech-migration 129_cash_book_accounts.sql 836DDCBBE70AB4E8D44DCF6AD2A840A19E7067727A4510439C651B7AC7884474 0F7A623421601FBAB5889039A234C6920CF6A829A5C934788315C7D2CD9B865D 0F7A623421601FBAB5889039A234C6920CF6A829A5C934788315C7D2CD9B865D 0F7A623421601FBAB5889039A234C6920CF6A829A5C934788315C7D2CD9B865D
+-- @shoutech-migration 129_cash_book_accounts.sql 189D63BB856E6BD82654F8E4141AE5B788873C5794E95C923B8F3507410B70FF 8BE682D0CF19801E5438942F357F5FBBC3BDF7701D05A42AB748677333378D33 8BE682D0CF19801E5438942F357F5FBBC3BDF7701D05A42AB748677333378D33 8BE682D0CF19801E5438942F357F5FBBC3BDF7701D05A42AB748677333378D33
 -- 129 - Explicit cash-book classification for chart accounts.
 -- Cash-book membership is configured on each posting account; account names
 -- are never used to infer whether a movement belongs in the cash journal.
+-- Built-in COA templates define account 131 as their cash-on-hand account.
+-- Backfill it for existing companies selected from those built-in templates.
 -- @if-column-missing chart_of_accounts.cash_book
 ALTER TABLE chart_of_accounts ADD COLUMN cash_book BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE chart_of_accounts
+SET cash_book = TRUE
+WHERE account_code = '131'
+  AND EXISTS (
+      SELECT 1 FROM companies c
+      WHERE c.company_id = chart_of_accounts.company_id
+        AND UPPER(COALESCE(c.coa_template_code, '')) IN
+            ('US','CONT-INV','EU','GCC','IND','IQ','JOB-ORDERS','JO','LB',
+             'PROFIT-CENTERS','SA','SIMPLE-FR','SIMPLE','SY','TR')
+  );
