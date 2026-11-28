@@ -354,7 +354,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Recoverable Input Taxes by Jurisdiction",
+        "ar": "ضرائب مدخلات قابلة للاسترداد حسب الاختصاص الضريبي",
         "en": "Recoverable Input Taxes by Jurisdiction"
       }
     },
@@ -786,7 +786,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Indirect Taxes Payable by Jurisdiction",
+        "ar": "ضرائب غير مباشرة مستحقة حسب الاختصاص الضريبي",
         "en": "Indirect Taxes Payable by Jurisdiction"
       }
     },
@@ -1560,7 +1560,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Zakat or Income Tax Payable by Jurisdiction",
+        "ar": "الزكاة أو ضريبة الدخل المستحقة حسب الاختصاص الضريبي",
         "en": "Zakat or Income Tax Payable by Jurisdiction"
       }
     },
@@ -1578,7 +1578,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Zakat or Income Tax Expense",
+        "ar": "مصروف الزكاة أو ضريبة الدخل",
         "en": "Zakat or Income Tax Expense"
       }
     },
