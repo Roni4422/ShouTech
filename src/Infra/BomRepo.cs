@@ -114,7 +114,8 @@ public sealed class BomRepository : IBomRepository
             !new[] { "MATERIAL_RECEIPT", "STOCK_IN" }.Contains(bom.OutputDocumentKind.Trim().ToUpperInvariant()))
             throw new InvalidOperationException("Manufacturing input and output document types are invalid.");
         if (bom.Expenses.Any(e => e.Amount < 0 || string.IsNullOrWhiteSpace(e.ExpenseCode) ||
-            string.IsNullOrWhiteSpace(e.DebitAccountCode) || string.IsNullOrWhiteSpace(e.CreditAccountCode)))
+            string.IsNullOrWhiteSpace(e.DebitAccountCode) || string.IsNullOrWhiteSpace(e.CreditAccountCode) ||
+            string.Equals(e.DebitAccountCode.Trim(), e.CreditAccountCode.Trim(), StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Each production expense requires a code, a non-negative amount, and debit and credit accounts.");
         foreach (var line in bom.Lines)
         {
