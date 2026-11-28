@@ -485,9 +485,12 @@ public sealed class OperationsRepository : IOperationsRepository
             // and be currently unmatched.
             Guid statementId;
             string? existingMatch;
+            decimal statementAmount;
+            string statementAccount;
             await using (var check = CreateCommand(connection, transaction, """
-                SELECT CAST(statement_id AS TEXT), matched_journal_line_key FROM bank_statement_lines
-                WHERE company_id = @company AND id = @id AND is_deleted = 0
+                SELECT CAST(l.statement_id AS TEXT), l.matched_journal_line_key, l.amount, l.account_code
+                FROM bank_statement_lines l
+                WHERE l.company_id = @company AND l.id = @id AND l.is_deleted = 0
                 """))
             {
                 Add(check, "@company", companyId.Trim());
@@ -497,25 +500,57 @@ public sealed class OperationsRepository : IOperationsRepository
                     throw new InvalidOperationException("Statement line was not found for this company.");
                 statementId = ReadGuid(reader, 0);
                 existingMatch = ReadString(reader, 1);
+                statementAmount = ReadDecimal(reader, 2);
+                statementAccount = ReadString(reader, 3) ?? string.Empty;
             }
             if (!string.IsNullOrWhiteSpace(existingMatch))
                 throw new AppError(ErrorCodes.StatementLineAlreadyMatched,
                     "The statement line is already matched to a book line; unmatch it first.", statementLineId.ToString("D"));
             await EnsureStatementOpenAsync(connection, transaction, companyId, statementId, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(mark.AccountCode?.Trim(), statementAccount, StringComparison.OrdinalIgnoreCase)
+                || mark.ClearedAmount != statementAmount)
+                throw new InvalidOperationException("The reconciliation mark must use the statement line's bank account and exact amount.");
+
+            var chartCompany = await ResolveChartCompanyAsync(connection, companyId, cancellationToken).ConfigureAwait(false);
+            await using (var book = CreateCommand(connection, transaction, $"""
+                SELECT CAST(j.journal_entry_id AS TEXT), l.debit - l.credit
+                FROM journal_entry_lines l
+                INNER JOIN journal_entries j ON CAST(j.journal_entry_id AS TEXT) = CAST(l.journal_entry_id AS TEXT)
+                INNER JOIN chart_of_accounts a ON CAST(a.account_id AS TEXT) = CAST(l.account_id AS TEXT)
+                    AND CAST(a.company_id AS TEXT) = CAST(j.company_id AS TEXT)
+                WHERE CAST(l.journal_entry_line_id AS TEXT) = @key
+                  AND CAST(j.company_id AS TEXT) = @companyGuid
+                  AND j.status = 1 AND a.account_code = @code AND a.{NotDeleted}
+                """))
+            {
+                Add(book, "@key", mark.JournalLineKey);
+                Add(book, "@companyGuid", chartCompany);
+                Add(book, "@code", statementAccount);
+                await using var reader = await book.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                    throw new InvalidOperationException("The selected book line is not a posted line for this company's statement bank account.");
+                var actualEntryId = ReadString(reader, 0) ?? string.Empty;
+                var actualAmount = ReadDecimal(reader, 1);
+                if (!string.Equals(actualEntryId, mark.JournalEntryId, StringComparison.OrdinalIgnoreCase)
+                    || actualAmount != statementAmount)
+                    throw new InvalidOperationException("The selected book line does not match the statement line's posted entry and amount.");
+            }
+
+            await using (var existingMark = CreateCommand(connection, transaction, """
+                SELECT COUNT(*) FROM bank_reconciliation_marks
+                WHERE company_id = @company AND journal_line_key = @key AND is_cleared = 1
+                """))
+            {
+                Add(existingMark, "@company", companyId.Trim());
+                Add(existingMark, "@key", mark.JournalLineKey);
+                if (Convert.ToInt64(await existingMark.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) > 0)
+                    throw new InvalidOperationException("The selected book line is already reconciled; unmatch or unmark it first.");
+            }
 
             await using (var upsert = CreateCommand(connection, transaction, """
                 INSERT INTO bank_reconciliation_marks
                     (id, company_id, journal_entry_id, journal_line_key, account_code, statement_date, statement_ref, cleared_amount, is_cleared, statement_id, statement_line_id, created_by)
                 VALUES (@id, @company, @entry, @key, @code, @sdate, @sref, @amount, 1, @statement, @sline, @user)
-                ON CONFLICT (company_id, journal_line_key) DO UPDATE SET
-                    statement_date = EXCLUDED.statement_date,
-                    statement_ref = EXCLUDED.statement_ref,
-                    cleared_amount = EXCLUDED.cleared_amount,
-                    is_cleared = 1,
-                    statement_id = EXCLUDED.statement_id,
-                    statement_line_id = EXCLUDED.statement_line_id,
-                    updated_by = EXCLUDED.created_by,
-                    updated_at = CURRENT_TIMESTAMP
                 """))
             {
                 Add(upsert, "@id", FormatGuid(mark.Id));

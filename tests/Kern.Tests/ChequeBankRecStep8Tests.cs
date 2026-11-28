@@ -209,6 +209,20 @@ public class ChequeBankRecStep8Tests
         Assert.Equal(1000m, totals.BookBalance);
         Assert.Equal(1050m, totals.UnmatchedStatementTotal);
 
+        // Persistence must reject forged amounts even if a caller
+        // bypasses the application service and submits a fabricated mark.
+        var firstStatementLine = statementLines.Single(l => l.Amount == 600m);
+        var firstBookLine = bookLines.Single(l => l.Amount == 600m);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            repository.MatchBankLineAsync(CompanyCode, firstStatementLine.Id,
+                new BankReconciliationMark
+                {
+                    JournalEntryId = firstBookLine.EntryId,
+                    JournalLineKey = firstBookLine.LineKey,
+                    AccountCode = Bank,
+                    ClearedAmount = 1m
+                }, Actor));
+
         // Matching moves the difference by the matched amounts.
         await MatchAsync(ops, statement, statementLines, bookLines, 600m);
         statementLines = await ops.GetBankStatementLinesAsync(CompanyCode, statement.Id);
