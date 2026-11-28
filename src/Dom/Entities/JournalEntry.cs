@@ -120,7 +120,10 @@ public sealed record JournalEntrySnapshot(
     string CurrencyCode,
     decimal ExchangeRate,
     JournalEntryStatus Status,
-    IReadOnlyList<JournalEntryLineSnapshot> Lines);
+    IReadOnlyList<JournalEntryLineSnapshot> Lines,
+    string? SourceDocType = null,
+    string? SourceDocId = null,
+    string? SourceDocNo = null);
 
 public sealed record JournalEntryLineSnapshot(
     int LineNumber,
