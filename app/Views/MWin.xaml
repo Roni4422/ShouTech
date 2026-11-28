@@ -804,13 +804,7 @@
                             loc:LocProps.ToolTipKey="Menu.Reports"
                             ToolTip="Reports"
                             Click="OnQuickReportsClick"/>
-                    <Button x:Name="QuickRecycleBinButton"
-                            Style="{StaticResource QuickAccessButtonStyle}"
-                            qb:QuickBarProps.Icon="pack://application:,,,/Resources/Ico/ArchiveBin.png"
-                            loc:LocProps.ToolTipKey="RecycleBin.Title"
-                            ToolTip="Recycle Bin"
-                            Click="OnRecycleBinClick"/>
-                    <Border Width="1"
+                                        <Border Width="1"
                             Margin="6,4"
                             Background="{DynamicResource ShellContentBorderBrush}"/>
                     <Button x:Name="AccentPickerButton"
@@ -926,22 +920,7 @@
                         <TextBlock Text="{Binding CurrentDatabase}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StatusBarItem>
-                <StatusBarItem x:Name="BinStatusItem"
-                               HorizontalAlignment="Left"
-                               HorizontalContentAlignment="Left">
-                    <Button x:Name="RecycleBinButton"
-                            Style="{StaticResource RecycleBinIconButtonStyle}"
-                            ToolTip="Archive bin"
-                            Width="36"
-                            Height="30"
-                            Margin="6,0,8,0"
-                            Click="OnRecycleBinClick">
-                        <Image Width="24" Height="24"
-                               Stretch="Uniform"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               Source="pack://application:,,,/Resources/Ico/ArchiveBin.png"/>
-                    </Button>
-                </StatusBarItem>
+</StatusBarItem>
                             </StatusBar>
 
             <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->

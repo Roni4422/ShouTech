@@ -316,9 +316,6 @@ namespace ShouTech.App.Views
             if (RecycleBinLayer is null || RecycleBinCornerButton is null)
                 return;
 
-            // Keep the user-positioned bin inside the content viewport.
-            // Hide it rather than moving it when the saved position no longer
-            // fits; it reappears when the viewport can contain that position.
             const double minimumWidth = 120;
             const double minimumHeight = 146;
             var width = RecycleBinLayer.ActualWidth;
@@ -329,20 +326,34 @@ namespace ShouTech.App.Views
             var buttonHeight = RecycleBinCornerButton.ActualHeight > 0
                 ? RecycleBinCornerButton.ActualHeight
                 : RecycleBinCornerButton.Height;
+            var hasRoom = width >= Math.Max(minimumWidth, buttonWidth) &&
+                          height >= Math.Max(minimumHeight, buttonHeight);
+
+            if (!hasRoom)
+            {
+                RecycleBinCornerButton.Visibility = Visibility.Collapsed;
+                return;
+            }
+
             var left = Canvas.GetLeft(RecycleBinCornerButton);
             var top = Canvas.GetTop(RecycleBinCornerButton);
-            var hasPosition = !double.IsNaN(left) && !double.IsNaN(top);
-            var positionFits = !hasPosition ||
-                (left >= 0 && top >= 0 &&
-                 left + buttonWidth <= width &&
-                 top + buttonHeight <= height);
-            var hasRoom =
-                width >= Math.Max(minimumWidth, buttonWidth) &&
-                height >= Math.Max(minimumHeight, buttonHeight) &&
-                positionFits;
+            if (!double.IsNaN(left) && !double.IsNaN(top))
+            {
+                var adjustedLeft = Math.Clamp(left, 0, width - buttonWidth);
+                var adjustedTop = Math.Clamp(top, 0, height - buttonHeight);
+                if (Math.Abs(adjustedLeft - left) > 0.5 ||
+                    Math.Abs(adjustedTop - top) > 0.5)
+                {
+                    Canvas.SetLeft(RecycleBinCornerButton, adjustedLeft);
+                    Canvas.SetTop(RecycleBinCornerButton, adjustedTop);
+                    var preferences = UsrPref.Load();
+                    preferences.RecycleBinLeft = adjustedLeft;
+                    preferences.RecycleBinTop = adjustedTop;
+                    preferences.Save();
+                }
+            }
 
-            RecycleBinCornerButton.Visibility =
-                hasRoom ? Visibility.Visible : Visibility.Collapsed;
+            RecycleBinCornerButton.Visibility = Visibility.Visible;
         }
 
         private static bool IsArabicUi()
@@ -555,14 +566,8 @@ namespace ShouTech.App.Views
                         count)
                     : "Recycle bin — empty. Soft-deleted master data appears here.";
 
-                if (RecycleBinButton != null)
-                    RecycleBinButton.ToolTip = tooltip;
-
                 if (RecycleBinCornerButton != null)
                     RecycleBinCornerButton.ToolTip = tooltip;
-
-                if (QuickRecycleBinButton != null)
-                    QuickRecycleBinButton.ToolTip = tooltip;
 
             }
             catch (Exception exL395)
