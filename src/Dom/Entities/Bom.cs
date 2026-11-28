@@ -12,6 +12,10 @@ public sealed class Bom
     public Guid Id { get; set; } = Guid.NewGuid();
     public string MaterialCode { get; set; } = string.Empty;
     public string? MaterialName { get; set; }
+    /// <summary>Human-readable manufacturing template label used by the template picker.</summary>
+    public string PickerLabel => string.IsNullOrWhiteSpace(MaterialName)
+        ? $"{MaterialCode} · v{Version}"
+        : $"{MaterialName} ({MaterialCode}) · v{Version}";
     /// <summary>Version number within (company, material); starts at 1.</summary>
     public int Version { get; set; } = 1;
     public bool IsActive { get; set; } = true;
