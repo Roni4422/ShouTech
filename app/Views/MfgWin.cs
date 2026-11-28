@@ -347,6 +347,18 @@ public sealed class MfgWin : BaseWin
             element.Margin = new Thickness(margin.Left, 0, margin.Right, 2);
         }
 
+        // Keep input text usable in the compact header: one pixel of
+        // inner padding on every field control, including the BOM picker.
+        foreach (var control in new Control[]
+        {
+            _txtDocNo, _dtDate, _txtItem, _txtItemName, _txtQty, _txtUnit,
+            _txtWhs, _txtOverheads, _txtStdCost, _txtNotes, _txtScrapWhs,
+            _txtFinishQty, _cmbBom, _dtPlannedStart, _dtPlannedEnd,
+            _txtSalesOrder, _txtCostCenter, _txtSourceWhs, _txtWipWhs,
+            _txtTargetWhs, btnFindBom
+        })
+            control.Padding = new Thickness(1);
+
         Grid.SetRow(headerForm, 0);
         body.Children.Add(headerForm);
 
