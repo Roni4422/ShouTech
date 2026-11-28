@@ -247,7 +247,13 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
             docKind = Text(reader.GetValue(0)) ?? "";
             supplierId = Convert.ToInt64(reader.GetValue(1), CultureInfo.InvariantCulture);
         }
-        if (supplierId <= 0) throw Invalid();
+        // The public picker lists posted supplier purchase invoices only.
+        // Enforce the same boundary here: callers can bypass the picker and
+        // submit arbitrary document IDs, so a posted receipt, return, order,
+        // or other purchase document must never be accepted as the source
+        // liability for a landed-cost reclassification.
+        if (supplierId <= 0 || !string.Equals(docKind, "PUR", StringComparison.OrdinalIgnoreCase))
+            throw Invalid();
 
         var consuming = FindConsumingVoucher(connection, transaction, company, docId, null);
         if (consuming is not null)
