@@ -49,7 +49,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Assets",
+        "ar": "الأصول",
         "en": "Assets"
       }
     },
@@ -67,7 +67,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Non-current Assets",
+        "ar": "الأصول غير المتداولة",
         "en": "Non-current Assets"
       }
     },
@@ -85,7 +85,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Land",
+        "ar": "الأراضي",
         "en": "Land"
       }
     },
@@ -103,7 +103,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Buildings and Structures",
+        "ar": "المباني والإنشاءات",
         "en": "Buildings and Structures"
       }
     },
@@ -121,7 +121,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Machinery and Equipment",
+        "ar": "الآلات والمعدات",
         "en": "Machinery and Equipment"
       }
     },
@@ -139,7 +139,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Vehicles",
+        "ar": "المركبات",
         "en": "Vehicles"
       }
     },
@@ -157,7 +157,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Furniture and Fixtures",
+        "ar": "الأثاث والتجهيزات",
         "en": "Furniture and Fixtures"
       }
     },
@@ -175,7 +175,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Computer Equipment and Software",
+        "ar": "أجهزة الحاسب والبرمجيات",
         "en": "Computer Equipment and Software"
       }
     },
@@ -193,7 +193,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Leasehold Improvements",
+        "ar": "تحسينات العقارات المستأجرة",
         "en": "Leasehold Improvements"
       }
     },
@@ -211,7 +211,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Right-of-use Assets",
+        "ar": "أصول حق الاستخدام",
         "en": "Right-of-use Assets"
       }
     },
@@ -229,7 +229,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Accumulated Depreciation and Amortization",
+        "ar": "مجمع الإهلاك والإطفاء",
         "en": "Accumulated Depreciation and Amortization"
       }
     },
@@ -247,7 +247,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Current Assets",
+        "ar": "الأصول المتداولة",
         "en": "Current Assets"
       }
     },
@@ -265,7 +265,7 @@
       "posting": true,
       "cardType": "Customer",
       "names": {
-        "ar": "Trade Accounts Receivable",
+        "ar": "الذمم المدينة التجارية",
         "en": "Trade Accounts Receivable"
       }
     },
@@ -283,7 +283,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Notes Receivable",
+        "ar": "أوراق القبض",
         "en": "Notes Receivable"
       }
     },
@@ -301,7 +301,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "Merchandise Inventory",
+        "ar": "مخزون البضاعة",
         "en": "Merchandise Inventory"
       }
     },
@@ -319,7 +319,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "بضاعة مسلّمة غير مفوترة",
+        "ar": "بضاعة مسلمة غير مفوترة",
         "en": "Stock Delivered But Not Billed"
       }
     },
@@ -337,7 +337,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Prepaid Expenses",
+        "ar": "مصروفات مدفوعة مقدماً",
         "en": "Prepaid Expenses"
       }
     },
@@ -391,7 +391,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Advances and Imprests",
+        "ar": "السلف والعهد",
         "en": "Advances and Imprests"
       }
     },
@@ -409,7 +409,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Other Receivables",
+        "ar": "ذمم مدينة أخرى",
         "en": "Other Receivables"
       }
     },
@@ -427,7 +427,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Short-term Investments",
+        "ar": "استثمارات قصيرة الأجل",
         "en": "Short-term Investments"
       }
     },
@@ -445,7 +445,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Allowance for Expected Credit Losses",
+        "ar": "مخصص خسائر الائتمان المتوقعة",
         "en": "Allowance for Expected Credit Losses"
       }
     },
@@ -463,7 +463,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Cash and Cash Equivalents",
+        "ar": "النقدية وما في حكمها",
         "en": "Cash and Cash Equivalents"
       }
     },
@@ -481,7 +481,7 @@
       "posting": true,
       "cardType": "Cash",
       "names": {
-        "ar": "Cash on Hand",
+        "ar": "الصندوق النقدي",
         "en": "Cash on Hand"
       }
     },
@@ -499,7 +499,7 @@
       "posting": true,
       "cardType": "Bank",
       "names": {
-        "ar": "Bank Accounts",
+        "ar": "الحسابات البنكية",
         "en": "Bank Accounts"
       }
     },
@@ -517,7 +517,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Cash in Transit",
+        "ar": "النقدية بالطريق",
         "en": "Cash in Transit"
       }
     },
@@ -535,7 +535,7 @@
       "posting": true,
       "cardType": "Bank",
       "names": {
-        "ar": "Payment Service Provider Balances",
+        "ar": "أرصدة مزودي خدمات الدفع",
         "en": "Payment Service Provider Balances"
       }
     },
@@ -553,7 +553,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Liabilities and Equity",
+        "ar": "الالتزامات وحقوق الملكية",
         "en": "Liabilities and Equity"
       }
     },
@@ -571,7 +571,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Equity",
+        "ar": "حقوق الملكية",
         "en": "Equity"
       }
     },
@@ -589,7 +589,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "Share Capital",
+        "ar": "رأس المال",
         "en": "Share Capital"
       }
     },
@@ -607,7 +607,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "Owner or Partners Current Account",
+        "ar": "الحساب الجاري للمالك أو الشركاء",
         "en": "Owner or Partners Current Account"
       }
     },
@@ -625,7 +625,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "Reserves",
+        "ar": "الاحتياطيات",
         "en": "Reserves"
       }
     },
@@ -643,7 +643,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "Retained Earnings",
+        "ar": "الأرباح المحتجزة",
         "en": "Retained Earnings"
       }
     },
@@ -661,7 +661,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "Current Year Profit or Loss",
+        "ar": "ربح أو خسارة السنة الحالية",
         "en": "Current Year Profit or Loss"
       }
     },
@@ -679,7 +679,7 @@
       "posting": true,
       "cardType": "Equity",
       "names": {
-        "ar": "Dividends Payable",
+        "ar": "توزيعات أرباح مستحقة",
         "en": "Dividends Payable"
       }
     },
@@ -697,7 +697,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Current Liabilities",
+        "ar": "الالتزامات المتداولة",
         "en": "Current Liabilities"
       }
     },
@@ -715,7 +715,7 @@
       "posting": true,
       "cardType": "Supplier",
       "names": {
-        "ar": "Trade Accounts Payable",
+        "ar": "الذمم الدائنة التجارية",
         "en": "Trade Accounts Payable"
       }
     },
@@ -733,7 +733,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Notes Payable",
+        "ar": "أوراق الدفع",
         "en": "Notes Payable"
       }
     },
@@ -751,7 +751,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Accrued Expenses",
+        "ar": "مصروفات مستحقة",
         "en": "Accrued Expenses"
       }
     },
@@ -769,7 +769,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Salaries and Wages Payable",
+        "ar": "رواتب وأجور مستحقة",
         "en": "Salaries and Wages Payable"
       }
     },
@@ -805,7 +805,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Customer Advances",
+        "ar": "دفعات مقدمة من العملاء",
         "en": "Customer Advances"
       }
     },
@@ -823,7 +823,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Short-term Loans",
+        "ar": "قروض قصيرة الأجل",
         "en": "Short-term Loans"
       }
     },
@@ -841,7 +841,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Withholding Taxes Payable",
+        "ar": "ضرائب استقطاع مستحقة",
         "en": "Withholding Taxes Payable"
       }
     },
@@ -859,7 +859,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Other Current Provisions and Liabilities",
+        "ar": "مخصصات والتزامات متداولة أخرى",
         "en": "Other Current Provisions and Liabilities"
       }
     },
@@ -877,7 +877,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Non-current Liabilities",
+        "ar": "الالتزامات غير المتداولة",
         "en": "Non-current Liabilities"
       }
     },
@@ -895,7 +895,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Long-term Loans",
+        "ar": "قروض طويلة الأجل",
         "en": "Long-term Loans"
       }
     },
@@ -913,7 +913,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Lease Liabilities",
+        "ar": "التزامات عقود الإيجار",
         "en": "Lease Liabilities"
       }
     },
@@ -931,7 +931,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Long-term Provisions",
+        "ar": "مخصصات طويلة الأجل",
         "en": "Long-term Provisions"
       }
     },
@@ -949,7 +949,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Revenue",
+        "ar": "الإيرادات",
         "en": "Revenue"
       }
     },
@@ -967,7 +967,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "Goods Sales",
+        "ar": "مبيعات البضائع",
         "en": "Goods Sales"
       }
     },
@@ -985,7 +985,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "Sales Returns and Allowances",
+        "ar": "مردودات وخصومات المبيعات",
         "en": "Sales Returns and Allowances"
       }
     },
@@ -1003,7 +1003,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "Service Revenue",
+        "ar": "إيرادات الخدمات",
         "en": "Service Revenue"
       }
     },
@@ -1021,7 +1021,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "Contract and Project Revenue",
+        "ar": "إيرادات العقود والمشروعات",
         "en": "Contract and Project Revenue"
       }
     },
@@ -1039,7 +1039,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "Sales Discounts",
+        "ar": "خصومات المبيعات",
         "en": "Sales Discounts"
       }
     },
@@ -1057,7 +1057,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "Other Income",
+        "ar": "إيرادات أخرى",
         "en": "Other Income"
       }
     },
@@ -1075,7 +1075,7 @@
       "posting": true,
       "cardType": "Revenue",
       "names": {
-        "ar": "Gain on Disposal of Assets",
+        "ar": "أرباح استبعاد الأصول",
         "en": "Gain on Disposal of Assets"
       }
     },
@@ -1093,7 +1093,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Purchases and Cost of Sales",
+        "ar": "المشتريات وتكلفة المبيعات",
         "en": "Purchases and Cost of Sales"
       }
     },
@@ -1111,7 +1111,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Cost of Goods Sold",
+        "ar": "تكلفة البضاعة المباعة",
         "en": "Cost of Goods Sold"
       }
     },
@@ -1129,7 +1129,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Merchandise Purchases",
+        "ar": "مشتريات البضاعة",
         "en": "Merchandise Purchases"
       }
     },
@@ -1147,7 +1147,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Purchase Returns",
+        "ar": "مردودات المشتريات",
         "en": "Purchase Returns"
       }
     },
@@ -1165,7 +1165,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Freight-in",
+        "ar": "مصاريف نقل المشتريات",
         "en": "Freight-in"
       }
     },
@@ -1183,7 +1183,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Purchase Discounts",
+        "ar": "خصومات المشتريات",
         "en": "Purchase Discounts"
       }
     },
@@ -1201,7 +1201,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Inventory Variances and Adjustments",
+        "ar": "فروقات وتسويات المخزون",
         "en": "Inventory Variances and Adjustments"
       }
     },
@@ -1237,7 +1237,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Operating and Administrative Expenses",
+        "ar": "المصروفات التشغيلية والإدارية",
         "en": "Operating and Administrative Expenses"
       }
     },
@@ -1255,7 +1255,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Salaries and Wages",
+        "ar": "الرواتب والأجور",
         "en": "Salaries and Wages"
       }
     },
@@ -1273,7 +1273,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Rent Expense",
+        "ar": "مصروف الإيجار",
         "en": "Rent Expense"
       }
     },
@@ -1291,7 +1291,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Utilities and Energy",
+        "ar": "مصروف المرافق والطاقة",
         "en": "Utilities and Energy"
       }
     },
@@ -1309,7 +1309,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Telecommunications and Internet",
+        "ar": "الاتصالات والإنترنت",
         "en": "Telecommunications and Internet"
       }
     },
@@ -1327,7 +1327,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Depreciation and Amortization",
+        "ar": "الإهلاك والإطفاء",
         "en": "Depreciation and Amortization"
       }
     },
@@ -1345,7 +1345,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "General and Administrative Expenses",
+        "ar": "المصروفات العمومية والإدارية",
         "en": "General and Administrative Expenses"
       }
     },
@@ -1363,7 +1363,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Marketing and Advertising",
+        "ar": "التسويق والإعلان",
         "en": "Marketing and Advertising"
       }
     },
@@ -1381,7 +1381,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Bank Charges",
+        "ar": "مصاريف وعمولات بنكية",
         "en": "Bank Charges"
       }
     },
@@ -1399,7 +1399,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Foreign Exchange Losses",
+        "ar": "خسائر فروق العملة",
         "en": "Foreign Exchange Losses"
       }
     },
@@ -1417,7 +1417,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Repairs and Maintenance",
+        "ar": "الإصلاح والصيانة",
         "en": "Repairs and Maintenance"
       }
     },
@@ -1435,7 +1435,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Professional and Consulting Fees",
+        "ar": "أتعاب مهنية واستشارية",
         "en": "Professional and Consulting Fees"
       }
     },
@@ -1453,7 +1453,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Travel and Transportation",
+        "ar": "مصاريف السفر والنقل",
         "en": "Travel and Transportation"
       }
     },
@@ -1471,7 +1471,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Insurance Expense",
+        "ar": "مصروف التأمين",
         "en": "Insurance Expense"
       }
     },
@@ -1489,7 +1489,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Credit Losses and Bad Debts",
+        "ar": "خسائر الائتمان والديون المعدومة",
         "en": "Credit Losses and Bad Debts"
       }
     },
@@ -1507,7 +1507,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Finance Costs and Interest",
+        "ar": "تكاليف التمويل والفوائد",
         "en": "Finance Costs and Interest"
       }
     },
@@ -1525,7 +1525,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Income Tax Expense",
+        "ar": "مصروف ضريبة الدخل",
         "en": "Income Tax Expense"
       }
     },
@@ -1543,7 +1543,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Miscellaneous Expenses",
+        "ar": "مصروفات متنوعة",
         "en": "Miscellaneous Expenses"
       }
     },
@@ -1597,7 +1597,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Domestic Recoverable Input Tax",
+        "ar": "ضريبة مدخلات محلية قابلة للاسترداد",
         "en": "Domestic Recoverable Input Tax"
       }
     },
@@ -1615,7 +1615,7 @@
       "posting": true,
       "cardType": "Asset",
       "names": {
-        "ar": "Import Recoverable Input Tax",
+        "ar": "ضريبة مدخلات الاستيراد القابلة للاسترداد",
         "en": "Import Recoverable Input Tax"
       }
     },
@@ -1633,7 +1633,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Tax Payable on Domestic Sales",
+        "ar": "ضريبة مستحقة على المبيعات المحلية",
         "en": "Tax Payable on Domestic Sales"
       }
     },
@@ -1651,7 +1651,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Tax Payable on Imports or Adjustments",
+        "ar": "ضريبة مستحقة على الواردات أو التسويات",
         "en": "Tax Payable on Imports or Adjustments"
       }
     },
@@ -1705,7 +1705,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "Finished Goods Inventory",
+        "ar": "مخزون الإنتاج التام",
         "en": "Finished Goods Inventory"
       }
     },
@@ -1723,7 +1723,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "Spare Parts and Supplies Inventory",
+        "ar": "مخزون قطع الغيار والمستلزمات",
         "en": "Spare Parts and Supplies Inventory"
       }
     },
@@ -1759,7 +1759,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Direct Manufacturing Labor",
+        "ar": "أجور العمالة الصناعية المباشرة",
         "en": "Direct Manufacturing Labor"
       }
     },
@@ -1777,7 +1777,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Applied Manufacturing Overhead",
+        "ar": "التكاليف الصناعية غير المباشرة المحملة",
         "en": "Applied Manufacturing Overhead"
       }
     },
@@ -1795,7 +1795,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Cost of Completed Production Transferred to Inventory",
+        "ar": "تكلفة الإنتاج التام المحول إلى المخزون",
         "en": "Cost of Completed Production Transferred to Inventory"
       }
     },
@@ -1813,7 +1813,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Factory Machinery Maintenance",
+        "ar": "صيانة آلات المصنع",
         "en": "Factory Machinery Maintenance"
       }
     },
@@ -1831,7 +1831,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Factory Supervisory Labor",
+        "ar": "أجور الإشراف بالمصنع",
         "en": "Factory Supervisory Labor"
       }
     },
@@ -1849,7 +1849,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Factory Utilities and Energy",
+        "ar": "مرافق وطاقة المصنع",
         "en": "Factory Utilities and Energy"
       }
     },
@@ -1867,7 +1867,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Manufacturing Equipment Depreciation",
+        "ar": "إهلاك معدات التصنيع",
         "en": "Manufacturing Equipment Depreciation"
       }
     },
@@ -1885,7 +1885,7 @@
       "posting": false,
       "cardType": null,
       "names": {
-        "ar": "Closing Accounts",
+        "ar": "الحسابات الختامية",
         "en": "Closing Accounts"
       }
     },
@@ -1903,7 +1903,7 @@
       "posting": true,
       "cardType": "Inventory",
       "names": {
-        "ar": "Work in Progress by Job Order",
+        "ar": "إنتاج تحت التشغيل حسب أمر التشغيل",
         "en": "Work in Progress by Job Order"
       }
     },
@@ -1921,7 +1921,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Direct Materials by Job Order",
+        "ar": "المواد المباشرة حسب أمر التشغيل",
         "en": "Direct Materials by Job Order"
       }
     },
@@ -1939,7 +1939,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Direct Labor by Job Order",
+        "ar": "العمالة المباشرة حسب أمر التشغيل",
         "en": "Direct Labor by Job Order"
       }
     },
@@ -1957,7 +1957,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Applied Overhead by Job Order",
+        "ar": "التكاليف غير المباشرة المحملة حسب أمر التشغيل",
         "en": "Applied Overhead by Job Order"
       }
     },
@@ -1975,7 +1975,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Manufacturing Overhead Variances",
+        "ar": "فروقات التكاليف الصناعية غير المباشرة",
         "en": "Manufacturing Overhead Variances"
       }
     },
