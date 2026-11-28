@@ -655,6 +655,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
             if (order.Status is not (MfgOrderStatuses.Confirmed or MfgOrderStatuses.InProcess))
                 throw StageError(order, "issue materials");
+            var expectedStatus = order.Status;
             var seq = await NextEventSeqAsync(connection, transaction, order.Id, cancellationToken).ConfigureAwait(false);
             var documentNo = $"MO-{order.DocNo}";
             var issueDocNo = $"{documentNo}-I{seq}";
@@ -755,7 +756,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             order.AccumulatedCost = decimal.Round(order.AccumulatedCost + total, 2);
             order.WipBalance = decimal.Round(order.WipBalance + total, 2);
             order.Status = MfgOrderStatuses.InProcess;
-            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, MfgOrderStatuses.InProcess, userId, cancellationToken).ConfigureAwait(false);
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, expectedStatus, MfgOrderStatuses.InProcess, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Issue", order.DocDate, issuedQtyTotal, total, journalDocNo, issueDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new MfgStageResult(order.Id, order.Status, total, journalDocNo, order.WipBalance, order.ProducedQty);
@@ -1032,6 +1033,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
             if (order.Status is not (MfgOrderStatuses.InProcess or MfgOrderStatuses.Completed))
                 throw StageError(order, "close");
+            var expectedCloseStatus = order.Status;
             var seq = await NextEventSeqAsync(connection, transaction, order.Id, cancellationToken).ConfigureAwait(false);
             var documentNo = $"MO-{order.DocNo}";
             var closeDocNo = $"{documentNo}-C{seq}";
@@ -1070,7 +1072,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             order.StandardVariance = standardVariance;
             order.WipBalance = 0m;
             order.Status = MfgOrderStatuses.Closed;
-            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, MfgOrderStatuses.Closed, userId, cancellationToken).ConfigureAwait(false);
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, expectedCloseStatus, MfgOrderStatuses.Closed, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Close", order.DocDate, order.ProducedQty, variance, journalDocNo, closeDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new MfgStageResult(order.Id, order.Status, variance, journalDocNo, 0m, order.ProducedQty);
