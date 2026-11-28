@@ -278,11 +278,14 @@ public sealed class OperationsRepository : IOperationsRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (!string.Equals(statement.Status, BankStatementStatuses.Open, StringComparison.Ordinal))
+                throw new InvalidOperationException("A bank statement can only be persisted in the open state.");
+
             await using (var update = CreateCommand(connection, transaction, """
                 UPDATE bank_statements SET account_code = @code, statement_date = @sdate, statement_ref = @sref,
                     period_from = @from, period_to = @to, opening_balance = @opening, closing_balance = @closing,
-                    status = @status, updated_by = @user, updated_at = CURRENT_TIMESTAMP
-                WHERE company_id = @company AND id = @id AND is_deleted = 0
+                    updated_by = @user, updated_at = CURRENT_TIMESTAMP
+                WHERE company_id = @company AND id = @id AND status = 'Open' AND is_deleted = 0
                 """))
             {
                 BindStatement(update, companyId, statement, userId);
@@ -292,11 +295,27 @@ public sealed class OperationsRepository : IOperationsRepository
                     return statement.Id;
                 }
             }
+
+            // A closed statement is immutable. Distinguish it from a new
+            // statement before attempting INSERT, so a caller cannot turn
+            // a closed record back into an editable one or overwrite its
+            // closing balance through the generic save path.
+            await using (var exists = CreateCommand(connection, transaction, """
+                SELECT COUNT(*) FROM bank_statements
+                WHERE company_id = @company AND id = @id AND is_deleted = 0
+                """))
+            {
+                Add(exists, "@company", companyId.Trim());
+                Add(exists, "@id", FormatGuid(statement.Id));
+                if (Convert.ToInt64(await exists.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture) > 0)
+                    throw new InvalidOperationException("Bank statement is closed or cannot be updated; closed statements are immutable.");
+            }
+
             await using var insert = CreateCommand(connection, transaction, """
                 INSERT INTO bank_statements
                     (id, company_id, account_code, statement_date, statement_ref, period_from, period_to,
                      opening_balance, closing_balance, status, created_by)
-                VALUES (@id, @company, @code, @sdate, @sref, @from, @to, @opening, @closing, @status, @user)
+                VALUES (@id, @company, @code, @sdate, @sref, @from, @to, @opening, @closing, 'Open', @user)
                 """);
             BindStatement(insert, companyId, statement, userId);
             await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -321,7 +340,6 @@ public sealed class OperationsRepository : IOperationsRepository
         Add(command, "@to", (object?)statement.PeriodTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? DBNull.Value);
         Add(command, "@opening", statement.OpeningBalance);
         Add(command, "@closing", statement.ClosingBalance);
-        Add(command, "@status", string.IsNullOrWhiteSpace(statement.Status) ? BankStatementStatuses.Open : statement.Status);
         Add(command, "@user", userId);
     }
 

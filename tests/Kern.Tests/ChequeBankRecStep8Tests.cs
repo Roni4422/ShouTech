@@ -245,8 +245,34 @@ public class ChequeBankRecStep8Tests
         Assert.Equal(0m, totals.UnmatchedStatementTotal);
 
         await ops.CloseBankStatementAsync(CompanyCode, statement.Id, Actor);
-        Assert.Equal(BankStatementStatuses.Closed,
-            (await ops.GetBankStatementAsync(CompanyCode, statement.Id))!.Status);
+        var closed = (await ops.GetBankStatementAsync(CompanyCode, statement.Id))!;
+        Assert.Equal(BankStatementStatuses.Closed, closed.Status);
+
+        // Closed statements are immutable: the ordinary save route must
+        // not reopen them or rewrite their bank-reported closing balance.
+        var attemptedEdit = new BankStatement
+        {
+            Id = closed.Id,
+            AccountCode = closed.AccountCode,
+            StatementDate = closed.StatementDate,
+            StatementRef = closed.StatementRef,
+            OpeningBalance = closed.OpeningBalance,
+            ClosingBalance = 9999m,
+            Status = BankStatementStatuses.Open
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ops.SaveBankStatementAsync(CompanyCode, attemptedEdit, Actor));
+        Assert.Equal(1050m, (await ops.GetBankStatementAsync(CompanyCode, statement.Id))!.ClosingBalance);
+
+        var attemptedClosedInsert = new BankStatement
+        {
+            AccountCode = Bank,
+            StatementDate = new DateOnly(2026, 12, 31),
+            ClosingBalance = 1m,
+            Status = BankStatementStatuses.Closed
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ops.SaveBankStatementAsync(CompanyCode, attemptedClosedInsert, Actor));
     }
 
     [Fact]

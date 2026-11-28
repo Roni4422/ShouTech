@@ -104,6 +104,8 @@ public sealed class OperationsService
         ArgumentNullException.ThrowIfNull(statement);
         if (string.IsNullOrWhiteSpace(statement.AccountCode))
             throw new InvalidOperationException("A bank account code is required for a statement.");
+        if (!string.Equals(statement.Status, BankStatementStatuses.Open, StringComparison.Ordinal))
+            throw new InvalidOperationException("A bank statement can only be saved while it is open; use the reconciliation close operation to close it.");
         if (statement.PeriodFrom is { } from && statement.PeriodTo is { } to && to < from)
             throw new InvalidOperationException("The statement period end cannot precede its start.");
         statement.AccountCode = statement.AccountCode.Trim();
