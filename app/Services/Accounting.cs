@@ -367,7 +367,7 @@ internal static class AccRepo
 
     private static string SelectColumnsSql() => $"""
         SELECT CAST(a.account_id AS TEXT), a.account_code, p.account_code,
-               a.account_name, a.account_name,
+               COALESCE(a.name_ar, a.account_name), a.account_name,
                CASE WHEN a.is_postable THEN 'Postable' ELSE 'Summary' END,
                CASE WHEN a.is_active THEN 'Active' ELSE 'Disabled' END,
                a.risk, a.cost_center_mode, a.allow_reconcile,
@@ -404,11 +404,72 @@ internal static class AccRepo
             ORDER BY a.account_code;
             """;
         Add(command, "$company", CompanyValue(companyGuid));
-        using var reader = command.ExecuteReader();
         var result = new List<AccRec>();
-        while (reader.Read())
-            result.Add(Read(reader));
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+                result.Add(Read(reader));
+        }
+
+        var templateCode = "SIMPLE";
+        using (var templateCommand = connection.CreateCommand())
+        {
+            templateCommand.CommandText = "SELECT COALESCE(NULLIF(coa_template_code, ''), 'SIMPLE') FROM companies WHERE company_id = $company;";
+            Add(templateCommand, "$company", CompanyValue(companyGuid));
+            templateCode = Convert.ToString(templateCommand.ExecuteScalar(), CultureInfo.InvariantCulture) ?? "SIMPLE";
+        }
+
+        var template = CoaTemplatesSvc.LoadByCode(templateCode);
+        var templateAccounts = template?.Accounts
+            .Where(account => !string.IsNullOrWhiteSpace(account.Code))
+            .GroupBy(account => account.Code.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var language = (App.CurrentLanguageCode ?? "en").Split('-', '_')[0].ToLowerInvariant();
+
+        for (var index = 0; index < result.Count; index++)
+        {
+            var account = result[index];
+            var englishName = account.NameEn;
+            var localizedName = account.Name;
+
+            if (ContainsArabicText(englishName))
+                englishName = null;
+
+            if (templateAccounts is not null && templateAccounts.TryGetValue(account.Code, out var templateAccount))
+            {
+                if (string.IsNullOrWhiteSpace(englishName) &&
+                    templateAccount.Names.TryGetValue("en", out var templateEnglish) &&
+                    !string.IsNullOrWhiteSpace(templateEnglish))
+                    englishName = templateEnglish.Trim();
+
+                if (templateAccount.Names.TryGetValue(language, out var templateLocalized) &&
+                    !string.IsNullOrWhiteSpace(templateLocalized))
+                    localizedName = templateLocalized.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(englishName))
+                englishName = $"Account {account.Code}";
+
+            if (string.Equals(language, "en", StringComparison.Ordinal))
+                localizedName = englishName;
+            else if (string.IsNullOrWhiteSpace(localizedName) || string.Equals(localizedName, account.NameEn, StringComparison.OrdinalIgnoreCase))
+                localizedName = englishName;
+
+            result[index] = account with { Name = localizedName, NameEn = englishName };
+        }
+
         return result;
+    }
+
+    private static bool ContainsArabicText(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return false;
+
+        return value.Any(character =>
+            (character >= '\\u0600' && character <= '\\u06FF') ||
+            (character >= '\\u0750' && character <= '\\u077F') ||
+            (character >= '\\u08A0' && character <= '\\u08FF'));
     }
 
     public enum AccountMatchKind { None, Exact, UniquePartial, Ambiguous }
