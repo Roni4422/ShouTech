@@ -4658,6 +4658,7 @@
     "ReceiptSupplier": "مورّد الإيصال (افتراضي)",
     "Payee": "المستفيد",
     "CreditMode": "وضع الائتمان",
+    "DefaultFreightDescription": "أجور النقل",
     "BasisValue": "حسب القيمة",
     "BasisQuantity": "حسب الكمية",
     "BasisWeight": "حسب الوزن",

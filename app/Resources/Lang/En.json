@@ -4528,6 +4528,7 @@
     "ReceiptSupplier": "Receipt supplier (default)",
     "Payee": "Payee",
     "CreditMode": "Credit mode",
+    "DefaultFreightDescription": "Freight",
     "BasisValue": "By value",
     "BasisQuantity": "By quantity",
     "BasisWeight": "By weight",

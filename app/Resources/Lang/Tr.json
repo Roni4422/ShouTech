@@ -4467,6 +4467,7 @@
   "ReceiptSupplier": "Makbuz tedarikçisi (varsayılan)",
   "Payee": "Alacaklı",
   "CreditMode": "Kredi modu",
+    "DefaultFreightDescription": "Navlun",
     "BasisValue": "Değere göre",
     "BasisQuantity": "Miktara göre",
     "BasisWeight": "Ağırlığa göre",

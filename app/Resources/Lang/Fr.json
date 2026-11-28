@@ -4467,6 +4467,7 @@
   "ReceiptSupplier": "Fournisseur de la réception (par défaut)",
   "Payee": "Bénéficiaire",
   "CreditMode": "Mode de crédit",
+    "DefaultFreightDescription": "Fret",
     "BasisValue": "Selon la valeur",
     "BasisQuantity": "Selon la quantité",
     "BasisWeight": "Selon le poids",

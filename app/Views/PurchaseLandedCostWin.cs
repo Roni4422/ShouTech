@@ -71,7 +71,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
         {
             _companyId = await AppHost.JournalStore.ResolveCompanyIdAsync(CurrentCompanyCode);
             if (_companyId == Guid.Empty) throw new InvalidOperationException("Company context is unavailable.");
-            _charges.Add(new ChargeRow { Code = "FREIGHT", Description = "Freight", Amount = "0", Basis = "Value" });
+            _charges.Add(new ChargeRow { Code = "FREIGHT", Description = T("PurchaseLandedCost.DefaultFreightDescription"), Amount = "0", Basis = "Value", IsDefaultDescription = true });
             ApplyPermissions();
             await LoadPickersAsync();
             await RefreshHistoryAsync();
@@ -110,6 +110,8 @@ public sealed class PurchaseLandedCostWin : BaseWin
     protected override void ApplyLocalizedText()
     {
         Title = T("PurchaseLandedCost.Title");
+        foreach (var row in _charges.Where(x => x.IsDefaultDescription))
+            row.Description = T("PurchaseLandedCost.DefaultFreightDescription");
         StyleButton(_add, "PurchaseLandedCost.AddCharge");
         StyleButton(_remove, "PurchaseLandedCost.RemoveCharge");
         StyleButton(_create, "PurchaseLandedCost.CreateDraft");
@@ -243,6 +245,11 @@ public sealed class PurchaseLandedCostWin : BaseWin
         _grid.CanUserAddRows = false;
         _grid.IsReadOnly = false;
         _grid.SelectionMode = DataGridSelectionMode.Single;
+        _grid.CellEditEnding += (_, e) =>
+        {
+            if (e.Row.Item is ChargeRow row && e.Column.DisplayIndex == 1)
+                row.IsDefaultDescription = false;
+        };
         _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.ChargeCode"), Binding = new Binding(nameof(ChargeRow.Code)), Width = 100 });
         _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Description"), Binding = new Binding(nameof(ChargeRow.Description)), Width = new DataGridLength(2, DataGridLengthUnitType.Star) });
         _grid.Columns.Add(new DataGridTextColumn { Header = T("PurchaseLandedCost.Amount"), Binding = new Binding(nameof(ChargeRow.Amount)), Width = 100 });
@@ -461,6 +468,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
                 _number.Text.Trim(), DateOnly.FromDateTime(_date.SelectedDate ?? DateTime.Today),
                 string.IsNullOrWhiteSpace(_currency.Text) ? firstReceipt.CurrencyCode : _currency.Text.Trim(),
                 rate, charges, CurrentUserId);
+            foreach (var row in _charges) row.IsDefaultDescription = false;
             _voucherId.Text = id.ToString("D");
             _status.Text = T("PurchaseLandedCost.DraftCreated") + " " + _number.Text.Trim();
             await RefreshHistoryAsync();
@@ -565,6 +573,7 @@ public sealed class PurchaseLandedCostWin : BaseWin
     {
         public string Code { get; set; } = "";
         public string Description { get; set; } = "";
+        public bool IsDefaultDescription { get; set; }
         public string Amount { get; set; } = "0";
         public string Basis { get; set; } = "Value";
         public string ManualAmounts { get; set; } = "";
