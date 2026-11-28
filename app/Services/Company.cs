@@ -2033,14 +2033,15 @@ public sealed class CoCreateSvc : ICoCreateSvc
                         INSERT INTO chart_of_accounts
                             (account_id, company_id, account_code, account_name, name_ar, account_type,
                              parent_account_id, is_postable, is_active, is_deleted,
-                             risk, cost_center_mode)
+                             risk, cost_center_mode, cash_book)
                         VALUES (@id, @company, @code, @nameEn, @nameAr, @type,
-                                NULL, @postable, 1, 0, 'Low', 'Unspecified')
+                                NULL, @postable, 1, 0, 'Low', 'Unspecified', @cashBook)
                         ON CONFLICT(company_id, account_code) DO NOTHING
                         """, ("id", seedIdByCode[row.Code]), ("company", record.CompanyId.ToString()),
                         ("code", row.Code), ("nameAr", row.NameAr), ("nameEn", row.NameEn),
                         ("type", AccRepo.AccountTypeForCode(row.Code)),
-                        ("postable", string.Equals(row.PostingMode, "Summary", StringComparison.OrdinalIgnoreCase) ? 0 : 1));
+                        ("postable", string.Equals(row.PostingMode, "Summary", StringComparison.OrdinalIgnoreCase) ? 0 : 1),
+                        ("cashBook", row.CashBook ? 1 : 0));
                 }
                 foreach (var row in seedRows)
                 {
@@ -2069,7 +2070,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
         /// 'Summary') the application reads. Duplicate template codes are
         /// seeded once.
         /// </summary>
-        private static List<(string Code, string? ParentCode, string NameAr, string NameEn, string PostingMode)>
+        private static List<(string Code, string? ParentCode, string NameAr, string NameEn, string PostingMode, bool CashBook)>
             BuildCoaSeedRows(CoaTemplateV5 template)
         {
             var codeById = new Dictionary<int, string>();
@@ -2094,13 +2095,12 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     !string.Equals(mapped, code, StringComparison.OrdinalIgnoreCase))
                     parentCode = mapped;
 
-                var nameEn = TemplateAccountName(account, "en")
-                             ?? TemplateAccountName(account, "ar") ?? code;
-                var nameAr = TemplateAccountName(account, "ar")
-                             ?? TemplateAccountName(account, "en") ?? code;
+                var nameEn = TemplateAccountName(account, "en") ?? $"Account {code}";
+                var nameAr = TemplateAccountName(account, "ar") ?? nameEn;
+                var cashBook = string.Equals(account.CardType, "Cash", StringComparison.OrdinalIgnoreCase);
 
                 rows.Add((code, parentCode, nameAr, nameEn,
-                    account.Posting ? "Postable" : "Summary"));
+                    account.Posting ? "Postable" : "Summary", cashBook));
             }
 
             return rows;
@@ -2133,9 +2133,9 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 INSERT INTO public.chart_of_accounts
                     (account_id, company_id, account_code, account_name, name_ar, account_type,
                      parent_account_id, is_postable, is_active, is_deleted,
-                     risk, cost_center_mode)
+                     risk, cost_center_mode, cash_book)
                 VALUES (@Id, @Company, @Code, @NameEn, @NameAr, @Type,
-                        NULL, @Postable, TRUE, FALSE, 'Low', 'Unspecified')
+                        NULL, @Postable, TRUE, FALSE, 'Low', 'Unspecified', @CashBook)
                 ON CONFLICT (company_id, account_code) DO NOTHING;
                 """;
 
@@ -2150,6 +2150,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
                 cmd.Parameters.Add("@Type", NpgsqlDbType.Varchar).Value = AccRepo.AccountTypeForCode(row.Code);
                 cmd.Parameters.Add("@Postable", NpgsqlDbType.Boolean).Value =
                     !string.Equals(row.PostingMode, "Summary", StringComparison.OrdinalIgnoreCase);
+                cmd.Parameters.Add("@CashBook", NpgsqlDbType.Boolean).Value = row.CashBook;
                 await cmd.ExecuteNonQueryAsync();
             }
 
