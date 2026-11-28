@@ -628,7 +628,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             order.AccumulatedCost = 0m;
             order.WipBalance = 0m;
             order.ProducedQty = 0m;
-            await UpdateOrderStageAsync(connection, transaction, companyId, order, MfgOrderStatuses.Confirmed, userId, cancellationToken).ConfigureAwait(false);
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, MfgOrderStatuses.Draft, MfgOrderStatuses.Confirmed, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Confirm", order.DocDate, 0m, 0m, null, null, userId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new MfgStageResult(order.Id, MfgOrderStatuses.Confirmed, 0m, null, order.WipBalance, order.ProducedQty);
@@ -741,7 +741,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             order.AccumulatedCost = decimal.Round(order.AccumulatedCost + total, 2);
             order.WipBalance = decimal.Round(order.WipBalance + total, 2);
             order.Status = MfgOrderStatuses.InProcess;
-            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, userId, cancellationToken).ConfigureAwait(false);
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, MfgOrderStatuses.InProcess, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Issue", order.DocDate, issuedQtyTotal, total, journalDocNo, issueDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new MfgStageResult(order.Id, order.Status, total, journalDocNo, order.WipBalance, order.ProducedQty);
@@ -980,7 +980,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 ? decimal.Round(order.TotalCost / order.ProducedQty, 4, MidpointRounding.AwayFromZero)
                 : 0m;
             order.Status = order.ProducedQty >= order.Qty ? MfgOrderStatuses.Completed : MfgOrderStatuses.InProcess;
-            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, userId, cancellationToken).ConfigureAwait(false);
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, MfgOrderStatuses.InProcess, order.Status, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Finish", order.DocDate, finishedQty, fgPool, journalDocNo, finishDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new MfgStageResult(order.Id, order.Status, fgPool, journalDocNo, order.WipBalance, order.ProducedQty);
@@ -1043,7 +1043,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             order.StandardVariance = standardVariance;
             order.WipBalance = 0m;
             order.Status = MfgOrderStatuses.Closed;
-            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, userId, cancellationToken).ConfigureAwait(false);
+            await UpdateOrderStageAsync(connection, transaction, companyId, order, order.Status, MfgOrderStatuses.Closed, userId, cancellationToken).ConfigureAwait(false);
             await InsertEventAsync(connection, transaction, companyId, order, "Close", order.DocDate, order.ProducedQty, variance, journalDocNo, closeDocNo, userId, cancellationToken, seq).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new MfgStageResult(order.Id, order.Status, variance, journalDocNo, 0m, order.ProducedQty);
@@ -1145,10 +1145,11 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
 
     /// <summary>Persists the stage-owned header fields (status, produced,
     /// accumulated, WIP, totals, variance) with a status CAS guard.</summary>
-    private async Task UpdateOrderStageAsync(DbConnection connection, DbTransaction transaction, string companyId, MfgOrder order, string newStatus, string userId, CancellationToken cancellationToken)
+    private async Task UpdateOrderStageAsync(DbConnection connection, DbTransaction transaction, string companyId, MfgOrder order, string expectedStatus, string newStatus, string userId, CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(connection, transaction,
-            $"UPDATE mfg_orders SET status = @status, produced_qty = @produced, accumulated_cost = @accumulated, wip_balance = @wip, total_cost = @total, unit_cost = @unitCost, variance_amount = @variance, standard_variance = @stdVariance, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+            $"UPDATE mfg_orders SET status = @status, produced_qty = @produced, accumulated_cost = @accumulated, wip_balance = @wip, total_cost = @total, unit_cost = @unitCost, variance_amount = @variance, standard_variance = @stdVariance, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND status = @expected AND {NotDeleted}");
+        Add(command, "@expected", expectedStatus);
         Add(command, "@status", newStatus);
         Add(command, "@produced", order.ProducedQty);
         Add(command, "@accumulated", order.AccumulatedCost);
@@ -1168,11 +1169,13 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     private async Task UpdateLineActualAsync(DbConnection connection, DbTransaction transaction, MfgOrderLine line, CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(connection, transaction,
-            "UPDATE mfg_order_lines SET consumed_qty = @consumed, produced_qty = @produced WHERE id = @id");
+            "UPDATE mfg_order_lines SET consumed_qty = @consumed, produced_qty = @produced WHERE id = @id AND order_id = @order");
         Add(command, "@consumed", line.ConsumedQty);
         Add(command, "@produced", line.ProducedQty);
         Add(command, "@id", FormatGuid(line.Id));
-        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        Add(command, "@order", FormatGuid(line.OrderId));
+        if (await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+            throw new InvalidOperationException("Manufacturing order line changed or no longer belongs to this order.");
     }
 
     /// <summary>Reverses every staged GL entry of an order (issue /
