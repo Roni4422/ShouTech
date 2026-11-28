@@ -354,7 +354,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Recoverable Input VAT",
+        "ar": "ضريبة قيمة مضافة مدخلات قابلة للاسترداد",
         "en": "Recoverable Input VAT"
       }
     },
@@ -786,7 +786,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "VAT Payable",
+        "ar": "ضريبة القيمة المضافة المستحقة",
         "en": "VAT Payable"
       }
     },
@@ -1560,7 +1560,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Zakat Payable",
+        "ar": "الزكاة المستحقة",
         "en": "Zakat Payable"
       }
     },
@@ -1578,7 +1578,7 @@
       "posting": true,
       "cardType": "Expense",
       "names": {
-        "ar": "Zakat Expense",
+        "ar": "مصروف الزكاة",
         "en": "Zakat Expense"
       }
     },
