@@ -360,7 +360,17 @@ public sealed class BomWin : BaseWin
         var code = _material.Text.Trim();
         var option = _materialOptions.FirstOrDefault(m => string.Equals(m.Code, code, StringComparison.OrdinalIgnoreCase));
         if (option is not null)
+        {
             _materialName.Text = option.Name ?? string.Empty;
+            var main = _outputs.FirstOrDefault(o => string.Equals(o.Kind, "MAIN", StringComparison.OrdinalIgnoreCase));
+            if (main is not null)
+            {
+                main.MaterialCode = option.Code;
+                main.MaterialName = option.Name ?? string.Empty;
+                main.Qty = ParseDecimal(_outputQty);
+                main.Unit = string.IsNullOrWhiteSpace(_outputUnit.Text) ? "PCS" : _outputUnit.Text;
+            }
+        }
     }
 
     private void AddLine()
@@ -451,6 +461,20 @@ public sealed class BomWin : BaseWin
                 Amount = e.Amount, DebitAccountCode = NullIfBlank(e.DebitAccount),
                 CreditAccountCode = NullIfBlank(e.CreditAccount), CostCenter = NullIfBlank(e.CostCenter)
             }).ToList();
+            var mainOutput = _outputs.FirstOrDefault(o => string.Equals(o.Kind, "MAIN", StringComparison.OrdinalIgnoreCase));
+            if (mainOutput is null)
+            {
+                mainOutput = new BomOutputVm
+                {
+                    MaterialCode = bom.MaterialCode, MaterialName = bom.MaterialName ?? string.Empty,
+                    Kind = "MAIN", Qty = bom.OutputQty, Unit = bom.OutputUnit
+                };
+                _outputs.Insert(0, mainOutput);
+            }
+            mainOutput.MaterialCode = bom.MaterialCode;
+            mainOutput.MaterialName = bom.MaterialName ?? string.Empty;
+            mainOutput.Qty = bom.OutputQty;
+            mainOutput.Unit = bom.OutputUnit;
             bom.Outputs = _outputs.Where(o => !string.IsNullOrWhiteSpace(o.MaterialCode)).Select(o => new BomOutput
             {
                 BomId = bom.Id, MaterialCode = o.MaterialCode.Trim(), MaterialName = NullIfBlank(o.MaterialName),
