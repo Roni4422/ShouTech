@@ -98,6 +98,8 @@ public sealed class MfgOrderService
             throw new InvalidOperationException("Standard unit cost cannot be negative.");
         if (order.Lines is null || order.Lines.Count == 0)
             throw new InvalidOperationException("A manufacturing order requires at least one raw-material line.");
+        if (!order.Lines.Any(line => line.LineKind == MfgLineKinds.Raw))
+            throw new InvalidOperationException("A manufacturing order requires at least one raw-material input line.");
         if (order.PlannedStartDate is { } start && order.PlannedEndDate is { } end && end < start)
             throw new InvalidOperationException("The planned end date cannot precede the planned start date.");
         foreach (var line in order.Lines)
@@ -114,6 +116,21 @@ public sealed class MfgOrderService
                 throw new InvalidOperationException($"Cost share for '{line.ItemCode}' must be between 0 and 100.");
             if (line.CostSharePct > 0 && line.LineKind != MfgLineKinds.ByProduct)
                 throw new InvalidOperationException($"Only by-product lines carry a cost share ('{line.ItemCode}').");
+            var hasDebit = !string.IsNullOrWhiteSpace(line.DebitAccountCode);
+            var hasCredit = !string.IsNullOrWhiteSpace(line.CreditAccountCode);
+            if (line.LineKind == MfgLineKinds.Cost)
+            {
+                if (hasDebit != hasCredit)
+                    throw new InvalidOperationException($"Expense line '{line.ItemCode}' must specify both debit and credit accounts.");
+                if (hasDebit && string.Equals(line.DebitAccountCode!.Trim(), line.CreditAccountCode!.Trim(), StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"Expense line '{line.ItemCode}' must use different debit and credit accounts.");
+                if (order.BomId.HasValue && (!hasDebit || !hasCredit))
+                    throw new InvalidOperationException($"Template expense line '{line.ItemCode}' requires debit and credit accounts.");
+            }
+            else if (hasDebit || hasCredit)
+            {
+                throw new InvalidOperationException($"Only expense lines may specify debit and credit accounts ('{line.ItemCode}').");
+            }
             line.ItemCode = line.ItemCode.Trim();
         }
         if (order.Lines.Where(l => l.LineKind == MfgLineKinds.ByProduct).Sum(l => l.CostSharePct) > 100m)
