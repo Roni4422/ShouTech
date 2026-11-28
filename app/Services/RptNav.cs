@@ -132,6 +132,8 @@ public static class RptNav
             case "Invoices.Quotation":
             case "Sales.Quotation":
                 OpenQuotation(owner); return true;
+            case "Bonds.CashJournal":
+                OpenCashJournal(owner); return true;
             case "Bonds.JournalVoucher":
             case "Accounts.JournalVoucher":
             case "Vouchers.JournalTitle":
@@ -255,6 +257,7 @@ public static class RptNav
     public static void OpenInventoryCount(Window? owner = null) => Show(new InvoiceWin(InvDocKind.InventoryCount), owner);
     public static void OpenQuotation(Window? owner = null) => Show(new InvoiceWin(InvDocKind.Quotation), owner);
 
+    public static void OpenCashJournal(Window? owner = null) => Show(new CashJournalWin(), owner);
     public static void OpenJournalVoucher(Window? owner = null) => Show(new JrnWin(), owner);
     public static void OpenReceiptVoucher(Window? owner = null) => Show(new CshWin(CshKind.Receipt), owner);
     public static void OpenPaymentVoucher(Window? owner = null) => Show(new CshWin(CshKind.Payment), owner);
