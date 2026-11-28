@@ -106,8 +106,13 @@ public sealed class BomRepository : IBomRepository
             throw new InvalidOperationException("A manufacturing template must contain exactly one MAIN output.");
         if (bom.Outputs.Any(o => o.Qty <= 0 || string.IsNullOrWhiteSpace(o.MaterialCode)))
             throw new InvalidOperationException("Every output requires a material and a quantity greater than zero.");
+        if (bom.Outputs.Any(o => !new[] { "MAIN", "CO_PRODUCT", "BY_PRODUCT", "SCRAP" }.Contains(o.OutputKind?.Trim().ToUpperInvariant())))
+            throw new InvalidOperationException("Output type must be MAIN, CO_PRODUCT, BY_PRODUCT or SCRAP.");
         if (bom.Outputs.Any(o => o.CostSharePct is < 0 or > 100) || bom.Outputs.Sum(o => o.CostSharePct) > 100m)
             throw new InvalidOperationException("Output cost-share percentages must be between 0 and 100 and cannot exceed 100 in total.");
+        if (!new[] { "MATERIAL_ISSUE", "STOCK_OUT" }.Contains(bom.InputDocumentKind.Trim().ToUpperInvariant()) ||
+            !new[] { "MATERIAL_RECEIPT", "STOCK_IN" }.Contains(bom.OutputDocumentKind.Trim().ToUpperInvariant()))
+            throw new InvalidOperationException("Manufacturing input and output document types are invalid.");
         if (bom.Expenses.Any(e => e.Amount < 0 || string.IsNullOrWhiteSpace(e.ExpenseCode) ||
             string.IsNullOrWhiteSpace(e.DebitAccountCode) || string.IsNullOrWhiteSpace(e.CreditAccountCode)))
             throw new InvalidOperationException("Each production expense requires a code, a non-negative amount, and debit and credit accounts.");
