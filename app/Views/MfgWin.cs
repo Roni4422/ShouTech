@@ -549,7 +549,7 @@ public sealed class MfgWin : BaseWin
     {
         var editable = string.Equals(_status, MfgOrderStatuses.Draft, StringComparison.OrdinalIgnoreCase);
         _btnSave.IsEnabled = editable;
-        _btnPost.IsEnabled = editable && _currentId.HasValue;
+        _btnPost.IsEnabled = editable && _currentId.HasValue && !_bomId.HasValue;
         _btnFetchBom.IsEnabled = editable;
         _btnConfirm.IsEnabled = editable && _currentId.HasValue;
         var inProcess = string.Equals(_status, MfgOrderStatuses.InProcess, StringComparison.OrdinalIgnoreCase)
