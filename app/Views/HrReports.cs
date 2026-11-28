@@ -330,7 +330,7 @@ public sealed class CashJrnRpt : RptBase
             string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal));
         var opening = RptWinUtil.Dec(openingRow?.GetValueOrDefault("Balance"));
         var movements = raw.Where(r =>
-            !string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo")), "OPENING", StringComparison.Ordinal)).ToList();
+            !string.Equals(Convert.ToString(r.GetValueOrDefault("DocNo"), CultureInfo.InvariantCulture), "OPENING", StringComparison.Ordinal)).ToList();
         var receipts = movements.Sum(r => RptWinUtil.Dec(r.GetValueOrDefault("Receipt")));
         var payments = movements.Sum(r => RptWinUtil.Dec(r.GetValueOrDefault("Payment")));
         var closing = movements.Count == 0
