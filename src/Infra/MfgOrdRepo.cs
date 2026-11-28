@@ -656,7 +656,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     var expenseDocNo = $"MO-{order.DocNo}-EXP";
                     GlPosting.PostInTransaction(connection, transaction, _provider,
                         new GlDocumentRequest(companyGuid, order.DocDate, $"Manufacturing expenses {expenseDocNo}",
-                            "MFG-EXP", order.Id.ToString("D"), expenseDocNo, "SAR", 1m, expenseJournalLines),
+                            "MFG-EXP", order.Id.ToString("D") + "#EXP", expenseDocNo, "SAR", 1m, expenseJournalLines),
                         userId);
                 }
             }
@@ -1273,7 +1273,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     {
         var ids = new List<Guid>();
         using (var find = CreateCommand(connection, transaction,
-            "SELECT journal_entry_id FROM journal_entries WHERE company_id = @company AND source_doc_type IN ('MFG-ISSUE','MFG-FINISH','MFG-OVHD','MFG-CLOSE') AND source_doc_id LIKE @prefix AND reversal_of_entry_id IS NULL AND status = 1"))
+            "SELECT journal_entry_id FROM journal_entries WHERE company_id = @company AND source_doc_type IN ('MFG-ISSUE','MFG-FINISH','MFG-OVHD','MFG-CLOSE','MFG-EXP') AND source_doc_id LIKE @prefix AND reversal_of_entry_id IS NULL AND status = 1"))
         {
             Add(find, "@company", _provider == "PostgreSQL" ? (object)companyGuid : companyGuid.ToString("D"));
             Add(find, "@prefix", order.Id.ToString("D") + "#%");
