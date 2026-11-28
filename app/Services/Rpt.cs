@@ -1358,6 +1358,8 @@ public static class RptQuery
     // Chunk E: English account name contains cash / bank / box.
     private const string CashAccountSql =
         "(LOWER(COALESCE(a.account_name, '')) LIKE '%cash%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%bank%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%box%')";
+    private const string CashBoxAccountSql =
+        "(LOWER(COALESCE(a.account_name, '')) LIKE '%cash%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%box%')";
     private const string BankAccountSql =
         "(LOWER(COALESCE(a.account_name, '')) LIKE '%bank%')";
 
@@ -2117,24 +2119,109 @@ public static class RptQuery
         DateTime from, DateTime to, CancellationToken ct)
     {
         DocSchema.Ensure();
+        // The cash journal is a report over posted GL cash-box lines, not a
+        // second posting stream. One row represents one cash-account line;
+        // debit is a receipt and credit is a payment. Bank accounts remain
+        // in the separate bank reports.
         var sql = PgBoolFix($"""
-            SELECT j.entry_date AS EntryDate,
-                   COALESCE(j.document_number, j.journal_entry_id) AS DocNo,
-                   COALESCE(j.description, '') AS Description,
-                   COALESCE(j.reference_number, '') AS Reference,
-                   COALESCE(SUM(COALESCE(l.base_debit, l.debit)), 0) AS Debit,
-                   COALESCE(SUM(COALESCE(l.base_credit, l.credit)), 0) AS Credit,
-                   CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status
-            FROM journal_entries j
-            INNER JOIN journal_entry_lines l ON l.journal_entry_id = j.journal_entry_id
-            INNER JOIN chart_of_accounts a ON a.account_id = l.account_id AND a.company_id = j.company_id
-            INNER JOIN companies co ON co.company_id = j.company_id
-            WHERE co.company_code = $company AND a.is_deleted = 0 AND {CashAccountSql}
-              AND j.entry_date >= $from AND j.entry_date <= $to
-            GROUP BY j.journal_entry_id, j.entry_date, j.document_number, j.description, j.reference_number, j.status
-            ORDER BY j.entry_date DESC, j.journal_entry_id DESC;
+            WITH cash_accounts AS (
+                SELECT a.account_id, a.account_code, a.account_name
+                FROM chart_of_accounts a
+                INNER JOIN companies co ON co.company_id = a.company_id
+                WHERE co.company_code = $company
+                  AND a.is_deleted = 0
+                  AND {CashBoxAccountSql}
+            ),
+            opening AS (
+                SELECT COALESCE(SUM(COALESCE(l.base_debit, l.debit, 0)
+                                  - COALESCE(l.base_credit, l.credit, 0)), 0) AS amount
+                FROM journal_entry_lines l
+                INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                INNER JOIN cash_accounts ca ON ca.account_id = l.account_id
+                WHERE j.status = 1 AND j.entry_date < $from
+            ),
+            movements AS (
+                SELECT j.entry_date,
+                       j.journal_entry_id,
+                       l.line_number,
+                       COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS doc_no,
+                       j.description,
+                       j.reference_number,
+                       j.created_by,
+                       ca.account_code AS cash_account_code,
+                       ca.account_name AS cash_account_name,
+                       COALESCE((
+                           SELECT COALESCE(a2.account_code, '') || ' - ' || COALESCE(a2.account_name, '')
+                           FROM journal_entry_lines x
+                           INNER JOIN chart_of_accounts a2
+                             ON a2.account_id = x.account_id AND a2.company_id = j.company_id
+                           WHERE x.journal_entry_id = j.journal_entry_id
+                             AND x.line_number <> l.line_number
+                           ORDER BY x.line_number
+                           LIMIT 1
+                       ), '') AS counter_account,
+                       COALESCE(l.base_debit, l.debit, 0) AS receipt,
+                       COALESCE(l.base_credit, l.credit, 0) AS payment
+                FROM journal_entry_lines l
+                INNER JOIN journal_entries j ON j.journal_entry_id = l.journal_entry_id
+                INNER JOIN cash_accounts ca ON ca.account_id = l.account_id
+                WHERE j.status = 1
+                  AND j.entry_date >= $from
+                  AND j.entry_date < $to
+            ),
+            details AS (
+                SELECT m.*,
+                       o.amount AS opening_balance,
+                       o.amount + SUM(m.receipt - m.payment) OVER (
+                           ORDER BY m.entry_date, m.journal_entry_id, m.line_number
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                       ) AS running_balance
+                FROM movements m
+                CROSS JOIN opening o
+            )
+            SELECT NULL AS EntryDate,
+                   NULL AS JournalDate,
+                   NULL AS JournalDocNo,
+                   'OPENING' AS DocNo,
+                   '' AS CashAccountCode,
+                   '' AS CashAccountName,
+                   '' AS CounterAccount,
+                   '' AS Description,
+                   '' AS Reference,
+                   '' AS CreatedBy,
+                   opening.amount AS OpeningBalance,
+                   0 AS Receipt,
+                   0 AS Payment,
+                   opening.amount AS Balance,
+                   0 AS RowOrder,
+                   0 AS JournalEntryId,
+                   0 AS LineNo
+            FROM opening
+            UNION ALL
+            SELECT d.entry_date AS EntryDate,
+                   d.entry_date AS JournalDate,
+                   d.doc_no AS JournalDocNo,
+                   d.doc_no AS DocNo,
+                   d.cash_account_code AS CashAccountCode,
+                   d.cash_account_name AS CashAccountName,
+                   d.counter_account AS CounterAccount,
+                   COALESCE(d.description, '') AS Description,
+                   COALESCE(d.reference_number, '') AS Reference,
+                   COALESCE(d.created_by, '') AS CreatedBy,
+                   NULL AS OpeningBalance,
+                   d.receipt AS Receipt,
+                   d.payment AS Payment,
+                   d.running_balance AS Balance,
+                   1 AS RowOrder,
+                   d.journal_entry_id AS JournalEntryId,
+                   d.line_number AS LineNo
+            FROM details d
+            ORDER BY RowOrder, EntryDate, JournalEntryId, LineNo;
             """);
-        return await QueryAsync(sql, ct, ("$company", Company), ("$from", FmtDate(from)), ("$to", FmtDate(to)));
+        return await QueryAsync(sql, ct,
+            ("$company", Company),
+            ("$from", FmtDate(from)),
+            ("$to", FmtDate(to.Date.AddDays(1))));
     }
 
     // ---------------- Invoices ----------------
