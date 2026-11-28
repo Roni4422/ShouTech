@@ -132,7 +132,7 @@ public sealed class PurchaseLandedCostRepository : IPurchaseLandedCostRepository
         var stockCompanyCode = PartyLedger.ResolveCompanyCode(connection, null, _provider, companyId.ToString("D"));
         var rows = new List<PurchaseLandedCostPayeeOption>();
         await using var command = Cmd(connection, null, """
-            SELECT ledger_id, code, COALESCE(NULLIF(name_en, ''), name_ar), kind
+            SELECT ledger_id, code, COALESCE(NULLIF(name_en, ''), code), kind
             FROM parties
             WHERE company_id = @company AND is_deleted = @false AND ledger_id IS NOT NULL
             ORDER BY kind, code
