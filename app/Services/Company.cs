@@ -2064,11 +2064,10 @@ public sealed class CoCreateSvc : ICoCreateSvc
 
         /// <summary>
         /// Flattens a COA template into account seed rows. Parent codes are
-        /// resolved through the template's id map; names fall back across
-        /// languages so the NOT NULL name columns are always satisfied;
-        /// posting_mode uses the canonical English tokens ('Postable' /
-        /// 'Summary') the application reads. Duplicate template codes are
-        /// seeded once.
+        /// resolved through the template's id map; English names never fall
+        /// back to another language, and the localized name uses the selected
+        /// chart language. Posting mode uses canonical English tokens.
+        /// Duplicate template codes are seeded once.
         /// </summary>
         private static List<(string Code, string? ParentCode, string NameAr, string NameEn, string PostingMode, bool CashBook)>
             BuildCoaSeedRows(CoaTemplateV5 template)
