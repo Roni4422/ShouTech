@@ -2271,6 +2271,10 @@
     }
   },
   "Bom": {
+    "InputDocumentKind": "Issue Document Type",
+    "OutputDocumentKind": "Receipt Document Type",
+    "InputWarehouse": "Issue Warehouse",
+    "OutputWarehouse": "Receipt Warehouse",
     "Inputs": "Inputs",
     "Expenses": "Production Expenses",
     "Outputs": "Production Outputs",
