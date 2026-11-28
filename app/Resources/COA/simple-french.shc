@@ -259,7 +259,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Recoverable Input VAT",
+        "ar": "ضريبة قيمة مضافة مدخلات قابلة للاسترداد",
         "en": "Recoverable Input VAT",
         "fr": "Taxes récupérables sur achats"
       }
@@ -524,7 +524,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "VAT Payable",
+        "ar": "ضريبة القيمة المضافة المستحقة",
         "en": "VAT Payable",
         "fr": "Taxes sur ventes à payer"
       }
