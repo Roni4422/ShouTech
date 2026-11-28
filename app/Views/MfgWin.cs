@@ -1057,6 +1057,7 @@ public sealed class MfgWin : BaseWin
             _grid.Columns[15].Header = T("Invoice.Col.LineTotal");
         }
         RefreshLocalizedContent(Content as DependencyObject);
+        if (_grid.ItemsSource is ICollectionView view) view.Refresh();
         CalculateCost();
     }
 
@@ -1105,9 +1106,9 @@ public sealed class MfgWin : BaseWin
         }
         public string Section => _lineKind switch
         {
-            MfgLineKinds.Raw => T("Bom.Inputs"),
-            MfgLineKinds.Cost => T("Bom.Expenses"),
-            _ => T("Bom.Outputs")
+            MfgLineKinds.Raw => $"1 - {T("Bom.Inputs")}",
+            MfgLineKinds.Cost => $"2 - {T("Bom.Expenses")}",
+            _ => $"3 - {T("Bom.Outputs")}"
         };
         public string ItemCode { get => _itemCode; set { _itemCode = value; OnChanged(); } }
         public string ItemName { get => _itemName; set { _itemName = value; OnChanged(); } }
