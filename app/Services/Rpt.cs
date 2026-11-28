@@ -179,7 +179,9 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT j.entry_date AS EntryDate,
+                   j.entry_date AS JournalDate,
                    COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
+                   COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS JournalDocNo,
                    COALESCE(j.description, '') AS Description,
                    COALESCE(COALESCE(l.base_debit, l.debit), 0) AS Debit,
                    COALESCE(COALESCE(l.base_credit, l.credit), 0) AS Credit,
@@ -208,7 +210,9 @@ public static class RptQuery
         DocSchema.Ensure();
         const string sql = """
             SELECT j.entry_date AS EntryDate,
+                   j.entry_date AS JournalDate,
                    COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS DocNo,
+                   COALESCE(j.document_number, CAST(j.journal_entry_id AS TEXT)) AS JournalDocNo,
                    COALESCE(j.description, '') AS Description,
                    CASE j.status WHEN 0 THEN 'Draft' WHEN 1 THEN 'Posted' ELSE 'Reversed' END AS Status,
                    COALESCE((SELECT SUM(COALESCE(base_debit, debit)) FROM journal_entry_lines x WHERE x.journal_entry_id = j.journal_entry_id), 0) AS Debit,
