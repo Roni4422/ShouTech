@@ -507,7 +507,8 @@ public sealed class OperationsRepository : IOperationsRepository
                 throw new AppError(ErrorCodes.StatementLineAlreadyMatched,
                     "The statement line is already matched to a book line; unmatch it first.", statementLineId.ToString("D"));
             await EnsureStatementOpenAsync(connection, transaction, companyId, statementId, cancellationToken).ConfigureAwait(false);
-            if (!string.Equals(mark.AccountCode?.Trim(), statementAccount, StringComparison.OrdinalIgnoreCase)
+            if (string.IsNullOrWhiteSpace(statementAccount)
+                || !string.Equals(mark.AccountCode?.Trim(), statementAccount, StringComparison.OrdinalIgnoreCase)
                 || mark.ClearedAmount != statementAmount)
                 throw new InvalidOperationException("The reconciliation mark must use the statement line's bank account and exact amount.");
 
@@ -557,7 +558,7 @@ public sealed class OperationsRepository : IOperationsRepository
                 Add(upsert, "@company", companyId.Trim());
                 Add(upsert, "@entry", mark.JournalEntryId);
                 Add(upsert, "@key", mark.JournalLineKey);
-                Add(upsert, "@code", mark.AccountCode.Trim());
+                Add(upsert, "@code", statementAccount);
                 Add(upsert, "@sdate", mark.StatementDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
                 Add(upsert, "@sref", (object?)NullIfBlank(mark.StatementRef) ?? DBNull.Value);
                 Add(upsert, "@amount", mark.ClearedAmount);
