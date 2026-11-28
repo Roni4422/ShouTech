@@ -282,21 +282,21 @@ public partial class CoaWin : BaseWin, IInfoContextProvider
 
     internal static string GetDisplayName(AccountNode node)
     {
-        var isArabic = string.Equals(App.CurrentLanguageCode, "ar", StringComparison.OrdinalIgnoreCase);
-        if (isArabic)
-        {
-            if (!string.IsNullOrWhiteSpace(node.Name)
-                && !string.Equals(node.Name, node.NameEn, StringComparison.OrdinalIgnoreCase))
-                return node.Name;
+        var language = (App.CurrentLanguageCode ?? "en").Split('-', '_')[0];
+        var isEnglish = string.Equals(language, "en", StringComparison.OrdinalIgnoreCase);
 
-            var localized = Loc.Get($"CoaWin.AccountNames.{node.Code}", string.Empty);
-            if (!string.IsNullOrWhiteSpace(localized))
-                return localized;
+        if (!isEnglish
+            && !string.IsNullOrWhiteSpace(node.Name)
+            && !string.Equals(node.Name, node.NameEn, StringComparison.OrdinalIgnoreCase))
+            return node.Name;
 
-            return !string.IsNullOrWhiteSpace(node.Name) ? node.Name : node.NameEn;
-        }
+        var localized = !isEnglish
+            ? Loc.Get($"CoaWin.AccountNames.{node.Code}", string.Empty)
+            : string.Empty;
+        if (!string.IsNullOrWhiteSpace(localized))
+            return localized;
 
-        return !string.IsNullOrWhiteSpace(node.NameEn) ? node.NameEn : node.Name;
+        return !string.IsNullOrWhiteSpace(node.NameEn) ? node.NameEn : $"Account {node.Code}";
     }
 
     private static IEnumerable<AccountNode> Flatten(AccountNode node)
