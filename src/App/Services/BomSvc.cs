@@ -106,8 +106,9 @@ public sealed class BomService
             throw new InvalidOperationException("Every output requires a material code and a positive quantity.");
         if (bom.Outputs.Any(o => o.CostSharePct is < 0 or > 100) || bom.Outputs.Sum(o => o.CostSharePct) > 100m)
             throw new InvalidOperationException("Output cost-share percentages must total no more than 100.");
-        if (bom.Expenses.Any(e => string.IsNullOrWhiteSpace(e.ExpenseCode) || e.Amount < 0))
-            throw new InvalidOperationException("Each expense requires a code and a non-negative amount.");
+        if (bom.Expenses.Any(e => string.IsNullOrWhiteSpace(e.ExpenseCode) || e.Amount < 0 ||
+            string.IsNullOrWhiteSpace(e.DebitAccountCode) || string.IsNullOrWhiteSpace(e.CreditAccountCode)))
+            throw new InvalidOperationException("Each production expense requires a code, a non-negative amount, and debit and credit accounts.");
         bom.MaterialCode = bom.MaterialCode.Trim();
         if (string.IsNullOrWhiteSpace(bom.OutputUnit)) bom.OutputUnit = "PCS";
     }
