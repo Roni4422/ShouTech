@@ -1351,11 +1351,12 @@ public static class RptQuery
                  .Replace("is_service = 1", "is_service = TRUE", StringComparison.Ordinal)
                  .Replace("has_expiry = 1", "has_expiry = TRUE", StringComparison.Ordinal)
                  .Replace("is_active = 1", "is_active = TRUE", StringComparison.Ordinal)
+                 .Replace("cash_book = 1", "cash_book = TRUE", StringComparison.Ordinal)
             : sql;
 
-    // Cash/bank GL accounts carry no flag column in the schema; the rest of
-    // the app identifies them by account name. Same heuristic everywhere in
-    // Chunk E: English account name contains cash / bank / box.
+    // Cash-book membership is an explicit account-card setting. Bank reports
+    // retain their separate account-name classification until bank-account
+    // master data is unified with the same typed account metadata.
     private const string CashAccountSql =
         "(LOWER(COALESCE(a.account_name, '')) LIKE '%cash%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%bank%' OR LOWER(COALESCE(a.account_name, '')) LIKE '%box%')";
     private const string CashBoxAccountSql = "a.cash_book = 1";
