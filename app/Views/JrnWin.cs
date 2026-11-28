@@ -474,10 +474,11 @@ public sealed class JrnWin : BaseWin
             // and reversed entries are immutable and load read-only.
             var isDraft = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Draft;
             _loadedDraft = isDraft;
-            _btnSave.IsEnabled = isDraft;
-            _btnPost.IsEnabled = isDraft;
-            _btnReverse.IsEnabled = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Posted;
-            _btnDelete.IsEnabled = snapshot.Status != ShouTech.Domain.Entities.JournalEntryStatus.Reversed;
+            var sourceLinked = !string.IsNullOrWhiteSpace(_sourceDocType) || !string.IsNullOrWhiteSpace(_sourceDocId);
+            _btnSave.IsEnabled = isDraft && !sourceLinked;
+            _btnPost.IsEnabled = isDraft && !sourceLinked;
+            _btnReverse.IsEnabled = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Posted && !sourceLinked;
+            _btnDelete.IsEnabled = snapshot.Status != ShouTech.Domain.Entities.JournalEntryStatus.Reversed && !sourceLinked;
             SetVoucherReadOnly(!isDraft);
             RefreshBalances();
 
