@@ -834,7 +834,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             {
                 if (rawLine.Qty <= 0m)
                     throw new InvalidOperationException($"Raw-material line '{rawLine.ItemCode.Trim()}' has an invalid planned quantity.");
-                var supportedOutput = decimal.Round(rawLine.ConsumedQty * order.Qty / rawLine.Qty, 6, MidpointRounding.Floor);
+                var supportedOutput = decimal.Floor(rawLine.ConsumedQty * order.Qty / rawLine.Qty * 1_000_000m) / 1_000_000m;
                 if (order.ProducedQty + finishedQty > supportedOutput)
                     throw new InvalidOperationException(
                         $"Cannot finish {finishedQty} units: raw material '{rawLine.ItemCode.Trim()}' has only been issued for {supportedOutput} units of production.");
