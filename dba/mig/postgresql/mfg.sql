@@ -432,3 +432,39 @@ WHERE r.role_code = 'ROLE_USER' AND r.is_active = true AND p.is_active = true AN
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM roles r CROSS JOIN permissions p
 WHERE r.role_code = 'ROLE_VIEWER' AND r.is_active = true AND p.is_active = true AND p.permission_code IN ('MFG.PLANNING.VIEW') ON CONFLICT DO NOTHING;
+-- @shoutech-migration 131_mfg_template_sections.sql 20EF0ED65B783F52FB41B0FA7F7293AE4BF9E939D4C05CA207D15A145A65B55B 20EF0ED65B783F52FB41B0FA7F7293AE4BF9E939D4C05CA207D15A145A65B55B 20EF0ED65B783F52FB41B0FA7F7293AE4BF9E939D4C05CA207D15A145A65B55B 20EF0ED65B783F52FB41B0FA7F7293AE4BF9E939D4C05CA207D15A145A65B55B
+-- 131 - Persist complete reusable manufacturing template sections.
+-- Inputs remain in mfg_bom_lines. Expenses and all output products are stored
+-- independently so template selection can reproduce the full recipe.
+CREATE TABLE IF NOT EXISTS mfg_bom_expenses (
+    id uuid PRIMARY KEY,
+    bom_id uuid NOT NULL REFERENCES mfg_boms(id) ON DELETE CASCADE,
+    line_no INTEGER NOT NULL,
+    expense_code TEXT NOT NULL,
+    description TEXT,
+    amount NUMERIC NOT NULL DEFAULT 0 CHECK (amount >= 0),
+    debit_account_code TEXT,
+    credit_account_code TEXT,
+    cost_center TEXT,
+    UNIQUE (bom_id, line_no)
+);
+CREATE INDEX IF NOT EXISTS ix_mfg_bom_expenses_bom
+    ON mfg_bom_expenses(bom_id, line_no);
+
+CREATE TABLE IF NOT EXISTS mfg_bom_outputs (
+    id uuid PRIMARY KEY,
+    bom_id uuid NOT NULL REFERENCES mfg_boms(id) ON DELETE CASCADE,
+    line_no INTEGER NOT NULL,
+    material_code TEXT NOT NULL,
+    material_name TEXT,
+    output_kind TEXT NOT NULL DEFAULT 'MAIN'
+        CHECK (output_kind IN ('MAIN','CO_PRODUCT','BY_PRODUCT','SCRAP')),
+    qty NUMERIC NOT NULL CHECK (qty > 0),
+    unit_code TEXT,
+    warehouse_code TEXT,
+    cost_share_pct NUMERIC NOT NULL DEFAULT 0
+        CHECK (cost_share_pct >= 0 AND cost_share_pct <= 100),
+    UNIQUE (bom_id, line_no)
+);
+CREATE INDEX IF NOT EXISTS ix_mfg_bom_outputs_bom
+    ON mfg_bom_outputs(bom_id, line_no);
