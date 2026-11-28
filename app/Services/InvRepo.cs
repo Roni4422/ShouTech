@@ -236,6 +236,17 @@ public static class InvRepo
         var headerTable = isSales ? "sales_documents" : "purchase_documents";
         var lineTable = isSales ? "sales_document_lines" : "purchase_document_lines";
 
+        if (doc.DocId > 0)
+        {
+            using var originGuard = connection.CreateCommand();
+            originGuard.Transaction = tx;
+            originGuard.CommandText = $"SELECT original_doc_id FROM {headerTable} WHERE doc_id=$id AND is_deleted=0;";
+            Add(originGuard, "$id", doc.DocId);
+            var originId = originGuard.ExecuteScalar();
+            if (originId is not null and not DBNull)
+                throw new InvalidOperationException("This document is generated from an original document. Open the original document to make changes.");
+        }
+
         // W6 (migration 100): sales-return workflow stamps. Computed
         // here, at save time, from the line conditions and the company
         // settings, so every creation path (window, SrtRepo, POS,
