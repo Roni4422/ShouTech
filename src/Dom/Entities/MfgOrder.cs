@@ -132,6 +132,9 @@ public sealed class MfgOrderLine
     public decimal ProducedQty { get; set; }
     /// <summary>Per-line source warehouse override; null = order source.</summary>
     public string? WarehouseCode { get; set; }
+    public string? DebitAccountCode { get; set; }
+    public string? CreditAccountCode { get; set; }
+    public string? CostCenter { get; set; }
     /// <summary>BYPRODUCT only: share (0-100%) of the finish pool this
     /// by-product carries (ERPNext by-product cost allocation).</summary>
     public decimal CostSharePct { get; set; }
