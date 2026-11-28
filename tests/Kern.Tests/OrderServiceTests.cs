@@ -744,6 +744,16 @@ namespace Kern.Tests
                 Assert.False(string.IsNullOrWhiteSpace(confirmed.ConfirmedAt));
                 Assert.Equal(7m, Assert.Single(confirmed.Lines).PickedQty);
 
+                // A second picking may stage only the unreserved balance.
+                var secondPickingId = await service.CreatePickingFromOrderAsync(orderId, "picker-3");
+                var secondPicking = await service.GetPickingAsync(secondPickingId);
+                Assert.Equal(3m, Assert.Single(secondPicking!.Lines).PickedQty);
+                var duplicateReservation = await Assert.ThrowsAsync<AppError>(() =>
+                    service.ConfirmPickingAsync(secondPickingId,
+                        new Dictionary<int, decimal> { [1] = 4m }, "picker-3"));
+                Assert.Equal(ErrorCodes.PickingExceedsRemaining, duplicateReservation.Code);
+                await service.CancelPickingAsync(secondPickingId, "picker-3");
+
                 var found = await service.FindConfirmedPickingAsync(companyId, orderId);
                 Assert.NotNull(found);
                 Assert.Equal(pickingId, found!.PickingId);
@@ -760,6 +770,14 @@ namespace Kern.Tests
                 Assert.Equal(CommercialDocKinds.DeliveryNote, delivery!.DocKind);
                 Assert.Equal(7m, Assert.Single(delivery.Lines).Qty);
                 Assert.Equal(12.5m, delivery.DeliveryCost);
+
+                // A posted delivery consumes the corresponding confirmed
+                // reservation; the next picking can stage the true balance.
+                var afterDeliveryPickingId = await service.CreatePickingFromOrderAsync(orderId, "picker-4");
+                var afterDeliveryPicking = await service.GetPickingAsync(afterDeliveryPickingId);
+                Assert.Equal(3m, Assert.Single(afterDeliveryPicking!.Lines).PickedQty);
+                await service.ConfirmPickingAsync(afterDeliveryPickingId,
+                    new Dictionary<int, decimal> { [1] = 3m }, "picker-4");
             }
             finally
             {

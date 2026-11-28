@@ -3647,6 +3647,7 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await LockSalesOrderForPickingAsync(connection, transaction, salesOrderId, null, cancellationToken).ConfigureAwait(false);
             var order = await ReadSnapshotAsync(connection, transaction, CommercialDocSide.Sales, salesOrderId, null, null, null, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException("Sales order was not found.");
             if (order.DocKind != CommercialDocKinds.SalesOrder)
@@ -3660,6 +3661,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             var progress = await ComputeProgressAsync(connection, transaction, CommercialDocSide.Sales, salesOrderId, cancellationToken).ConfigureAwait(false);
             var remainingByLine = progress.Lines.ToDictionary(line => line.LineNo, line => line.RemainingToFulfill);
+            var fulfilledByLine = progress.Lines.ToDictionary(line => line.LineNo, line => line.FulfilledQty);
+            var reservedByLine = await LoadConfirmedPickingQuantitiesAsync(
+                connection, transaction, order.CompanyId, salesOrderId, 0, cancellationToken).ConfigureAwait(false);
 
             long pickingId;
             await using (var insert = CreateCommand(connection, transaction,
@@ -3678,7 +3682,12 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             var inserted = 0;
             foreach (var line in order.Lines)
             {
-                var remaining = remainingByLine.GetValueOrDefault(line.LineNo);
+                // Confirmed picks reserve only the still-unfulfilled part of
+                // their quantity. Deliveries consume the reservation naturally,
+                // so partial deliveries do not strand order capacity.
+                var fulfilled = fulfilledByLine.GetValueOrDefault(line.LineNo);
+                var reserved = Math.Max(0m, reservedByLine.GetValueOrDefault(line.LineNo) - fulfilled);
+                var remaining = Math.Max(0m, remainingByLine.GetValueOrDefault(line.LineNo) - reserved);
                 if (remaining <= 0m)
                     continue;
                 await using var insertLine = CreateCommand(connection, transaction, """
@@ -3699,8 +3708,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 inserted++;
             }
             if (inserted == 0)
-                throw new AppError(ErrorCodes.ChainSourceFullyFulfilled,
-                    $"The source document '{order.DocNo}' is already fully fulfilled.",
+                throw new AppError(ErrorCodes.PickingExceedsRemaining,
+                    $"The source document '{order.DocNo}' is fully fulfilled or its remaining quantities are reserved by confirmed pickings.",
                     order.DocNo);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -3761,23 +3770,37 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
             if (picking.Status != SalesPickingStatus.Draft)
                 throw new InvalidOperationException($"Only a draft picking can be confirmed; picking '{pickingId}' is '{picking.Status}'.");
 
-            // Over-pick guard (SAL-7012): the picked quantity of a line
-            // may never exceed what the order still has to deliver,
-            // recomputed inside this transaction from posted deliveries.
+            await LockSalesOrderForPickingAsync(
+                connection, transaction, picking.SalesOrderId, picking.CompanyId, cancellationToken).ConfigureAwait(false);
+
+            // Over-pick guard (SAL-7012): recompute fulfilled and already
+            // confirmed quantities while holding the source-order lock. This
+            // serializes competing confirmations on both database providers.
             var progress = await ComputeProgressAsync(connection, transaction, CommercialDocSide.Sales, picking.SalesOrderId, cancellationToken).ConfigureAwait(false);
             var remainingByLine = progress.Lines.ToDictionary(line => line.LineNo, line => line.RemainingToFulfill);
+            var fulfilledByLine = progress.Lines.ToDictionary(line => line.LineNo, line => line.FulfilledQty);
+            var reservedByLine = await LoadConfirmedPickingQuantitiesAsync(
+                connection, transaction, picking.CompanyId, picking.SalesOrderId, pickingId, cancellationToken).ConfigureAwait(false);
+            var pickingLineNumbers = picking.Lines.Select(line => line.SourceLineNo).ToHashSet();
+            foreach (var requested in pickedBySourceLine)
+            {
+                if (!pickingLineNumbers.Contains(requested.Key))
+                    throw new InvalidOperationException($"Picking line '{requested.Key}' does not belong to this picking.");
+                if (requested.Value < 0m)
+                    throw new InvalidOperationException("Picked quantities cannot be negative.");
+            }
 
             foreach (var line in picking.Lines)
             {
                 var picked = pickedBySourceLine.TryGetValue(line.SourceLineNo, out var requested)
                     ? requested
                     : line.PickedQty;
-                if (picked < 0m)
-                    throw new InvalidOperationException("Picked quantities cannot be negative.");
-                var remaining = remainingByLine.GetValueOrDefault(line.SourceLineNo);
+                var fulfilled = fulfilledByLine.GetValueOrDefault(line.SourceLineNo);
+                var reserved = Math.Max(0m, reservedByLine.GetValueOrDefault(line.SourceLineNo) - fulfilled);
+                var remaining = Math.Max(0m, remainingByLine.GetValueOrDefault(line.SourceLineNo) - reserved);
                 if (picked > remaining)
                     throw new AppError(ErrorCodes.PickingExceedsRemaining,
-                        $"The picked quantity for '{line.Description}' exceeds the remaining quantity to deliver.",
+                        $"The picked quantity for '{line.Description}' exceeds the remaining unreserved quantity to deliver.",
                         line.Description);
                 await using var updateLine = CreateCommand(connection, transaction,
                     "UPDATE sales_picking_lines SET picked_qty = @picked WHERE picking_line_id = @id");
@@ -3815,16 +3838,79 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
         if (string.IsNullOrWhiteSpace(userId)) throw new ArgumentException("User is required.", nameof(userId));
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        await using var update = CreateCommand(connection, null, """
-            UPDATE sales_picking SET status = @cancelled
-            WHERE picking_id = @id AND status IN (@draft, @confirmed)
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var picking = await ReadPickingAsync(connection, transaction, pickingId, null, null, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Picking was not found.");
+            await LockSalesOrderForPickingAsync(
+                connection, transaction, picking.SalesOrderId, picking.CompanyId, cancellationToken).ConfigureAwait(false);
+            await using var update = CreateCommand(connection, transaction, """
+                UPDATE sales_picking SET status = @cancelled
+                WHERE picking_id = @id AND company_id = @company AND status IN (@draft, @confirmed)
+                """);
+            Add(update, "@cancelled", SalesPickingStatus.Cancelled);
+            Add(update, "@draft", SalesPickingStatus.Draft);
+            Add(update, "@confirmed", SalesPickingStatus.Confirmed);
+            Add(update, "@id", pickingId);
+            Add(update, "@company", picking.CompanyId.ToString("D"));
+            if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException("Picking was not found or is already cancelled.");
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task LockSalesOrderForPickingAsync(
+        DbConnection connection, DbTransaction transaction, long salesOrderId,
+        Guid? companyId, CancellationToken cancellationToken)
+    {
+        var companyFilter = companyId is null ? string.Empty : " AND company_id = @company";
+        await using var command = CreateCommand(connection, transaction,
+            _provider == "PostgreSQL"
+                ? $"SELECT doc_id FROM sales_documents WHERE doc_id = @order AND doc_kind = @kind AND is_deleted = FALSE{companyFilter} FOR UPDATE"
+                : $"UPDATE sales_documents SET doc_id = doc_id WHERE doc_id = @order AND doc_kind = @kind AND is_deleted = 0{companyFilter}");
+        Add(command, "@order", salesOrderId);
+        Add(command, "@kind", CommercialDocKinds.SalesOrder);
+        if (companyId is Guid company)
+            Add(command, "@company", company.ToString("D"));
+        if (_provider == "PostgreSQL")
+        {
+            if (await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is null)
+                throw new InvalidOperationException("The sales order for this picking was not found.");
+        }
+        else if (await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+        {
+            throw new InvalidOperationException("The sales order for this picking was not found.");
+        }
+    }
+
+    private async Task<IReadOnlyDictionary<int, decimal>> LoadConfirmedPickingQuantitiesAsync(
+        DbConnection connection, DbTransaction transaction, Guid companyId,
+        long salesOrderId, long excludePickingId, CancellationToken cancellationToken)
+    {
+        var quantities = new Dictionary<int, decimal>();
+        await using var command = CreateCommand(connection, transaction, """
+            SELECT l.source_line_no, SUM(l.picked_qty)
+            FROM sales_picking p
+            JOIN sales_picking_lines l ON l.picking_id = p.picking_id
+            WHERE p.company_id = @company AND p.sales_order_id = @order
+              AND p.status = @confirmed AND p.picking_id <> @exclude
+            GROUP BY l.source_line_no
             """);
-        Add(update, "@cancelled", SalesPickingStatus.Cancelled);
-        Add(update, "@draft", SalesPickingStatus.Draft);
-        Add(update, "@confirmed", SalesPickingStatus.Confirmed);
-        Add(update, "@id", pickingId);
-        if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
-            throw new InvalidOperationException("Picking was not found or is already cancelled.");
+        Add(command, "@company", companyId.ToString("D"));
+        Add(command, "@order", salesOrderId);
+        Add(command, "@confirmed", SalesPickingStatus.Confirmed);
+        Add(command, "@exclude", excludePickingId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            quantities[Convert.ToInt32(reader.GetValue(0), CultureInfo.InvariantCulture)] =
+                Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+        return quantities;
     }
 
     private async Task<SalesPickingSnapshot?> ReadPickingAsync(
