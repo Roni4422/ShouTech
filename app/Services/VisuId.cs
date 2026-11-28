@@ -43,6 +43,55 @@ namespace ShouTech.App.Services
         private const string VisuIdUri =
             "pack://application:,,,/Themes/VisuId.xaml";
 
+        private static readonly Dictionary<ResourceDictionary, Dictionary<string, double>> FontSizeDefaults =
+            new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Scales the central typography tokens from their original theme values.
+        /// DynamicResource consumers update immediately; repeated saves never compound
+        /// the scale because each dictionary's unscaled values are retained once.
+        /// </summary>
+        public static void ApplyFontScale(double preferredSize)
+        {
+            if (System.Windows.Application.Current is not { } app || preferredSize <= 0d)
+                return;
+
+            var scale = Math.Clamp(preferredSize, 10d, 20d) / 13d;
+            foreach (var dictionary in EnumerateDictionaries(app.Resources))
+            {
+                foreach (var keyObject in dictionary.Keys)
+                {
+                    if (keyObject is not string key ||
+                        !key.Contains("FontSize", StringComparison.OrdinalIgnoreCase) ||
+                        dictionary[keyObject] is not double current)
+                        continue;
+
+                    if (!FontSizeDefaults.TryGetValue(dictionary, out var defaults))
+                    {
+                        defaults = new Dictionary<string, double>(StringComparer.Ordinal);
+                        FontSizeDefaults.Add(dictionary, defaults);
+                    }
+
+                    if (!defaults.TryGetValue(key, out var original))
+                    {
+                        original = current;
+                        defaults.Add(key, original);
+                    }
+
+                    dictionary[keyObject] = Math.Max(8d,
+                        Math.Round(original * scale, 1, MidpointRounding.AwayFromZero));
+                }
+            }
+        }
+
+        private static IEnumerable<ResourceDictionary> EnumerateDictionaries(ResourceDictionary root)
+        {
+            yield return root;
+            foreach (var merged in root.MergedDictionaries)
+                foreach (var nested in EnumerateDictionaries(merged))
+                    yield return nested;
+        }
+
         public static double ResolveFontSize(double fallback)
         {
             var size = fallback.ToString(CultureInfo.InvariantCulture)
@@ -430,6 +479,8 @@ namespace ShouTech.App.Services
             {
                 AppHost.Errors.Report(ErrorCodes.NonFatalInternalFailure, ex, "VisuId.ApplyShellVisualProperties.Prefs");
             }
+
+            ApplyFontScale(prefSize > 0d ? prefSize : 13d);
 
             if (!string.IsNullOrWhiteSpace(prefFamily))
             {

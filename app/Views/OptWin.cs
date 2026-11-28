@@ -1142,6 +1142,7 @@ public sealed class OptWin : BaseWin
         {
             if (System.Windows.Application.Current is not null)
             {
+                VisuId.ApplyFontScale(_pref.FontSize);
                 foreach (Window window in System.Windows.Application.Current.Windows)
                 {
                     if (!string.IsNullOrWhiteSpace(_pref.FontFamily))
