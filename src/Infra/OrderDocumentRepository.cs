@@ -3772,6 +3772,14 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
 
             await LockSalesOrderForPickingAsync(
                 connection, transaction, picking.SalesOrderId, picking.CompanyId, cancellationToken).ConfigureAwait(false);
+            var sourceOrder = await ReadSnapshotAsync(
+                connection, transaction, CommercialDocSide.Sales, picking.SalesOrderId,
+                picking.CompanyId, CommercialDocKinds.SalesOrder, null, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("The source sales order was not found in the picking company.");
+            if (sourceOrder.Status != CommercialDocumentStatus.Posted)
+                throw new AppError(ErrorCodes.ChainSourceNotPosted,
+                    $"The source sales order '{sourceOrder.DocNo}' must remain posted until picking is confirmed.",
+                    sourceOrder.DocNo);
 
             // Over-pick guard (SAL-7012): recompute fulfilled and already
             // confirmed quantities while holding the source-order lock. This
@@ -3790,11 +3798,13 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                     throw new InvalidOperationException("Picked quantities cannot be negative.");
             }
 
+            decimal totalPicked = 0m;
             foreach (var line in picking.Lines)
             {
                 var picked = pickedBySourceLine.TryGetValue(line.SourceLineNo, out var requested)
                     ? requested
                     : line.PickedQty;
+                totalPicked += picked;
                 var fulfilled = fulfilledByLine.GetValueOrDefault(line.SourceLineNo);
                 var reserved = Math.Max(0m, reservedByLine.GetValueOrDefault(line.SourceLineNo) - fulfilled);
                 var remaining = Math.Max(0m, remainingByLine.GetValueOrDefault(line.SourceLineNo) - reserved);
@@ -3808,6 +3818,9 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 Add(updateLine, "@id", line.PickingLineId);
                 await updateLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
+            if (totalPicked <= 0m)
+                throw new AppError(ErrorCodes.PickingExceedsRemaining,
+                    "A picking must contain at least one positive picked quantity.");
 
             await using (var update = CreateCommand(connection, transaction, """
                 UPDATE sales_picking
