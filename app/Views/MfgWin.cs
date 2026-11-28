@@ -338,6 +338,15 @@ public sealed class MfgWin : BaseWin
         AddFormField(headerForm, 4, 3, "MfgOrder.TargetWarehouse", _txtTargetWhs);
         _cmbBom.IsReadOnly = true;
         _txtItem.SelectionChanged += (_, _) => SyncFinishedItemName();
+
+        // Manufacturing header fields use a tighter vertical rhythm than
+        // the shared form default: keep the gap between rows at 2 device-independent pixels.
+        foreach (var element in headerForm.Children.OfType<FrameworkElement>())
+        {
+            var margin = element.Margin;
+            element.Margin = new Thickness(margin.Left, 0, margin.Right, 2);
+        }
+
         Grid.SetRow(headerForm, 0);
         body.Children.Add(headerForm);
 
