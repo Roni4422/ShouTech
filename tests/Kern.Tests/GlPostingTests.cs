@@ -459,8 +459,11 @@ public class GlPostingTests
 
         // Reversal through the existing Reverse path mirrors symmetrically.
         var reversalId = await store.ReverseAsync(first.JournalEntryId, Actor);
-        var reversal = await store.FindByDocumentNumberAsync(db.CompanyId, "REV-" + reversalId.ToString("N")[..12]);
+        Assert.NotEqual(Guid.Empty, reversalId);
+        var reversal = await store.FindByDocumentNumberAsync(
+            db.CompanyId, "JRN-2", new DateOnly(2026, 3, 10));
         Assert.NotNull(reversal);
+        Assert.Equal(reversalId, reversal!.Id);
         Assert.Equal(JournalEntryStatus.Posted, reversal!.Status);
         Assert.Equal(10m, reversal.Lines.Single(l => l.AccountCode == "1201").Credit);
     }

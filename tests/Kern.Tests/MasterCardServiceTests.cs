@@ -497,9 +497,10 @@ public class MasterCardServiceTests
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "dba", "mig")))
                 root = root.Parent;
             Assert.NotNull(root);
-            var path = Path.Combine(root!.FullName, "dba", "mig", "sqlite", "095_party_structure.sql");
-            Assert.True(File.Exists(path), $"Migration 095 not found: {path}");
-            return File.ReadAllText(path);
+            var migration = MigrationBundleReader.Load(Path.Combine(root!.FullName, "dba", "mig", "sqlite"))
+                .SingleOrDefault(item => string.Equals(item.Id, "095_party_structure.sql", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(migration);
+            return migration!.Sql;
         }
 
         private static string ReadMigration031()
@@ -508,9 +509,10 @@ public class MasterCardServiceTests
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "dba", "mig")))
                 root = root.Parent;
             Assert.NotNull(root);
-            var path = Path.Combine(root!.FullName, "dba", "mig", "sqlite", "031_master_cards.sql");
-            Assert.True(File.Exists(path), $"Migration 031 not found: {path}");
-            return File.ReadAllText(path);
+            var migration = MigrationBundleReader.Load(Path.Combine(root!.FullName, "dba", "mig", "sqlite"))
+                .SingleOrDefault(item => string.Equals(item.Id, "031_master_cards.sql", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(migration);
+            return migration!.Sql;
         }
 
         public async Task InsertJournalAsync(int status, string? costCenter = null, string? accountCode = null, decimal debit = 0m, decimal credit = 0m)

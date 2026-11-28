@@ -677,9 +677,11 @@ public class ChequeMfgServiceTests
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "dba", "mig")))
                 root = root.Parent;
             Assert.NotNull(root);
-            var path = Path.Combine(root!.FullName, "dba", "mig", "sqlite", fileName);
-            Assert.True(File.Exists(path), $"Migration not found: {path}");
-            return File.ReadAllText(path);
+            var directory = Path.Combine(root!.FullName, "dba", "mig", "sqlite");
+            var migration = MigrationBundleReader.Load(directory)
+                .SingleOrDefault(item => string.Equals(item.Id, fileName, StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(migration);
+            return migration!.Sql;
         }
 
         public void Dispose()

@@ -40,14 +40,14 @@ public sealed class JournalEntry
     public void EnsureBalanced()
     {
         if (_lines.Count < 2)
-            throw new InvalidOperationException("A journal entry requires at least two lines.");
+            throw new AppError(ErrorCodes.JournalTooFewLines, "A journal entry requires at least two lines.");
 
         var totalDebit = _lines.Sum(l => l.Debit);
         var totalCredit = _lines.Sum(l => l.Credit);
         if (totalDebit <= 0 || totalCredit <= 0)
-            throw new InvalidOperationException("Journal totals must be greater than zero.");
+            throw new AppError(ErrorCodes.JournalZeroAmount, "Journal totals must be greater than zero.");
         if (totalDebit != totalCredit)
-            throw new InvalidOperationException("Journal entry is not balanced.");
+            throw new AppError(ErrorCodes.JournalNotBalanced, "Journal entry is not balanced.");
     }
 
     public void MarkPosted() => Status = JournalEntryStatus.Posted;
