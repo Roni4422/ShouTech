@@ -468,3 +468,10 @@ CREATE TABLE IF NOT EXISTS mfg_bom_outputs (
 );
 CREATE INDEX IF NOT EXISTS ix_mfg_bom_outputs_bom
     ON mfg_bom_outputs(bom_id, line_no);
+-- @shoutech-migration 132_mfg_order_expense_accounts.sql 3E6A99B19FA7A4ACB52901DA258232E715525AF29321439877AAA21F70F3BEAF 871B0624C6F2932085719A3B754C932D292FBD0CE11399D1EC29CEA6B1490457 871B0624C6F2932085719A3B754C932D292FBD0CE11399D1EC29CEA6B1490457 871B0624C6F2932085719A3B754C932D292FBD0CE11399D1EC29CEA6B1490457
+-- 132 - Persist expense ledger accounts on manufacturing order lines.
+-- Expense rows are copied from the template into the order snapshot so
+-- subsequent template edits cannot alter a saved production document.
+ALTER TABLE mfg_order_lines ADD COLUMN debit_account_code TEXT;
+ALTER TABLE mfg_order_lines ADD COLUMN credit_account_code TEXT;
+ALTER TABLE mfg_order_lines ADD COLUMN cost_center TEXT;
