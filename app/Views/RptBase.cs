@@ -233,9 +233,12 @@ public abstract class RptBase : BaseWin
         DateTime entryDate;
         try
         {
-            entryDate = dateValue is DateTime date
-                ? date
-                : Convert.ToDateTime(dateValue, CultureInfo.InvariantCulture);
+            entryDate = dateValue switch
+            {
+                DateTime date => date,
+                DateOnly date => date.ToDateTime(TimeOnly.MinValue),
+                _ => Convert.ToDateTime(dateValue, CultureInfo.InvariantCulture)
+            };
         }
         catch (FormatException)
         {
