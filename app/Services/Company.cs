@@ -2081,7 +2081,7 @@ public sealed class CoCreateSvc : ICoCreateSvc
                     codeById[account.Id] = code;
             }
 
-            var rows = new List<(string Code, string? ParentCode, string NameAr, string NameEn, string PostingMode)>();
+            var rows = new List<(string Code, string? ParentCode, string NameAr, string NameEn, string PostingMode, bool CashBook)>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var account in template.Accounts)
             {
