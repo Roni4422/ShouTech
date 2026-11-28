@@ -2157,6 +2157,9 @@ public static class RptQuery
                              ON a2.account_id = x.account_id AND a2.company_id = j.company_id
                            WHERE x.journal_entry_id = j.journal_entry_id
                              AND x.line_number <> l.line_number
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM cash_accounts ca2 WHERE ca2.account_id = x.account_id
+                             )
                            ORDER BY x.line_number
                            LIMIT 1
                        ), '') AS counter_account,
