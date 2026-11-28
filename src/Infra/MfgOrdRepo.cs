@@ -622,7 +622,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 ?? throw new InvalidOperationException("Manufacturing order was not found for this company.");
             if (order.Status != MfgOrderStatuses.Draft)
                 throw StageError(order, "confirm");
-            if (order.Lines.Count == 0)
+            if (order.Lines.Count == 0 || !order.Lines.Any(line => line.LineKind == MfgLineKinds.Raw))
                 throw new InvalidOperationException("A manufacturing order requires at least one raw-material line.");
 
             // Staged actuals start from zero at Confirm: the header's
@@ -825,6 +825,20 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 throw new AppError(ErrorCodes.MfgFinishExceedsPlanned,
                     $"Receiving {finishedQty} of '{order.ItemCode.Trim()}' exceeds the remaining planned quantity {remainingPlanned}.",
                     order.ItemCode.Trim(), finishedQty.ToString(CultureInfo.InvariantCulture));
+
+            // Finished quantity cannot outrun the material actually issued.
+            // Compare production progress with each RAW line's consumed
+            // proportion so a caller cannot receive finished stock before
+            // the corresponding components have entered WIP.
+            foreach (var rawLine in order.Lines.Where(line => line.LineKind == MfgLineKinds.Raw))
+            {
+                if (rawLine.Qty <= 0m)
+                    throw new InvalidOperationException($"Raw-material line '{rawLine.ItemCode.Trim()}' has an invalid planned quantity.");
+                var supportedOutput = decimal.Round(rawLine.ConsumedQty * order.Qty / rawLine.Qty, 6, MidpointRounding.Floor);
+                if (order.ProducedQty + finishedQty > supportedOutput)
+                    throw new InvalidOperationException(
+                        $"Cannot finish {finishedQty} units: raw material '{rawLine.ItemCode.Trim()}' has only been issued for {supportedOutput} units of production.");
+            }
 
             // Apply the planned-quantity ceiling across the whole request;
             // duplicate line IDs must not bypass it by passing individually.
