@@ -24,7 +24,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     /// (034 base + 058 staged-workflow columns).</summary>
     private const string OrderColumns =
         "id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes, " +
-        "bom_id, bom_version, planned_start_date, planned_end_date, sales_order_doc_id, sales_order_no, cost_center, source_warehouse_code, wip_warehouse_code, target_warehouse_code, scrap_warehouse_code, produced_qty, accumulated_cost, wip_balance, variance_amount, standard_variance";
+        "bom_id, bom_version, planned_start_date, planned_end_date, sales_order_doc_id, sales_order_no, cost_center, source_warehouse_code, wip_warehouse_code, target_warehouse_code, scrap_warehouse_code, input_document_kind, output_document_kind, produced_qty, accumulated_cost, wip_balance, variance_amount, standard_variance";
 
     private readonly string _provider;
     private readonly string _connectionString;
@@ -148,14 +148,14 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             if (existingStatus is null)
             {
                 await using var insert = CreateCommand(connection, transaction,
-                    "INSERT INTO mfg_orders (id, company_id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes, bom_id, bom_version, planned_start_date, planned_end_date, sales_order_doc_id, sales_order_no, cost_center, source_warehouse_code, wip_warehouse_code, target_warehouse_code, scrap_warehouse_code, produced_qty, accumulated_cost, wip_balance, variance_amount, standard_variance, created_by) VALUES (@id, @company, @doc, @date, @item, @itemName, @qty, @unit, @warehouse, @overhead, @std, @total, @unitCost, @status, @notes, @bomId, @bomVersion, @plannedStart, @plannedEnd, @soDocId, @soNo, @costCenter, @srcWhs, @wipWhs, @tgtWhs, @scrWhs, @producedQty, @accumulated, @wipBalance, @variance, @stdVariance, @user)");
+                    "INSERT INTO mfg_orders (id, company_id, doc_no, doc_date, item_code, item_name, qty, unit_code, warehouse_code, overhead_amount, standard_unit_cost, total_cost, unit_cost, status, notes, bom_id, bom_version, planned_start_date, planned_end_date, sales_order_doc_id, sales_order_no, cost_center, source_warehouse_code, wip_warehouse_code, target_warehouse_code, scrap_warehouse_code, input_document_kind, output_document_kind, produced_qty, accumulated_cost, wip_balance, variance_amount, standard_variance, created_by) VALUES (@id, @company, @doc, @date, @item, @itemName, @qty, @unit, @warehouse, @overhead, @std, @total, @unitCost, @status, @notes, @bomId, @bomVersion, @plannedStart, @plannedEnd, @soDocId, @soNo, @costCenter, @srcWhs, @wipWhs, @tgtWhs, @scrWhs, @inputKind, @outputKind, @producedQty, @accumulated, @wipBalance, @variance, @stdVariance, @user)");
                 BindOrder(insert, companyId, order, userId);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 await using var update = CreateCommand(connection, transaction,
-                    $"UPDATE mfg_orders SET doc_no = @doc, doc_date = @date, item_code = @item, item_name = @itemName, qty = @qty, unit_code = @unit, warehouse_code = @warehouse, overhead_amount = @overhead, standard_unit_cost = @std, total_cost = @total, unit_cost = @unitCost, notes = @notes, bom_id = @bomId, bom_version = @bomVersion, planned_start_date = @plannedStart, planned_end_date = @plannedEnd, sales_order_doc_id = @soDocId, sales_order_no = @soNo, cost_center = @costCenter, source_warehouse_code = @srcWhs, wip_warehouse_code = @wipWhs, target_warehouse_code = @tgtWhs, scrap_warehouse_code = @scrWhs, produced_qty = @producedQty, accumulated_cost = @accumulated, wip_balance = @wipBalance, variance_amount = @variance, standard_variance = @stdVariance, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND status = 'Draft' AND {NotDeleted}");
+                    $"UPDATE mfg_orders SET doc_no = @doc, doc_date = @date, item_code = @item, item_name = @itemName, qty = @qty, unit_code = @unit, warehouse_code = @warehouse, overhead_amount = @overhead, standard_unit_cost = @std, total_cost = @total, unit_cost = @unitCost, notes = @notes, bom_id = @bomId, bom_version = @bomVersion, planned_start_date = @plannedStart, planned_end_date = @plannedEnd, sales_order_doc_id = @soDocId, sales_order_no = @soNo, cost_center = @costCenter, source_warehouse_code = @srcWhs, wip_warehouse_code = @wipWhs, target_warehouse_code = @tgtWhs, scrap_warehouse_code = @scrWhs, input_document_kind = @inputKind, output_document_kind = @outputKind, produced_qty = @producedQty, accumulated_cost = @accumulated, wip_balance = @wipBalance, variance_amount = @variance, standard_variance = @stdVariance, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND status = 'Draft' AND {NotDeleted}");
                 BindOrder(update, companyId, order, userId);
                 if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("Manufacturing order could not be updated (missing, deleted, or no longer draft).");
@@ -1519,6 +1519,8 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         Add(command, "@wipWhs", (object?)NullIfBlank(order.WipWarehouseCode) ?? DBNull.Value);
         Add(command, "@tgtWhs", (object?)NullIfBlank(order.TargetWarehouseCode) ?? DBNull.Value);
         Add(command, "@scrWhs", (object?)NullIfBlank(order.ScrapWarehouseCode) ?? DBNull.Value);
+        Add(command, "@inputKind", string.IsNullOrWhiteSpace(order.InputDocumentKind) ? "MATERIAL_ISSUE" : order.InputDocumentKind.Trim());
+        Add(command, "@outputKind", string.IsNullOrWhiteSpace(order.OutputDocumentKind) ? "MATERIAL_RECEIPT" : order.OutputDocumentKind.Trim());
         Add(command, "@producedQty", order.ProducedQty);
         Add(command, "@accumulated", order.AccumulatedCost);
         Add(command, "@wipBalance", order.WipBalance);
@@ -1554,11 +1556,13 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
         WipWarehouseCode = ReadString(reader, 22),
         TargetWarehouseCode = ReadString(reader, 23),
         ScrapWarehouseCode = ReadString(reader, 24),
-        ProducedQty = ReadDecimal(reader, 25),
-        AccumulatedCost = ReadDecimal(reader, 26),
-        WipBalance = ReadDecimal(reader, 27),
-        VarianceAmount = ReadDecimal(reader, 28),
-        StandardVariance = ReadDecimal(reader, 29)
+        InputDocumentKind = ReadString(reader, 25) ?? "MATERIAL_ISSUE",
+        OutputDocumentKind = ReadString(reader, 26) ?? "MATERIAL_RECEIPT",
+        ProducedQty = ReadDecimal(reader, 27),
+        AccumulatedCost = ReadDecimal(reader, 28),
+        WipBalance = ReadDecimal(reader, 29),
+        VarianceAmount = ReadDecimal(reader, 30),
+        StandardVariance = ReadDecimal(reader, 31)
     };
 
     private static void RequireCompany(string companyId)
