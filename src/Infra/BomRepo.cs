@@ -54,7 +54,7 @@ public sealed class BomRepository : IBomRepository
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         var activeFilter = includeInactive ? string.Empty : $" AND is_active = {BoolTrue}";
         await using var command = CreateCommand(connection, null,
-            $"SELECT id, material_code, material_name, version, is_active, is_default, output_qty, output_unit, notes FROM mfg_boms WHERE company_id = @company AND {NotDeleted}{activeFilter} ORDER BY material_code, version");
+            $"SELECT id, material_code, material_name, version, is_active, is_default, output_qty, output_unit, notes, input_document_kind, output_document_kind, input_warehouse_code, output_warehouse_code FROM mfg_boms WHERE company_id = @company AND {NotDeleted}{activeFilter} ORDER BY material_code, version");
         Add(command, "@company", companyId.Trim());
         var result = new List<Bom>();
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
@@ -172,14 +172,14 @@ public sealed class BomRepository : IBomRepository
             if (!exists)
             {
                 await using var insert = CreateCommand(connection, transaction,
-                    "INSERT INTO mfg_boms (id, company_id, material_code, material_name, version, is_active, is_default, output_qty, output_unit, notes, created_by) VALUES (@id, @company, @material, @materialName, @version, @active, @isDefault, @outputQty, @outputUnit, @notes, @user)");
+                    "INSERT INTO mfg_boms (id, company_id, material_code, material_name, version, is_active, is_default, output_qty, output_unit, notes, input_document_kind, output_document_kind, input_warehouse_code, output_warehouse_code, created_by) VALUES (@id, @company, @material, @materialName, @version, @active, @isDefault, @outputQty, @outputUnit, @notes, @inputKind, @outputKind, @inputWarehouse, @outputWarehouse, @user)");
                 BindBom(insert, companyId, bom, userId);
                 await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 await using var update = CreateCommand(connection, transaction,
-                    $"UPDATE mfg_boms SET material_code = @material, material_name = @materialName, version = @version, is_active = @active, is_default = @isDefault, output_qty = @outputQty, output_unit = @outputUnit, notes = @notes, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
+                    $"UPDATE mfg_boms SET material_code = @material, material_name = @materialName, version = @version, is_active = @active, is_default = @isDefault, output_qty = @outputQty, output_unit = @outputUnit, notes = @notes, input_document_kind = @inputKind, output_document_kind = @outputKind, input_warehouse_code = @inputWarehouse, output_warehouse_code = @outputWarehouse, updated_by = @user, updated_at = {NowExpr} WHERE company_id = @company AND id = @id AND {NotDeleted}");
                 BindBom(update, companyId, bom, userId);
                 if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                     throw new InvalidOperationException("Bill of materials could not be updated (missing or deleted).");
@@ -428,7 +428,7 @@ public sealed class BomRepository : IBomRepository
     {
         Bom? bom = null;
         await using (var command = CreateCommand(connection, transaction,
-            $"SELECT id, material_code, material_name, version, is_active, is_default, output_qty, output_unit, notes FROM mfg_boms WHERE company_id = @company AND id = @id AND {NotDeleted}"))
+            $"SELECT id, material_code, material_name, version, is_active, is_default, output_qty, output_unit, notes, input_document_kind, output_document_kind, input_warehouse_code, output_warehouse_code FROM mfg_boms WHERE company_id = @company AND id = @id AND {NotDeleted}"))
         {
             Add(command, "@company", companyId.Trim());
             Add(command, "@id", FormatGuid(bomId));
@@ -592,6 +592,10 @@ public sealed class BomRepository : IBomRepository
         Add(command, "@outputQty", bom.OutputQty);
         Add(command, "@outputUnit", string.IsNullOrWhiteSpace(bom.OutputUnit) ? "PCS" : bom.OutputUnit.Trim());
         Add(command, "@notes", (object?)NullIfBlank(bom.Notes) ?? DBNull.Value);
+        Add(command, "@inputKind", string.IsNullOrWhiteSpace(bom.InputDocumentKind) ? "MATERIAL_ISSUE" : bom.InputDocumentKind.Trim());
+        Add(command, "@outputKind", string.IsNullOrWhiteSpace(bom.OutputDocumentKind) ? "MATERIAL_RECEIPT" : bom.OutputDocumentKind.Trim());
+        Add(command, "@inputWarehouse", (object?)NullIfBlank(bom.InputWarehouseCode) ?? DBNull.Value);
+        Add(command, "@outputWarehouse", (object?)NullIfBlank(bom.OutputWarehouseCode) ?? DBNull.Value);
         Add(command, "@user", userId);
     }
 
@@ -605,7 +609,11 @@ public sealed class BomRepository : IBomRepository
         IsDefault = !reader.IsDBNull(5) && Convert.ToBoolean(reader.GetValue(5), CultureInfo.InvariantCulture),
         OutputQty = ReadDecimal(reader, 6),
         OutputUnit = ReadString(reader, 7) ?? "PCS",
-        Notes = ReadString(reader, 8)
+        Notes = ReadString(reader, 8),
+        InputDocumentKind = ReadString(reader, 9) ?? "MATERIAL_ISSUE",
+        OutputDocumentKind = ReadString(reader, 10) ?? "MATERIAL_RECEIPT",
+        InputWarehouseCode = ReadString(reader, 11),
+        OutputWarehouseCode = ReadString(reader, 12)
     };
 
     private static void RequireCompany(string companyId)
