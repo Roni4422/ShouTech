@@ -600,3 +600,39 @@ WHERE r.role_code = 'ROLE_USER' AND r.is_active = 1 AND p.is_active = 1 AND p.pe
 INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
 SELECT r.role_id, p.permission_id FROM roles r CROSS JOIN permissions p
 WHERE r.role_code = 'ROLE_VIEWER' AND r.is_active = 1 AND p.is_active = 1 AND p.permission_code IN ('MFG.PLANNING.VIEW');
+-- @shoutech-migration 131_mfg_template_sections.sql 693F65B2E9FBBB04C6F85FDD67EEEECBF0EC1C7583521DDF40CDD75295F1E477 693F65B2E9FBBB04C6F85FDD67EEEECBF0EC1C7583521DDF40CDD75295F1E477 693F65B2E9FBBB04C6F85FDD67EEEECBF0EC1C7583521DDF40CDD75295F1E477 693F65B2E9FBBB04C6F85FDD67EEEECBF0EC1C7583521DDF40CDD75295F1E477
+-- 131 - Persist complete reusable manufacturing template sections.
+-- Inputs remain in mfg_bom_lines. Expenses and all output products are stored
+-- independently so template selection can reproduce the full recipe.
+CREATE TABLE IF NOT EXISTS mfg_bom_expenses (
+    id TEXT PRIMARY KEY,
+    bom_id TEXT NOT NULL REFERENCES mfg_boms(id) ON DELETE CASCADE,
+    line_no INTEGER NOT NULL,
+    expense_code TEXT NOT NULL,
+    description TEXT,
+    amount NUMERIC NOT NULL DEFAULT 0 CHECK (amount >= 0),
+    debit_account_code TEXT,
+    credit_account_code TEXT,
+    cost_center TEXT,
+    UNIQUE (bom_id, line_no)
+);
+CREATE INDEX IF NOT EXISTS ix_mfg_bom_expenses_bom
+    ON mfg_bom_expenses(bom_id, line_no);
+
+CREATE TABLE IF NOT EXISTS mfg_bom_outputs (
+    id TEXT PRIMARY KEY,
+    bom_id TEXT NOT NULL REFERENCES mfg_boms(id) ON DELETE CASCADE,
+    line_no INTEGER NOT NULL,
+    material_code TEXT NOT NULL,
+    material_name TEXT,
+    output_kind TEXT NOT NULL DEFAULT 'MAIN'
+        CHECK (output_kind IN ('MAIN','CO_PRODUCT','BY_PRODUCT','SCRAP')),
+    qty NUMERIC NOT NULL CHECK (qty > 0),
+    unit_code TEXT,
+    warehouse_code TEXT,
+    cost_share_pct NUMERIC NOT NULL DEFAULT 0
+        CHECK (cost_share_pct >= 0 AND cost_share_pct <= 100),
+    UNIQUE (bom_id, line_no)
+);
+CREATE INDEX IF NOT EXISTS ix_mfg_bom_outputs_bom
+    ON mfg_bom_outputs(bom_id, line_no);
