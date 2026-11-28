@@ -2264,6 +2264,9 @@
       "Kind": "Kind",
       "Consumed": "Consumed / Produced",
       "StageQty": "Stage Qty",
+      "DebitAccount": "Debit Account",
+      "CreditAccount": "Credit Account",
+      "CostCenter": "Cost Center",
       "CostShare": "Cost Share %"
     }
   },
