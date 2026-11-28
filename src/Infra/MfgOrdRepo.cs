@@ -171,7 +171,9 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 line.OrderId = order.Id;
                 line.LineNo = ++lineNo;
                 if (line.Id == Guid.Empty) line.Id = Guid.NewGuid();
-                line.Amount = decimal.Round(line.Qty * line.UnitCost, 2);
+                line.Amount = line.LineKind is MfgLineKinds.Raw or MfgLineKinds.Cost
+                    ? decimal.Round(line.Qty * line.UnitCost, 2)
+                    : 0m;
                 await using var insertLine = CreateCommand(connection, transaction,
                     "INSERT INTO mfg_order_lines (id, order_id, line_no, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount, consumed_qty, produced_qty, warehouse_code, cost_share_pct, debit_account_code, credit_account_code, cost_center) VALUES (@id, @order, @lineNo, @kind, @item, @itemName, @qty, @unit, @cost, @std, @amount, @consumed, @produced, @warehouse, @share, @debit, @credit, @costCenter)");
                 Add(insertLine, "@id", FormatGuid(line.Id));
