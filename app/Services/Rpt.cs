@@ -1351,6 +1351,7 @@ public static class RptQuery
                  .Replace("is_service = 1", "is_service = TRUE", StringComparison.Ordinal)
                  .Replace("has_expiry = 1", "has_expiry = TRUE", StringComparison.Ordinal)
                  .Replace("is_active = 1", "is_active = TRUE", StringComparison.Ordinal)
+                 .Replace("is_postable = 1", "is_postable = TRUE", StringComparison.Ordinal)
                  .Replace("cash_book = 1", "cash_book = TRUE", StringComparison.Ordinal)
             : sql;
 
