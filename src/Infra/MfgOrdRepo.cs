@@ -173,7 +173,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 if (line.Id == Guid.Empty) line.Id = Guid.NewGuid();
                 line.Amount = decimal.Round(line.Qty * line.UnitCost, 2);
                 await using var insertLine = CreateCommand(connection, transaction,
-                    "INSERT INTO mfg_order_lines (id, order_id, line_no, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount, consumed_qty, produced_qty, warehouse_code, cost_share_pct) VALUES (@id, @order, @lineNo, @kind, @item, @itemName, @qty, @unit, @cost, @std, @amount, @consumed, @produced, @warehouse, @share)");
+                    "INSERT INTO mfg_order_lines (id, order_id, line_no, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount, consumed_qty, produced_qty, warehouse_code, cost_share_pct, debit_account_code, credit_account_code, cost_center) VALUES (@id, @order, @lineNo, @kind, @item, @itemName, @qty, @unit, @cost, @std, @amount, @consumed, @produced, @warehouse, @share, @debit, @credit, @costCenter)");
                 Add(insertLine, "@id", FormatGuid(line.Id));
                 Add(insertLine, "@order", FormatGuid(order.Id));
                 Add(insertLine, "@lineNo", line.LineNo);
@@ -189,6 +189,9 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 Add(insertLine, "@produced", line.ProducedQty);
                 Add(insertLine, "@warehouse", (object?)NullIfBlank(line.WarehouseCode) ?? DBNull.Value);
                 Add(insertLine, "@share", line.CostSharePct);
+                Add(insertLine, "@debit", (object?)NullIfBlank(line.DebitAccountCode) ?? DBNull.Value);
+                Add(insertLine, "@credit", (object?)NullIfBlank(line.CreditAccountCode) ?? DBNull.Value);
+                Add(insertLine, "@costCenter", (object?)NullIfBlank(line.CostCenter) ?? DBNull.Value);
                 await insertLine.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
@@ -1396,7 +1399,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     private async Task<List<MfgOrderLine>> ReadLinesAsync(DbConnection connection, Guid orderId, CancellationToken cancellationToken, DbTransaction? transaction = null)
     {
         await using var command = CreateCommand(connection, transaction,
-            "SELECT id, order_id, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount, line_no, consumed_qty, produced_qty, warehouse_code, cost_share_pct FROM mfg_order_lines WHERE order_id = @order ORDER BY line_no, item_code");
+            "SELECT id, order_id, line_kind, item_code, item_name, qty, unit_code, unit_cost, standard_unit_cost, amount, line_no, consumed_qty, produced_qty, warehouse_code, cost_share_pct, debit_account_code, credit_account_code, cost_center FROM mfg_order_lines WHERE order_id = @order ORDER BY line_no, item_code");
         Add(command, "@order", FormatGuid(orderId));
         var result = new List<MfgOrderLine>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -1418,7 +1421,10 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                 ConsumedQty = ReadDecimal(reader, 11),
                 ProducedQty = ReadDecimal(reader, 12),
                 WarehouseCode = ReadString(reader, 13),
-                CostSharePct = ReadDecimal(reader, 14)
+                CostSharePct = ReadDecimal(reader, 14),
+                DebitAccountCode = ReadString(reader, 15),
+                CreditAccountCode = ReadString(reader, 16),
+                CostCenter = ReadString(reader, 17)
             });
         }
         return result;
