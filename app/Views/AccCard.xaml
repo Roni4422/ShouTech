@@ -205,6 +205,7 @@
 
                     <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="9" Grid.Column="0" Text="Reconciliation date" loc:LocProps.Key="AccCard.ReconciliationDate" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <DatePicker x:Name="DtReconcile" Grid.Row="9" Grid.Column="1" Margin="{StaticResource MarginFormField}"/>
+                    <CheckBox x:Name="ChkCashBook" Grid.Row="9" Grid.Column="2" Grid.ColumnSpan="2" Content="Include in cash journal" loc:LocProps.Key="AccCard.CashBook" VerticalAlignment="Center" Margin="0,0,0,5"/>
 
                     <TextBlock Style="{StaticResource VisuTextBlockLabelStyle}" Grid.Row="10" Grid.Column="0" Text="Description" loc:LocProps.Key="AccCard.Description" FontWeight="SemiBold" VerticalAlignment="Top" Margin="0,4,0,5"/>
                     <TextBox x:Name="TxtDescription" Grid.Row="10" Grid.Column="1" Grid.ColumnSpan="3" Height="{StaticResource MultilineFieldHeight}" Margin="{StaticResource MarginFormField}" AcceptsReturn="True" TextWrapping="Wrap"/>
