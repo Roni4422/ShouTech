@@ -125,6 +125,9 @@ public sealed partial class JournalRepository : IJournalRepository
         string currencyCode;
         decimal exchangeRate;
         string? storedDocumentNumber;
+        string? sourceDocType;
+        string? sourceDocId;
+        string? sourceDocumentNumber;
 
         await using (var header = connection.CreateCommand())
         {
@@ -163,9 +166,9 @@ public sealed partial class JournalRepository : IJournalRepository
             currencyCode = reader.GetString(6);
             exchangeRate = Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture);
             var centralDocumentNumber = reader.IsDBNull(8) ? null : reader.GetString(8);
-            var sourceDocType = reader.IsDBNull(9) ? null : reader.GetString(9);
-            var sourceDocId = reader.IsDBNull(10) ? null : Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture);
-            var sourceDocumentNumber = reader.IsDBNull(11) ? null : reader.GetString(11);
+            sourceDocType = reader.IsDBNull(9) ? null : reader.GetString(9);
+            sourceDocId = reader.IsDBNull(10) ? null : Convert.ToString(reader.GetValue(10), CultureInfo.InvariantCulture);
+            sourceDocumentNumber = reader.IsDBNull(11) ? null : reader.GetString(11);
             storedDocumentNumber = documentNumber.Trim().StartsWith("JRN-", StringComparison.OrdinalIgnoreCase)
                 ? centralDocumentNumber
                 : sourceDocumentNumber ?? centralDocumentNumber;
