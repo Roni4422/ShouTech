@@ -920,8 +920,7 @@
                         <TextBlock Text="{Binding CurrentDatabase}" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StatusBarItem>
-</StatusBarItem>
-                            </StatusBar>
+            </StatusBar>
 
             <!-- Archive bin: LTR Canvas so RTL shell does not mirror screen sides -->
             <Canvas x:Name="RecycleBinLayer"
