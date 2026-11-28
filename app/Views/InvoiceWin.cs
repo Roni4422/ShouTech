@@ -1813,16 +1813,17 @@ public sealed class InvoiceWin : BaseWin, IWindowMode, IInfoContextProvider
         finally { _suppressTaxSelectionChanged = false; }
 
         var locked = doc.Status is InvDocStatus.Posted or InvDocStatus.Posting or InvDocStatus.Cancelled;
-        _btnSave.IsEnabled = !locked;
-        _btnReverse.IsEnabled = locked && doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale;
+        var hasOriginal = doc.OriginalDocId is > 0;
+        _btnSave.IsEnabled = !locked && !hasOriginal;
+        _btnReverse.IsEnabled = locked && !hasOriginal && doc.Kind is InvDocKind.SalesInvoice or InvDocKind.PurchaseInvoice or InvDocKind.PosSale;
         if (_btnReverse.IsEnabled)
         {
             try { _btnReverse.IsEnabled = !InvRepo.HasCompletedReversal(doc.DocId, doc.Kind); }
             catch (Exception exL743) {
                 AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, exL743, "InvoiceWin.ApplyDoc"); _btnReverse.IsEnabled = false; }
         }
-        _btnDelete.IsEnabled = doc.DocId > 0;
-        _btnPost.IsEnabled = !locked;
+        _btnDelete.IsEnabled = doc.DocId > 0 && !hasOriginal;
+        _btnPost.IsEnabled = !locked && !hasOriginal;
         // Collect (Phenix reference): receipt allocation against a
         // POSTED sales invoice, through the existing PayRecWin path.
         _btnCollect.Visibility = doc.Kind == InvDocKind.SalesInvoice ? Visibility.Visible : Visibility.Collapsed;
