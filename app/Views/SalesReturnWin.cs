@@ -691,6 +691,9 @@ public sealed class SalesReturnWin : BaseWin
     {
         try
         {
+            // Inspection is a controlled return decision; use the same
+            // sensitive authorization boundary as return approval.
+            if (!EnsurePermission(PermCat.Sales.ReturnApprove, "InspectReturn")) return;
             if (_pendingDoc is null) return;
             _grid.CommitEdit(DataGridEditingUnit.Cell, true);
             _grid.CommitEdit(DataGridEditingUnit.Row, true);
