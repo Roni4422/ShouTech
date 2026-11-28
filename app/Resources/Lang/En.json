@@ -1797,6 +1797,7 @@
     "Reconcile": "Allow reconciliation",
     "Taxable": "Taxable",
     "ForeignCurrency": "Foreign currency",
+    "CashBook": "Include in cash journal",
     "CostRequired": "Cost center required",
     "Budget": "Budget controlled",
     "DefaultAccount": "Default account",
