@@ -449,7 +449,7 @@ namespace ShouTech.App.Views
 
         // Quick Access Bar: each navigation button carries the same action key
         // the ribbon uses in its Tag, and is routed through the exact chain the
-        // ribbon click uses (RibbonReportRouter -> RibbonNav -> RptNav ->
+        // ribbon click uses (RibbonNav -> RptNav ->
         // MainShVM.HandleRibbonAction), so a quick-bar button always opens the
         // same window as its ribbon counterpart.
         private void OnQuickAccessClick(object sender, RoutedEventArgs e)
@@ -466,9 +466,6 @@ namespace ShouTech.App.Views
 
             try
             {
-                if (RibbonReportRouter.TryHandle(actionKey, this))
-                    return;
-
                 if (RibbonNav.TryHandle(actionKey, this))
                     return;
 
@@ -1041,8 +1038,6 @@ namespace ShouTech.App.Views
 
             {
                 var reportKey = LocProps.GetKey(button);
-                if (RibbonReportRouter.TryHandle(reportKey, this))
-                    return;
                 if (RibbonNav.TryHandle(reportKey, this))
                     return;
                 if (RptNav.TryHandle(reportKey, this))

@@ -28,7 +28,7 @@ the old toolbar carried — the accent-color picker — moved into the quick bar
 
 Each navigation button carries the **same action key the ribbon uses** in its
 `Tag`, and `MWin.OnQuickAccessClick` routes it through the exact chain a ribbon
-click uses (`RibbonReportRouter` → `RibbonNav` → `RptNav` →
+click uses (`RibbonNav` → `RptNav` →
 `MainShVM.HandleRibbonAction`), so a quick-bar button always opens the same
 window as its ribbon counterpart. Tooltips are the window's localized title,
 applied by the central localization engine via `loc:LocProps.ToolTipKey`

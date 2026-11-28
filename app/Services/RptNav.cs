@@ -45,6 +45,8 @@ public static class RptNav
             // (CustStmtWin), not the GL account statement it used to open.
             case "Accounts.CustomerStatement":
                 OpenCustomerStatement(owner); return true;
+            case "Accounts.DailyReport":
+                OpenJournalList(owner); return true;
             case "Accounts.GeneralJournal":
             case "Reports.JournalList":
                 OpenJournalList(owner); return true;
@@ -53,6 +55,8 @@ public static class RptNav
             case "Reports.StockBalances":
             case "Reports.MaterialOverview":
                 OpenStockBalances(owner); return true;
+            case "Inventory.MaterialGroupMovementReport":
+                OpenGroupMoves(owner); return true;
             case "Inventory.MaterialMovement":
             case "Reports.MaterialMoves":
             case "Accounts.CostCenterMaterialMovement":
@@ -60,6 +64,8 @@ public static class RptNav
             case "Inventory.StockAdjustmentReport":
             case "Reports.StockAdjustment":
                 OpenStockAdjustment(owner); return true;
+            case "Inventory.MaterialProfits":
+                OpenItemProfitability(owner); return true;
             case "Reports.ItemProfitability":
             case "Inventory.ItemProfitability":
                 OpenItemProfitability(owner); return true;
@@ -67,6 +73,8 @@ public static class RptNav
             case "Reports.CustomerBalances":
             case "Reports.CustomerOverview":
                 OpenCustomerBalances(owner); return true;
+            case "Accounts.AgingReceivables":
+                OpenCustomerAging(owner); return true;
             case "Customers.CustomerAging":
             case "Reports.CustomerAging":
                 OpenCustomerAging(owner); return true;
@@ -100,6 +108,8 @@ public static class RptNav
                 OpenPurchaseReceiptReturn(owner); return true;
             case "Invoices.SalesInvoiceList":
             case "Reports.SalesInvoiceList":
+                OpenSalesInvoiceList(owner); return true;
+            case "Inventory.SalesReport":
                 OpenSalesInvoiceList(owner); return true;
             case "Invoices.PurchaseInvoiceList":
             case "Reports.PurchaseInvoiceList":
