@@ -140,6 +140,7 @@ public sealed class BomWin : BaseWin
 
         ConfigureGrid(_grid, readOnly: true);
         _grid.Columns.Add(TextCol(_headers, "Bom.Col.Material", nameof(Bom.MaterialCode), 110));
+        _grid.Columns.Add(TextCol(_headers, "Invoice.Col.Description", nameof(Bom.MaterialName), 160));
         _grid.Columns.Add(TextCol(_headers, "Bom.Col.Version", nameof(Bom.Version), 60));
         _grid.Columns.Add(TextCol(_headers, "Bom.Col.OutputQty", nameof(Bom.OutputQty), 80));
         _grid.Columns.Add(TextCol(_headers, "Bom.Col.Active", nameof(Bom.IsActive), 60));
@@ -165,6 +166,19 @@ public sealed class BomWin : BaseWin
         AddFormField(_labels, form, 2, 1, "Vouchers.Memo", _notes);
         AddFormElement(form, 3, 0, _isActive);
         AddFormElement(form, 3, 1, _isDefault);
+
+        // Keep the template header compact and consistent with the production form.
+        foreach (var element in form.Children.OfType<FrameworkElement>())
+        {
+            var margin = element.Margin;
+            element.Margin = new Thickness(margin.Left, 0, margin.Right, 2);
+        }
+        foreach (var control in new Control[]
+        {
+            _material, _materialName, _version, _outputQty, _outputUnit, _notes
+        })
+            control.Padding = new Thickness(1);
+
         _material.SelectionChanged += (_, _) => SyncMaterialName();
         _outputUnit.ItemsSource = new[] { "PCS", "KG", "G", "L", "M", "BOX" };
         _outputUnit.Text = "PCS";
