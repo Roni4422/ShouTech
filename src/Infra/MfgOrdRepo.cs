@@ -896,7 +896,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                     var amount = index == costLines.Count - 1
                         ? expenseAllocationTarget - allocatedExpense
                         : expenseBase > 0m
-                            ? decimal.Round(expenseAllocationTarget * expense.Amount / expenseBase, 2, MidpointRounding.AwayFromZero)
+                            ? decimal.Truncate(expenseAllocationTarget * expense.Amount / expenseBase * 100m) / 100m
                             : 0m;
                     if (amount <= 0m) continue;
                     allocatedExpense += amount;
