@@ -97,6 +97,11 @@ public sealed class BomService
             bom.Outputs.Add(new BomOutput { BomId = bom.Id, MaterialCode = bom.MaterialCode.Trim(), MaterialName = bom.MaterialName, OutputKind = "MAIN", Qty = bom.OutputQty, UnitCode = bom.OutputUnit });
         if (bom.Outputs.Count(o => string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase)) != 1)
             throw new InvalidOperationException("A manufacturing template must contain exactly one MAIN output.");
+        var mainOutput = bom.Outputs.Single(o => string.Equals(o.OutputKind, "MAIN", StringComparison.OrdinalIgnoreCase));
+        if (!string.Equals(mainOutput.MaterialCode.Trim(), bom.MaterialCode.Trim(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The MAIN output must match the finished material in the template header.");
+        if (mainOutput.Qty != bom.OutputQty || !string.Equals(mainOutput.UnitCode, bom.OutputUnit, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The MAIN output quantity and unit must match the template batch quantity and unit.");
         if (bom.Outputs.Any(o => string.IsNullOrWhiteSpace(o.MaterialCode) || o.Qty <= 0))
             throw new InvalidOperationException("Every output requires a material code and a positive quantity.");
         if (bom.Outputs.Any(o => o.CostSharePct is < 0 or > 100) || bom.Outputs.Sum(o => o.CostSharePct) > 100m)
