@@ -385,7 +385,7 @@ public sealed class MfgWin : BaseWin
     {
         if (_bomOptions.Count == 0)
         {
-            MessageBox.Show(this, T("MfgOrders.NoBomOptions"), Title,
+            MessageBox.Show(this, T("MfgOrder.SelectBom"), Title,
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -410,7 +410,7 @@ public sealed class MfgWin : BaseWin
 
         var list = new ListBox
         {
-            DisplayMemberPath = nameof(Bom.MaterialCode),
+            DisplayMemberPath = nameof(Bom.MaterialName),
             ItemsSource = _bomOptions.Where(x => x.IsActive)
                 .OrderBy(x => x.MaterialCode, StringComparer.CurrentCultureIgnoreCase)
                 .ThenBy(x => x.Version).ToList()
@@ -442,7 +442,7 @@ public sealed class MfgWin : BaseWin
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0)
         };
-        var choose = new Button { Content = T("Common.Select"), MinWidth = 90, Margin = new Thickness(4, 0, 0, 0) };
+        var choose = new Button { Content = T("Common.OK"), MinWidth = 90, Margin = new Thickness(4, 0, 0, 0) };
         choose.Click += (_, _) =>
         {
             if (list.SelectedItem is not Bom selected)
