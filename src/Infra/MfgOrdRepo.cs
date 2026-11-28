@@ -459,12 +459,14 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
                         continue;
                     var equivalent = await UnitEquivalents.ResolveAsync(connection, transaction, companyId, materialId, line.UnitCode, cancellationToken).ConfigureAwait(false);
                     var baseQty = line.ProducedQty * equivalent;
-                    var onHand = await GetOnHandAsync(connection, transaction, companyId, targetWarehouseId, materialId, cancellationToken).ConfigureAwait(false);
+                    var byProductWarehouseId = await ResolveWarehouseIdAsync(connection, transaction, companyId,
+                        line.WarehouseCode ?? order.EffectiveTargetWarehouse, cancellationToken).ConfigureAwait(false);
+                    var onHand = await GetOnHandAsync(connection, transaction, companyId, byProductWarehouseId, materialId, cancellationToken).ConfigureAwait(false);
                     if (onHand < baseQty)
                         throw new InvalidOperationException(
                             $"Cannot cancel: produced by-product '{line.ItemCode.Trim()}' is no longer fully on hand (required {baseQty} base units, on hand {onHand}).");
                     StockValuationEngine.Apply(connection, transaction, _provider,
-                        new StockMovementRequest(companyId.Trim(), targetWarehouseId, materialId, cancelDate,
+                        new StockMovementRequest(companyId.Trim(), byProductWarehouseId, materialId, cancelDate,
                             "MFG_PRODUCE_REV", cancelDocNo, QtyIn: 0m, QtyOut: baseQty,
                             Note: $"Manufacturing order {cancelDocNo} cancellation (by-product)",
                             AutoAllocateSerials: true, Actor: userId));
