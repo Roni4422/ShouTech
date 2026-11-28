@@ -430,7 +430,7 @@ internal static class AccRepo
         {
             var account = result[index];
             var englishName = account.NameEn;
-            var localizedName = account.Name;
+            string? templateLocalizedName = null;
 
             if (ContainsArabicText(englishName))
                 englishName = null;
@@ -444,16 +444,17 @@ internal static class AccRepo
 
                 if (templateAccount.Names.TryGetValue(language, out var templateLocalized) &&
                     !string.IsNullOrWhiteSpace(templateLocalized))
-                    localizedName = templateLocalized.Trim();
+                    templateLocalizedName = templateLocalized.Trim();
             }
 
             if (string.IsNullOrWhiteSpace(englishName))
                 englishName = $"Account {account.Code}";
 
-            if (string.Equals(language, "en", StringComparison.Ordinal))
-                localizedName = englishName;
-            else if (string.IsNullOrWhiteSpace(localizedName) || string.Equals(localizedName, account.NameEn, StringComparison.OrdinalIgnoreCase))
-                localizedName = englishName;
+            var localizedName = string.Equals(language, "ar", StringComparison.Ordinal)
+                && ContainsArabicText(account.Name)
+                && !string.Equals(account.Name, englishName, StringComparison.OrdinalIgnoreCase)
+                    ? account.Name
+                    : templateLocalizedName ?? englishName;
 
             result[index] = account with { Name = localizedName, NameEn = englishName };
         }
