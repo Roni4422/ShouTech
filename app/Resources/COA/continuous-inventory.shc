@@ -355,7 +355,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "Recoverable Input VAT",
+        "ar": "ضريبة قيمة مضافة مدخلات قابلة للاسترداد",
         "en": "Recoverable Input VAT"
       }
     },
@@ -787,7 +787,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "VAT Payable",
+        "ar": "ضريبة القيمة المضافة المستحقة",
         "en": "VAT Payable"
       }
     },
@@ -1561,7 +1561,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Payroll Taxes and Withholdings Payable",
+        "ar": "ضرائب واستقطاعات الرواتب المستحقة",
         "en": "Payroll Taxes and Withholdings Payable"
       }
     },
