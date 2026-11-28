@@ -26,6 +26,8 @@ public sealed class Bom
     public string OutputUnit { get; set; } = "PCS";
     public string? Notes { get; set; }
     public List<BomLine> Lines { get; set; } = new();
+    public List<BomExpense> Expenses { get; set; } = new();
+    public List<BomOutput> Outputs { get; set; } = new();
 
     /// <summary>Rolled standard cost of one output batch at the lines'
     /// snapshot standard costs (qty x standard unit cost, scrap excluded —
@@ -100,3 +102,32 @@ public sealed record MfgMaterialOption(
 
 /// <summary>A warehouse as the manufacturing pickers offer it.</summary>
 public sealed record MfgWarehouseOption(long WarehouseId, string Code, string? Name);
+
+/// <summary>Planned production expense in the reusable template. Amount is per template batch.</summary>
+public sealed class BomExpense
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BomId { get; set; }
+    public int LineNo { get; set; }
+    public string ExpenseCode { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal Amount { get; set; }
+    public string? DebitAccountCode { get; set; }
+    public string? CreditAccountCode { get; set; }
+    public string? CostCenter { get; set; }
+}
+
+/// <summary>Additional or primary output of a manufacturing template.</summary>
+public sealed class BomOutput
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BomId { get; set; }
+    public int LineNo { get; set; }
+    public string MaterialCode { get; set; } = string.Empty;
+    public string? MaterialName { get; set; }
+    public string OutputKind { get; set; } = "MAIN";
+    public decimal Qty { get; set; } = 1m;
+    public string? UnitCode { get; set; }
+    public string? WarehouseCode { get; set; }
+    public decimal CostSharePct { get; set; }
+}
