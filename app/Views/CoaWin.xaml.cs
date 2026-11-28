@@ -290,12 +290,6 @@ public partial class CoaWin : BaseWin, IInfoContextProvider
             && !string.Equals(node.Name, node.NameEn, StringComparison.OrdinalIgnoreCase))
             return node.Name;
 
-        var localized = !isEnglish
-            ? Loc.Get($"CoaWin.AccountNames.{node.Code}", string.Empty)
-            : string.Empty;
-        if (!string.IsNullOrWhiteSpace(localized))
-            return localized;
-
         return !string.IsNullOrWhiteSpace(node.NameEn) ? node.NameEn : $"Account {node.Code}";
     }
 
