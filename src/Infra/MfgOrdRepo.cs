@@ -1380,7 +1380,7 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
     {
         MfgOrder? order = null;
         await using (var command = CreateCommand(connection, transaction,
-            $"SELECT {OrderColumns} FROM mfg_orders WHERE company_id = @company AND id = @id AND {NotDeleted}"))
+            $"SELECT {OrderColumns} FROM mfg_orders WHERE company_id = @company AND id = @id AND {NotDeleted}{(_provider == "PostgreSQL" ? " FOR UPDATE" : string.Empty)}"))
         {
             Add(command, "@company", companyId.Trim());
             Add(command, "@id", FormatGuid(orderId));
