@@ -633,16 +633,15 @@ public sealed class MfgOrderRepository : IMfgOrderRepository
             order.ProducedQty = 0m;
 
             var expenseLines = order.Lines.Where(l => l.LineKind == MfgLineKinds.Cost && l.Amount > 0m).ToList();
-            if (expenseLines.Count > 0)
+            var configuredExpenses = expenseLines.Where(l =>
+                !string.IsNullOrWhiteSpace(l.DebitAccountCode) && !string.IsNullOrWhiteSpace(l.CreditAccountCode)).ToList();
+            if (order.BomId.HasValue && configuredExpenses.Count != expenseLines.Count)
+                throw new InvalidOperationException("Every template production expense must have debit and credit accounts before confirmation.");
+            if (configuredExpenses.Count > 0)
             {
-                foreach (var expense in expenseLines)
-                {
-                    if (string.IsNullOrWhiteSpace(expense.DebitAccountCode) || string.IsNullOrWhiteSpace(expense.CreditAccountCode))
-                        throw new InvalidOperationException($"Production expense '{expense.ItemCode}' requires both debit and credit account codes before confirmation.");
-                }
                 var companyGuid = ResolveCompanyGuid(connection, transaction, companyId);
                 var expenseJournalLines = new List<GlLineRequest>();
-                foreach (var expense in expenseLines)
+                foreach (var expense in configuredExpenses)
                 {
                     var amount = decimal.Round(expense.Amount, 2, MidpointRounding.AwayFromZero);
                     if (amount <= 0m) continue;
