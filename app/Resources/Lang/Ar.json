@@ -2407,6 +2407,13 @@
     }
   },
   "Bom": {
+    "Inputs": "المدخلات",
+    "Expenses": "مصاريف الإنتاج",
+    "Outputs": "المخرجات",
+    "ExpenseCode": "رمز المصروف",
+    "DebitAccount": "حساب المدين",
+    "CreditAccount": "حساب الدائن",
+    "OutputKind": "نوع المخرج",
     "Title": "نماذج التصنيع",
     "Explode": "تفجير",
     "ExplodeQty": "كمية التفجير",
