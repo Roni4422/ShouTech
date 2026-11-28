@@ -853,3 +853,9 @@ DROP INDEX IF EXISTS ux_journal_entries_company_document_number;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_journal_entries_company_period_document_number
     ON journal_entries(company_id, fiscal_period_id, document_number)
     WHERE document_number IS NOT NULL AND length(trim(document_number)) > 0;
+-- @shoutech-migration 129_cash_book_accounts.sql 836DDCBBE70AB4E8D44DCF6AD2A840A19E7067727A4510439C651B7AC7884474 0F7A623421601FBAB5889039A234C6920CF6A829A5C934788315C7D2CD9B865D 0F7A623421601FBAB5889039A234C6920CF6A829A5C934788315C7D2CD9B865D 0F7A623421601FBAB5889039A234C6920CF6A829A5C934788315C7D2CD9B865D
+-- 129 - Explicit cash-book classification for chart accounts.
+-- Cash-book membership is configured on each posting account; account names
+-- are never used to infer whether a movement belongs in the cash journal.
+-- @if-column-missing chart_of_accounts.cash_book
+ALTER TABLE chart_of_accounts ADD COLUMN cash_book BOOLEAN NOT NULL DEFAULT FALSE;
