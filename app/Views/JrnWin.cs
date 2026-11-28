@@ -50,6 +50,10 @@ public sealed class JrnWin : BaseWin
     private readonly Button _btnAddLine = new();
     private readonly Button _btnRemoveLine = new();
     private readonly Button _btnAutoBal = new();
+    private readonly Button _btnOriginal = new();
+    private string? _sourceDocType;
+    private string? _sourceDocId;
+    private string? _sourceDocNo;
 
     private readonly TextBlock _lblTotDr = new();
     private readonly TextBlock _lblTotCr = new();
@@ -110,6 +114,9 @@ public sealed class JrnWin : BaseWin
         StyleButton(_btnAddLine, "Invoice.AddLine");
         StyleButton(_btnRemoveLine, "Invoice.RemoveLine");
         StyleButton(_btnAutoBal, "Vouchers.AutoBalance");
+        StyleButton(_btnOriginal, "Invoice.Original");
+        _btnOriginal.IsEnabled = false;
+        _btnOriginal.Click += (_, _) => OpenOriginal();
 
         _btnNew.Click += (_, _) => ResetVoucher();
         _btnLoad.Click += async (_, _) => await LoadVoucherAsync();
@@ -138,7 +145,7 @@ public sealed class JrnWin : BaseWin
         };
         _btnAutoBal.Click += (_, _) => AutoBalance();
 
-        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnReverse, _btnDelete, _btnPrint, _btnAddLine, _btnRemoveLine, _btnAutoBal })
+        foreach (var b in new[] { _btnNew, _btnLoad, _btnSave, _btnPost, _btnReverse, _btnDelete, _btnPrint, _btnAddLine, _btnRemoveLine, _btnAutoBal, _btnOriginal })
             toolbar.Children.Add(b);
 
         // Explorer-style bottom command bar: flat, transparent, subtle 1px top divider.
@@ -302,6 +309,10 @@ public sealed class JrnWin : BaseWin
         _loadedDraft = false;
         _journalPosted = false;
         _journalReversed = false;
+        _sourceDocType = null;
+        _sourceDocId = null;
+        _sourceDocNo = null;
+        _btnOriginal.IsEnabled = false;
         _dtDate.SelectedDate = DateTime.Today;
         _txtRefNo.Text = string.Empty;
         _txtCc.Text = string.Empty;
@@ -420,6 +431,10 @@ public sealed class JrnWin : BaseWin
                 throw new InvalidOperationException($"Journal entry '{documentNumber}' was not found in the active company.");
 
             _currentJournalId = snapshot.Id;
+            _sourceDocType = snapshot.SourceDocType;
+            _sourceDocId = snapshot.SourceDocId;
+            _sourceDocNo = snapshot.SourceDocNo;
+            _btnOriginal.IsEnabled = !string.IsNullOrWhiteSpace(_sourceDocType) && !string.IsNullOrWhiteSpace(_sourceDocId);
             _journalPosted = snapshot.Status != ShouTech.Domain.Entities.JournalEntryStatus.Draft;
             _journalReversed = snapshot.Status == ShouTech.Domain.Entities.JournalEntryStatus.Reversed;
             _txtDocNo.Text = snapshot.DocumentNumber ?? string.Empty;
@@ -685,7 +700,7 @@ public sealed class JrnWin : BaseWin
     /// entry no longer exists in working lists.</summary>
     private void DeleteVoucher()
     {
-        if (!_currentJournalId.HasValue || _journalReversed)
+        if (!_currentJournalId.HasValue || _journalReversed || _btnOriginal.IsEnabled)
             return;
         if (!AskConfirm("RecycleBin.ConfirmDeleteJournal"))
             return;
@@ -703,6 +718,33 @@ public sealed class JrnWin : BaseWin
             AppHost.Errors.Report(ErrorCodes.WindowOperationFailed, ex, "JrnWin.DeleteVoucher");
             ReportPersistenceFailure("Delete", ex);
         }
+    }
+
+    private void OpenOriginal()
+    {
+        if (!long.TryParse(_sourceDocId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sourceId) || sourceId <= 0)
+            return;
+        var kind = _sourceDocType?.Trim().ToUpperInvariant() switch
+        {
+            "SAL" => ShouTech.App.Reporting.Invoices.InvDocKind.SalesInvoice,
+            "SRT" => ShouTech.App.Reporting.Invoices.InvDocKind.SalesReturn,
+            "PUR" => ShouTech.App.Reporting.Invoices.InvDocKind.PurchaseInvoice,
+            "PRT" => ShouTech.App.Reporting.Invoices.InvDocKind.PurchaseReturn,
+            "ENT" => ShouTech.App.Reporting.Invoices.InvDocKind.StockIn,
+            "EXT" => ShouTech.App.Reporting.Invoices.InvDocKind.StockOut,
+            "TRN" => ShouTech.App.Reporting.Invoices.InvDocKind.StockTransfer,
+            "OPN" => ShouTech.App.Reporting.Invoices.InvDocKind.OpeningStock,
+            "CNT" => ShouTech.App.Reporting.Invoices.InvDocKind.InventoryCount,
+            "QUO" => ShouTech.App.Reporting.Invoices.InvDocKind.Quotation,
+            _ => (ShouTech.App.Reporting.Invoices.InvDocKind?)null
+        };
+        if (kind is null)
+        {
+            MessageBox.Show(this, Tf("Invoice.OriginalOpenFailed", "The source document type is not supported by this window.") + " " + (_sourceDocNo ?? string.Empty),
+                T("Common.Warning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        new InvoiceWin(sourceId, kind.Value) { Owner = this }.Show();
     }
 
     private async Task ReverseVoucherAsync()
