@@ -1560,7 +1560,7 @@
       "posting": true,
       "cardType": "Liability",
       "names": {
-        "ar": "Social Security Contributions Payable",
+        "ar": "اشتراكات الضمان الاجتماعي المستحقة",
         "en": "Social Security Contributions Payable"
       }
     },
