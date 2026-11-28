@@ -786,7 +786,7 @@
       "posting": true,
       "cardType": null,
       "names": {
-        "ar": "VAT Payable",
+        "ar": "ضريبة القيمة المضافة المستحقة",
         "en": "VAT Payable"
       }
     },
