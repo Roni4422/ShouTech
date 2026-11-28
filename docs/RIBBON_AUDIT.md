@@ -430,3 +430,32 @@ indexed / total windows) is reported there.
 | 263 | Help.Suggestions | SupportWin | RibbonNav | a | central ✓ | ✓ | pending |  |
 | 264 | Help.RenewLicense | LicenseWin | RibbonNav | b | central ✓ | ✓ | pending | thin window (148 lines) — limited surface, completeness not proven |
 | 265 | Help.About | — | MainShVM system action | cmd | central ✓ | n/a | pending | shell command, works by design (not a window) |
+
+
+## Current-branch dispatch recheck — 2026-11-28
+
+The earlier dead-language verdict above is historical and is no longer current.
+On `reduce-2-upgrade`, the four language actions are now explicitly handled
+by `RibbonNav.SwitchLanguage` (`Tools.Arabic`, `Tools.English`,
+`Tools.French`, `Tools.Turkish`), which persists the preference and applies
+the language live.
+
+A fresh static trace of the current `app/Views/MWin.xaml` found 263
+`RibbonButton` entries. All 263 have a dispatch path through a named-button
+handler, a direct shell action, `RibbonNav`, or `RptNav`; no unmatched
+button key remained in that trace. This is a dispatch-coverage result, not
+proof that every destination's business workflow is complete. Runtime
+permission checks and each target window's data operations remain separate
+acceptance criteria.
+
+Confirmed examples:
+- `Banks.BankReconciliation` → `RibbonNav` → `BankRecWin`.
+- `Manufacturing.ManufacturingModels` → `RptNav.OpenBom` → `BomWin`.
+- `Manufacturing.ManufacturingProcess` → `RptNav.OpenMfgOrder` → `MfgWin`.
+- `OtherTools.RestoreCompany.Restore` → `RibbonNav` → `RestoreCoWin`.
+  The XAML key was corrected on 2026-11-28; it previously used the
+  unregistered `RestoreCompany.Restore` key.
+
+The main shell's custom caption grid now explicitly uses
+`FlowDirection.LeftToRight`, keeping its minimize, maximize, and close
+controls on the physical right while the Arabic client area remains RTL.
