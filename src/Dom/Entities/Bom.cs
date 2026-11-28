@@ -24,6 +24,10 @@ public sealed class Bom
     /// produces; line quantities are stated per this output quantity.</summary>
     public decimal OutputQty { get; set; } = 1m;
     public string OutputUnit { get; set; } = "PCS";
+    public string InputDocumentKind { get; set; } = "MATERIAL_ISSUE";
+    public string OutputDocumentKind { get; set; } = "MATERIAL_RECEIPT";
+    public string? InputWarehouseCode { get; set; }
+    public string? OutputWarehouseCode { get; set; }
     public string? Notes { get; set; }
     public List<BomLine> Lines { get; set; } = new();
     public List<BomExpense> Expenses { get; set; } = new();
