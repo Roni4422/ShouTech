@@ -770,6 +770,9 @@ namespace Kern.Tests
                 Assert.Equal(CommercialDocKinds.DeliveryNote, delivery!.DocKind);
                 Assert.Equal(7m, Assert.Single(delivery.Lines).Qty);
                 Assert.Equal(12.5m, delivery.DeliveryCost);
+                await service.PostSalesDeliveryAsync(deliveryId, "picker-warehouse");
+                var postedDelivery = await orders.FindByIdAsync(CommercialDocSide.Sales, deliveryId);
+                Assert.Equal(CommercialDocumentStatus.Posted, postedDelivery!.Status);
 
                 // A posted delivery consumes the corresponding confirmed
                 // reservation; the next picking can stage the true balance.
