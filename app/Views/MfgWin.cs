@@ -74,6 +74,8 @@ public sealed class MfgWin : BaseWin
     private readonly List<MfgMaterialOption> _materialOptions = new();
     private Guid? _bomId;
     private int? _bomVersion;
+    private string _inputDocumentKind = "MATERIAL_ISSUE";
+    private string _outputDocumentKind = "MATERIAL_RECEIPT";
 
     private readonly TextBlock _lblTotCost = new();
     private readonly TextBlock _lblUnitCost = new();
@@ -183,6 +185,8 @@ public sealed class MfgWin : BaseWin
             _txtWipWhs.Text = order.WipWarehouseCode ?? string.Empty;
             _txtTargetWhs.Text = order.TargetWarehouseCode ?? string.Empty;
             _txtScrapWhs.Text = order.ScrapWarehouseCode ?? string.Empty;
+            _inputDocumentKind = order.InputDocumentKind;
+            _outputDocumentKind = order.OutputDocumentKind;
             _txtFinishQty.Text = Math.Max(0m, order.Qty - order.ProducedQty).ToString("0.###", CultureInfo.InvariantCulture);
             _items.Clear();
             var lineNo = 0;
@@ -528,6 +532,8 @@ public sealed class MfgWin : BaseWin
         _txtWipWhs.Text = string.Empty;
         _txtTargetWhs.Text = string.Empty;
         _txtScrapWhs.Text = string.Empty;
+        _inputDocumentKind = "MATERIAL_ISSUE";
+        _outputDocumentKind = "MATERIAL_RECEIPT";
         _txtFinishQty.Text = "0";
         _items.Clear();
         _items.Add(new MfgItemVm { LineNo = 1, Unit = "KG", Qty = 1, UnitCost = 0 });
@@ -600,7 +606,9 @@ public sealed class MfgWin : BaseWin
             SourceWarehouseCode = string.IsNullOrWhiteSpace(_txtSourceWhs.Text) ? null : _txtSourceWhs.Text.Trim(),
             WipWarehouseCode = string.IsNullOrWhiteSpace(_txtWipWhs.Text) ? null : _txtWipWhs.Text.Trim(),
             TargetWarehouseCode = string.IsNullOrWhiteSpace(_txtTargetWhs.Text) ? null : _txtTargetWhs.Text.Trim(),
-            ScrapWarehouseCode = string.IsNullOrWhiteSpace(_txtScrapWhs.Text) ? null : _txtScrapWhs.Text.Trim()
+            ScrapWarehouseCode = string.IsNullOrWhiteSpace(_txtScrapWhs.Text) ? null : _txtScrapWhs.Text.Trim(),
+            InputDocumentKind = _inputDocumentKind,
+            OutputDocumentKind = _outputDocumentKind
         };
         foreach (var item in _items.Where(i => i.Qty > 0 || !string.IsNullOrWhiteSpace(i.ItemCode)))
             order.Lines.Add(new MfgOrderLine
@@ -768,6 +776,10 @@ public sealed class MfgWin : BaseWin
                 _txtItemName.Text = bom.MaterialName ?? string.Empty;
                 _txtUnit.Text = bom.OutputUnit;
                 _txtStdCost.Text = bom.StandardUnitCost.ToString("0.00", CultureInfo.InvariantCulture);
+                _inputDocumentKind = bom.InputDocumentKind;
+                _outputDocumentKind = bom.OutputDocumentKind;
+                _txtSourceWhs.Text = bom.InputWarehouseCode ?? string.Empty;
+                _txtTargetWhs.Text = bom.OutputWarehouseCode ?? string.Empty;
                 var scale = qty / bom.OutputQty;
                 foreach (var expense in bom.Expenses)
                     _items.Add(new MfgItemVm
