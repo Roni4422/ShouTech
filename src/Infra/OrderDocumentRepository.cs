@@ -3804,6 +3804,8 @@ public sealed class OrderDocumentRepository : IOrderDocumentRepository
                 var picked = pickedBySourceLine.TryGetValue(line.SourceLineNo, out var requested)
                     ? requested
                     : line.PickedQty;
+                if (picked < 0m)
+                    throw new InvalidOperationException("Picked quantities cannot be negative.");
                 totalPicked += picked;
                 var fulfilled = fulfilledByLine.GetValueOrDefault(line.SourceLineNo);
                 var reserved = Math.Max(0m, reservedByLine.GetValueOrDefault(line.SourceLineNo) - fulfilled);
